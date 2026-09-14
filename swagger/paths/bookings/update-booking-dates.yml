@@ -1,0 +1,303 @@
+patch:
+  tags:
+    - Bookings
+  summary: Update booking dates (Worker only)
+  description: |
+    Allows a worker to update dates for their pending booking.
+    
+    **WORKFLOW:**
+    - Worker updates dates via THIS endpoint
+    - System validates the proposed dates
+    - Booking dates are updated immediately in the database
+    - An informative message is sent to chat notifying about the change
+    
+    **Access Control:**
+    - Only the worker who owns the booking can update dates
+    - Only bookings in 'pending' status can have dates updated
+    
+    **Validations:**
+    - End date must be after start date
+    - New dates must be within the job listing period
+    - Position availability is checked for the new date range
+    - No conflicts with other confirmed bookings
+    
+    **Side Effects:**
+    - Booking dates are updated in the database
+    - An informative message is sent to the chat
+    - **WebSocket broadcast:** both participants receive `new_message` (the informative chat message) and a personalized `chat_updated` event with the updated booking dates
+    
+    **Response:**
+    - Updated booking with new dates
+  operationId: updateBookingDates
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: bookingId
+      in: path
+      required: true
+      description: The ID of the booking to update
+      schema:
+        type: string
+        format: uuid
+        example: "d7a87b92-8011-447b-80fe-6e23b0a3d91d"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - startDate
+            - endDate
+          properties:
+            startDate:
+              type: string
+              format: date
+              description: New start date in ISO 8601 format (YYYY-MM-DD)
+              example: "2026-02-15"
+            endDate:
+              type: string
+              format: date
+              description: New end date in ISO 8601 format (YYYY-MM-DD)
+              example: "2026-02-20"
+        examples:
+          validRequest:
+            summary: Valid date update request
+            value:
+              startDate: "2026-02-15"
+              endDate: "2026-02-20"
+  responses:
+    '200':
+      description: Booking dates updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Booking dates updated successfully"
+              booking:
+                type: object
+                properties:
+                  bookingId:
+                    type: string
+                    format: uuid
+                    example: "d7a87b92-8011-447b-80fe-6e23b0a3d91d"
+                  startDate:
+                    type: string
+                    format: date
+                    example: "2026-02-15"
+                  endDate:
+                    type: string
+                    format: date
+                    example: "2026-02-20"
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    example: "2026-01-13T10:35:00Z"
+    '400':
+      description: Bad Request - Invalid input or business rule violation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Bad Request"
+              message:
+                type: string
+          examples:
+            missingFields:
+              summary: Missing required fields
+              value:
+                error: "Bad Request"
+                message: "Missing required fields: startDate, endDate"
+            invalidDateFormat:
+              summary: Invalid date format
+              value:
+                error: "Bad Request"
+                message: "Invalid date format. Use ISO 8601 (YYYY-MM-DD)"
+            endBeforeStart:
+              summary: End date before start date
+              value:
+                error: "Bad Request"
+                message: "End date must be after start date"
+            notPending:
+              summary: Booking not in pending status
+              value:
+                error: "Bad Request"
+                message: "Can only update dates of pending bookings. Current status: confirmed"
+            outsideListingPeriod:
+              summary: Dates outside listing period
+              value:
+                error: "Bad Request"
+                message: "New dates must be within job listing period (2026-01-01 to 2026-12-31)"
+            noPositionsAvailable:
+              summary: No positions available
+              value:
+                error: "Bad Request"
+                message: "No positions available in the new date range (3/3 positions taken)"
+            minimum_notice_not_met:
+              summary: Minimum notice days requirement not met
+              value:
+                error: "BOOKING_MINIMUM_NOTICE_NOT_MET"
+                message: "This job listing requires bookings to be made at least 5 days in advance. Earliest available date: 2025-01-25"
+            minimum_duration_not_met:
+              summary: Minimum consecutive days requirement not met
+              value:
+                error: "BOOKING_MINIMUM_DURATION_NOT_MET"
+                message: "This job listing requires a minimum booking period of 7 consecutive days. Your booking is only 3 days."
+            nonBookingItem:
+              summary: Item is not a booking
+              value:
+                error: "Bad Request"
+                message: "Cannot update dates of non-booking items"
+    '403':
+      description: Forbidden - User not authorized or rejected booking blocks dates
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden"
+              message:
+                type: string
+              conflictingBookingId:
+                type: string
+              conflictingStatus:
+                type: string
+              conflictingDates:
+                type: object
+                properties:
+                  startDate:
+                    type: string
+                  endDate:
+                    type: string
+          examples:
+            notWorker:
+              summary: User is not a worker
+              value:
+                error: "Forbidden"
+                message: "Only worker users can update booking dates"
+            notOwner:
+              summary: Worker doesn't own the booking
+              value:
+                error: "Forbidden"
+                message: "You can only update your own bookings"
+            rejectedBooking:
+              summary: Previously rejected booking blocks these dates
+              value:
+                error: "Forbidden"
+                message: "You cannot update to these dates because you have a previously rejected booking in this date range"
+                conflictingBookingId: "booking_xyz789"
+                conflictingStatus: "rejected"
+                conflictingDates:
+                  startDate: "2026-02-15"
+                  endDate: "2026-02-20"
+    '409':
+      description: Conflict - Date conflicts with existing bookings
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Conflict"
+              message:
+                type: string
+              conflictingBookingId:
+                type: string
+              conflictingListingId:
+                type: string
+              conflictingStatus:
+                type: string
+              conflictingDates:
+                type: object
+                properties:
+                  startDate:
+                    type: string
+                  endDate:
+                    type: string
+          examples:
+            pendingSameListing:
+              summary: Another pending booking for same listing
+              value:
+                error: "Conflict"
+                message: "You already have another pending booking for this job listing in the new dates"
+                conflictingBookingId: "booking_abc123"
+                conflictingStatus: "pending"
+                conflictingDates:
+                  startDate: "2026-02-15"
+                  endDate: "2026-02-20"
+            confirmedSameListing:
+              summary: Confirmed booking for same listing
+              value:
+                error: "Conflict"
+                message: "You already have a confirmed booking for this job listing in the new dates"
+                conflictingBookingId: "booking_abc456"
+                conflictingStatus: "confirmed"
+                conflictingDates:
+                  startDate: "2026-02-15"
+                  endDate: "2026-02-20"
+            confirmedDifferentListing:
+              summary: Confirmed booking for different listing
+              value:
+                error: "Conflict"
+                message: "You cannot update to these dates because you already have a confirmed booking for another job listing during this period"
+                conflictingBookingId: "booking_def789"
+                conflictingListingId: "listing_xyz999"
+                conflictingStatus: "confirmed"
+                conflictingDates:
+                  startDate: "2026-02-15"
+                  endDate: "2026-02-20"
+    '404':
+      description: Not Found - Booking or listing not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Not Found"
+              message:
+                type: string
+          examples:
+            bookingNotFound:
+              summary: Booking not found
+              value:
+                error: "Not Found"
+                message: "Booking not found"
+            listingNotFound:
+              summary: Job listing not found
+              value:
+                error: "Not Found"
+                message: "Job listing not found"
+    '500':
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal Server Error"
+              message:
+                type: string
+          examples:
+            fetchError:
+              summary: Error fetching data
+              value:
+                error: "Internal Server Error"
+                message: "Error fetching booking"
+            updateError:
+              summary: Error updating booking
+              value:
+                error: "Internal Server Error"
+                message: "Error updating booking dates"

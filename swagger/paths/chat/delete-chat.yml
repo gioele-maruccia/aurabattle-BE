@@ -1,0 +1,94 @@
+delete:
+  operationId: deleteChat
+  summary: Delete a chat (soft delete)
+  description: |
+    Imposta lo stato della chat a "deleted" (cancellazione logica).
+    La chat non viene rimossa fisicamente dal database.
+    Solo i partecipanti della chat (worker o company representative) possono cancellarla.
+  tags:
+    - Chat
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chat_id
+      in: path
+      required: true
+      description: ID univoco della chat
+      schema:
+        type: string
+        example: "chat_abc123def456"
+  responses:
+    '200':
+      description: Chat cancellata con successo
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Chat deleted successfully"
+              chatId:
+                type: string
+                example: "chat_abc123def456"
+              status:
+                type: string
+                example: "deleted"
+    '400':
+      description: Richiesta non valida
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          examples:
+            missing_chat_id:
+              summary: Chat ID mancante
+              value:
+                error: "Missing chat_id in path"
+            already_deleted:
+              summary: Chat già cancellata
+              value:
+                error: "Chat is already deleted"
+    '401':
+      description: Non autenticato
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    '403':
+      description: Non autorizzato - Non sei un partecipante della chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          example:
+            error: "Forbidden - You are not a participant of this chat"
+    '404':
+      description: Chat non trovata
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          example:
+            error: "Chat not found"
+    '500':
+      description: Errore interno del server
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string

@@ -1,0 +1,65 @@
+    patch:
+      tags:
+        - Job listings
+      summary: Close job listing (Company owner only)
+      description: |
+        Close a listing permanently. Only the company owner can close.
+        
+        **Status transitions:**
+        - published/paused → closed: Permanent closure
+        
+        **Effect:**
+        - Listing removed from searches
+        - No new applications accepted
+        - Existing bookings honored until completion
+        - Cannot be re-opened (different from pause)
+        
+        **Use cases:**
+        - All positions filled
+        - Listing no longer needed
+        - Season ended early
+      operationId: closeJobListing
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Job listing ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for closing
+                  example: "All positions filled"
+      responses:
+        '200':
+          description: Listing closed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                  listing:
+                    $ref: '../../components/schemas/jobListing.yml#/JobListing'
+        '400':
+          description: Cannot close (invalid status)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not the listing owner
+        '404':
+          description: Listing not found
+        '500':
+          description: Internal server error

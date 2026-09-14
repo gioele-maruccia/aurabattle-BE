@@ -1,0 +1,72 @@
+{
+  "suite": "job-listings-complete",
+  "description": "Complete test suite for Job Listings API",
+  "baseEndpoint": "/listings",
+  "tests": [
+    {
+      "id": "create-listing-draft",
+      "name": "Create Job Listing - Draft Status",
+      "description": "Test creating a job listing as draft",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-draft.json",
+      "expectedStatus": 201,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 201
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "draft"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-from-draft",
+      "name": "Publish Listing - From Draft",
+      "description": "Test publishing a draft listing",
+      "method": "PATCH",
+      "endpoint": "/listings/9c63ec12-cf74-4b02-92b0-ac0c03431cb8/publish",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-draft:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "published"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "published successfully"
+        }
+      ]
+    }
+  
+  ]
+}

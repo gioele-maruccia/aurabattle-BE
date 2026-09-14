@@ -1,0 +1,67 @@
+    put:
+      tags:
+        - Backoffice
+      summary: Update document status
+      description: |
+        Approve or reject a document (backoffice-api-sam project)
+        
+        **Side Effects:**
+        - Updates document status in DynamoDB
+        - When all required documents are approved, updates user profile verification status
+        - Triggers Firebase push notification to user when profile verification changes
+
+        **Required documents per profile type (current):**
+        - **worker**: `id_card_front`, `id_card_back` _(selfie temporaneamente rimosso)_
+        - **company**: `id_card_front`, `id_card_back` _(selfie e visura temporaneamente rimossi)_
+        
+        **Push Notification Payload (Profile Verification):**
+        When a user's profile verification status changes (all documents approved/rejected), 
+        they receive a Firebase push notification:
+        ```json
+        {
+          "notification": {
+            "title": "Profilo verificato!",
+            "body": "La verifica del tuo profilo come azienda/lavoratore è andata a buon fine."
+          },
+          "data": {
+            "actionType": "upgrade"
+          }
+        }
+        ```
+      operationId: updateDocumentStatus
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: user_sub
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../components/schemas/backoffice.yml#/UpdateStatusRequest'
+            examples:
+              approve:
+                summary: Approve document
+                value:
+                  status: "APPROVED"
+              reject:
+                summary: Reject document
+                value:
+                  status: "REJECTED"
+                  rejectionReason: "Document image is blurry and text is not readable"
+      responses:
+        '200':
+          description: Status updated successfully
+        '400':
+          description: Invalid request
+        '409':
+          description: Document not in AWAITING_REVIEW status

@@ -1,0 +1,600 @@
+{
+  "suite": "job-listings-complete",
+  "description": "Complete test suite for Job Listings API",
+  "baseEndpoint": "/listings",
+  "tests": [
+    {
+      "id": "create-listing-valid",
+      "name": "Create Job Listing - Valid Payload",
+      "description": "Test creating a job listing with valid data and published status",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-valid.json",
+      "expectedStatus": 201,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 201
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "published"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.positions",
+          "value": 3
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "created successfully"
+        }
+      ]
+    },
+    {
+      "id": "create-listing-draft",
+      "name": "Create Job Listing - Draft Status",
+      "description": "Test creating a job listing as draft",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-draft.json",
+      "expectedStatus": 201,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 201
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "draft"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "id": "create-listing-minimal",
+      "name": "Create Job Listing - Minimal Required Fields",
+      "description": "Test creating a listing with only required fields",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-minimal.json",
+      "expectedStatus": 201,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 201
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.title",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "create-listing-missing-fields",
+      "name": "Create Job Listing - Missing Required Fields",
+      "description": "Test error handling for missing required fields",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-invalid.json",
+      "expectedStatus": 400,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 400
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Bad Request"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Missing required fields"
+        }
+      ]
+    },
+    {
+      "id": "create-listing-invalid-dates",
+      "name": "Create Job Listing - Invalid Dates",
+      "description": "Test error when end date is before start date",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "company",
+      "payload": "payloads/create-listing-invalid-dates.json",
+      "expectedStatus": 400,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 400
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Bad Request"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "End date must be after start date"
+        }
+      ]
+    },
+    {
+      "id": "create-listing-unauthorized-worker",
+      "name": "Create Job Listing - Unauthorized (Worker)",
+      "description": "Test that workers cannot create job listings",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "worker",
+      "payload": "payloads/create-listing-valid.json",
+      "expectedStatus": 403,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 403
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Forbidden"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Only company users can create"
+        }
+      ]
+    },
+    {
+      "id": "create-listing-no-auth",
+      "name": "Create Job Listing - No Authentication",
+      "description": "Test that unauthenticated users cannot create listings",
+      "method": "POST",
+      "endpoint": "/listings",
+      "auth": "none",
+      "payload": "payloads/create-listing-valid.json",
+      "expectedStatus": 401,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 401
+        }
+      ]
+    },
+    {
+      "id": "get-listing-public",
+      "name": "Get Job Listing - Public Access",
+      "description": "Test retrieving a published job listing without authentication",
+      "method": "GET",
+      "endpoint": "/listings/{listingId}",
+      "auth": "none",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-valid:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.title",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.companyId",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.company",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.company.businessName",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "get-listing-not-found",
+      "name": "Get Job Listing - Not Found",
+      "description": "Test retrieving a non-existent job listing",
+      "method": "GET",
+      "endpoint": "/listings/00000000-0000-0000-0000-000000000000",
+      "auth": "none",
+      "expectedStatus": 404,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 404
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Not Found"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Job listing not found"
+        }
+      ]
+    },
+    {
+      "id": "get-listing-with-auth",
+      "name": "Get Job Listing - With Authentication",
+      "description": "Test that authenticated users can also retrieve listings",
+      "method": "GET",
+      "endpoint": "/listings/{listingId}",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-valid:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.listingId",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-from-draft",
+      "name": "Publish Listing - From Draft",
+      "description": "Test publishing a draft listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/publish",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-draft:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "published"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "published successfully"
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-already-published",
+      "name": "Publish Listing - Already Published",
+      "description": "Test error when trying to publish an already published listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/publish",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-valid:$.listing.listingId"
+      },
+      "expectedStatus": 400,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 400
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Bad Request"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "already published"
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-not-owner",
+      "name": "Publish Listing - Not Owner",
+      "description": "Test that a company cannot publish another company's listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/publish",
+      "auth": "company2",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-draft:$.listing.listingId"
+      },
+      "expectedStatus": 403,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 403
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Forbidden"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "your own job listings"
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-unauthorized-worker",
+      "name": "Publish Listing - Unauthorized Worker",
+      "description": "Test that workers cannot publish listings",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/publish",
+      "auth": "worker",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-draft:$.listing.listingId"
+      },
+      "expectedStatus": 403,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 403
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Forbidden"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Only company users"
+        }
+      ]
+    },
+    {
+      "id": "publish-listing-not-found",
+      "name": "Publish Listing - Not Found",
+      "description": "Test error when publishing non-existent listing",
+      "method": "PATCH",
+      "endpoint": "/listings/00000000-0000-0000-0000-000000000000/publish",
+      "auth": "company",
+      "expectedStatus": 404,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 404
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Not Found"
+        }
+      ]
+    },
+    {
+      "id": "pause-listing-published",
+      "name": "Pause Listing - From Published",
+      "description": "Test pausing a published listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/pause",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-valid:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "paused"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": true
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "paused successfully"
+        }
+      ]
+    },
+    {
+      "id": "pause-listing-already-paused",
+      "name": "Pause Listing - Already Paused",
+      "description": "Test error when trying to pause an already paused listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/pause",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:pause-listing-published:$.listing.listingId"
+      },
+      "expectedStatus": 400,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 400
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Bad Request"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "already paused"
+        }
+      ]
+    },
+    {
+      "id": "pause-listing-draft",
+      "name": "Pause Listing - Cannot Pause Draft",
+      "description": "Test that draft listings cannot be paused",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/pause",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:create-listing-minimal:$.listing.listingId"
+      },
+      "expectedStatus": 400,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 400
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Bad Request"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Can only pause published listings"
+        }
+      ]
+    },
+    {
+      "id": "pause-listing-not-owner",
+      "name": "Pause Listing - Not Owner",
+      "description": "Test that a company cannot pause another company's listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/pause",
+      "auth": "company2",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:publish-listing-from-draft:$.listing.listingId"
+      },
+      "expectedStatus": 403,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 403
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Forbidden"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "your own job listings"
+        }
+      ]
+    },
+    {
+      "id": "pause-listing-unauthorized-worker",
+      "name": "Pause Listing - Unauthorized Worker",
+      "description": "Test that workers cannot pause listings",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/pause",
+      "auth": "worker",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:publish-listing-from-draft:$.listing.listingId"
+      },
+      "expectedStatus": 403,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 403
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.error",
+          "value": "Forbidden"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.message",
+          "contains": "Only company users"
+        }
+      ]
+    },
+    {
+      "id": "republish-paused-listing",
+      "name": "Republish Paused Listing",
+      "description": "Test republishing a paused listing",
+      "method": "PATCH",
+      "endpoint": "/listings/{listingId}/publish",
+      "auth": "company",
+      "dynamicParams": {
+        "listingId": "fromPreviousTest:pause-listing-published:$.listing.listingId"
+      },
+      "expectedStatus": 200,
+      "assertions": [
+        {
+          "type": "status",
+          "value": 200
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.status",
+          "value": "published"
+        },
+        {
+          "type": "jsonPath",
+          "path": "$.listing.publishedAt",
+          "exists": true
+        }
+      ]
+    }
+  ]
+}

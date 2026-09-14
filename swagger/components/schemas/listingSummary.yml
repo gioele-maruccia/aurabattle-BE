@@ -1,0 +1,36 @@
+ListingSummary:
+  type: object
+  properties:
+    listingId:
+      type: string
+      format: uuid
+    title:
+      type: string
+      example: "Summer Waiter - Beach Location"
+    category:
+      type: string
+      example: "hospitality"
+    positions:
+      type: integer
+      description: Total positions available
+      example: 5
+    positionsFilled:
+      type: integer
+      description: Confirmed bookings count
+      example: 2
+    positionsRemaining:
+      type: integer
+      description: Available positions
+      example: 3
+    startDate:
+      type: string
+      format: date
+      example: "2025-06-15"
+    endDate:
+      type: string
+      format: date
+      example: "2025-09-15"
+    status:
+      type: string
+      enum: [draft, published, paused, closed, expired]
+      example: "published"

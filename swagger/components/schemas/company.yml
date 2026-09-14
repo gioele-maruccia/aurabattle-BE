@@ -1,0 +1,219 @@
+CreateCompanyRequest:
+  type: object
+  required:
+    - businessName
+    - vatNumber
+    - atecoCode
+  properties:
+    businessName:
+      type: string
+      minLength: 2
+      maxLength: 200
+      description: Company business name
+      example: "KFC Belgium"
+    vatNumber:
+      type: string
+      pattern: "^[A-Z]{2}[0-9]{10}$"
+      description: VAT number (2 uppercase letters + 10 digits)
+      example: "BE0123456789"
+    atecoCode:
+      type: string
+      pattern: "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{2}$"
+      description: "ATECO classification code (IT only, format: XX.XX.XX)"
+      example: "56.10.11"
+    businessType:
+      type: string
+      enum: ['pubblici_esercizi', 'ristorazione_collettiva']
+      nullable: true
+      description: "Business sub-type for ATECO 55.xx.xx (accommodation) or 56.xx.xx (food service). Required for these ATECOs only. NULL for other sectors."
+      example: "pubblici_esercizi"
+
+UpdateCompanyRequest:
+  type: object
+  properties:
+    description:
+      type: string
+      maxLength: 2000
+      description: Company description
+      example: "Fast food chain dedicated to quality meals"
+    location:
+      type: object
+      required:
+        - city
+        - country
+      properties:
+        city:
+          type: string
+          example: "Mechelen"
+        country:
+          type: string
+          example: "Belgium"
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+              example: 51.0259
+            lon:
+              type: number
+              minimum: -180
+              maximum: 180
+              example: 4.4773
+    requestProfileImage:
+      type: boolean
+      description: Request presigned URL for profile image upload
+      example: true
+    requestGalleryImages:
+      type: integer
+      minimum: 0
+      maximum: 5
+      description: Number of gallery image URLs to generate (max 5)
+      example: 3
+    media:
+      type: object
+      description: Save uploaded image URLs
+      properties:
+        profileImageUrl:
+          type: string
+          format: uri
+          example: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/profile.jpg"
+        galleryImages:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            format: uri
+          example:
+            - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/1.jpg"
+            - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/2.jpg"
+
+Company:
+  type: object
+  properties:
+    userId:
+      type: string
+      format: uuid
+      description: Cognito user sub
+    companyId:
+      type: string
+      format: uuid
+      description: Unique company ID
+    businessName:
+      type: string
+    vatNumber:
+      type: string
+    atecoCode:
+      type: string
+      description: "ATECO classification code"
+      example: "56.10.11"
+    fipeCategory:
+      type: string
+      nullable: true
+      enum: ['pubblici_esercizi', 'ristorazione_collettiva', null]
+      description: "FIPE category for tourism/hospitality companies. NULL for non-FIPE sectors (requires manual entry for job listings)"
+      example: "pubblici_esercizi"
+    fipeArticle:
+      type: string
+      nullable: true
+      description: "FIPE contract article reference. NULL for non-FIPE companies"
+      example: "Art. 2"
+    businessType:
+      type: string
+      nullable: true
+      enum: ['pubblici_esercizi', 'ristorazione_collettiva', null]
+      description: "Business sub-type provided during registration"
+    description:
+      type: string
+    location:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          type: string
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+            lon:
+              type: number
+    media:
+      type: object
+      properties:
+        profileImageUrl:
+          type: string
+        galleryImages:
+          type: array
+          items:
+            type: string
+    stats:
+      type: object
+      properties:
+        averageRating:
+          type: number
+        totalReviews:
+          type: integer
+        activeListingsCount:
+          type: integer
+    status:
+      type: string
+      enum: [active, inactive, deleted]
+    representative:
+      type: object
+      nullable: true
+      description: Company representative personal info (fetched from Cognito)
+      properties:
+        sub:
+          type: string
+          format: uuid
+          description: Cognito user sub
+        firstName:
+          type: string
+          example: "Mario"
+        lastName:
+          type: string
+          example: "Rossi"
+        email:
+          type: string
+          format: email
+          example: "mario.rossi@example.com"
+        birthdate:
+          type: string
+          example: "1990-01-15"
+        photoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Presigned S3 URL for the representative's profile photo (valid 1h)
+        userStatus:
+          type: string
+          example: "CONFIRMED"
+        enabled:
+          type: boolean
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+PresignedUrl:
+  type: object
+  properties:
+    uploadUrl:
+      type: string
+      format: uri
+      description: Presigned S3 URL for uploading
+    key:
+      type: string
+      description: S3 object key
+    publicUrl:
+      type: string
+      format: uri
+      description: Public URL after upload
+    index:
+      type: integer
+      description: Gallery image index (1-5)

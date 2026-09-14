@@ -1,0 +1,15 @@
+﻿{
+    "timestamp":  "2026-01-16 20:17:31",
+    "api_user":  "https://8y5y7khdp8.execute-api.eu-south-1.amazonaws.com/dev",
+    "user_email":  "titocet754@naqulu.com",
+    "test_type":  "profile_upgrade",
+    "user_id":  "c6ce4200-7061-70b3-1c79-8120a6f83eda",
+    "instructions":  {
+                         "endpoint":  "https://8y5y7khdp8.execute-api.eu-south-1.amazonaws.com/dev/backoffice/documents/{document_id}/status",
+                         "required_role":  "admin",
+                         "watch_logs":  "/aws/lambda/dev-backoffice-update-document-status",
+                         "method":  "POST"
+                     },
+    "api_backoffice":  "https://8y5y7khdp8.execute-api.eu-south-1.amazonaws.com/dev",
+    "fcm_token":  "test-fcm-upgrade-20260116201730"
+}

@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Deploy ONLY PostConfirmation Lambda - NO User Pool creation (uses existing)
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - dev-be
+    - staging
+    - prod
+    Description: Ambiente di deployment
+  UserProfilesTableName:
+    Type: String
+    Description: Nome tabella DynamoDB user profiles
+  UserPoolId:
+    Type: String
+    Description: ID of EXISTING User Pool (NON crea uno nuovo)
+  UserPoolArn:
+    Type: String
+    Description: ARN of EXISTING User Pool (NON crea uno nuovo)
+Resources:
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-cognito-post-confirmation
+      CodeUri: s3://beezey-dev-be/cognito-setup-dev-be/20260225-192201/85eb49aa055cb05bbc91486ccb4a70e5
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          USER_PROFILES_TABLE:
+            Ref: UserProfilesTableName
+          ENVIRONMENT:
+            Ref: Environment
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+    Metadata:
+      SamResourceId: PostConfirmationFunction
+  PostConfirmationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: PostConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Ref: UserPoolArn
+    Metadata:
+      SamResourceId: PostConfirmationInvokePermission
+Outputs:
+  LambdaArn:
+    Description: PostConfirmation Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - PostConfirmationFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-PostConfirmationLambdaArn
+  LambdaName:
+    Description: PostConfirmation Lambda Function Name
+    Value:
+      Ref: PostConfirmationFunction
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-PostConfirmationLambdaName

@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ATECO to Compensation Category mapping table for CCNL Turismo
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+  
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Description: DynamoDB billing mode
+
+Resources:
+  AtecoCategoriesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-AtecoCategories'
+      BillingMode: !Ref BillingMode
+      AttributeDefinitions:
+        - AttributeName: atecoCode
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+      KeySchema:
+        - AttributeName: atecoCode
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: category-index
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Service
+          Value: AtecoCategories
+
+Outputs:
+  AtecoCategoriesTableName:
+    Description: ATECO Categories table name
+    Value: !Ref AtecoCategoriesTable
+    Export:
+      Name: !Sub '${Environment}-AtecoCategories-TableName'
+  
+  AtecoCategoriesTableArn:
+    Description: ATECO Categories table ARN
+    Value: !GetAtt AtecoCategoriesTable.Arn
+    Export:
+      Name: !Sub '${Environment}-AtecoCategories-TableArn'
+
+# Struttura del record:
+# {
+#   "atecoCode": "56.10.11",                           # PK - Codice ATECO (formato: XX.XX.XX)
+#   "category": "ristorazione_commerciale",            # GSI - Categoria di compenso
+#   "name": "Ristorazione con somministrazione",       # Nome descrittivo dell'attività
+#   "description": "Ristoranti, trattorie, pizzerie, osterie e simili",
+#   "examples": [                                      # Esempi di attività
+#     "Ristoranti",
+#     "Trattorie",
+#     "Pizzerie",
+#     "Osterie"
+#   ],
+#   "compensationTable": "table_A",                    # Tabella retributiva applicabile
+#   "ccnlType": "turismo",                            # Tipo di CCNL
+#   "active": true,                                    # Flag attivo/disattivo
+#   "createdAt": "2024-11-17T00:00:00Z",
+#   "updatedAt": "2024-11-17T00:00:00Z"
+# }
+#
+# Query patterns:
+# 1. Get category by ATECO code: atecoCode = "56.10.11"
+# 2. List all ATECO codes by category: GSI category-index where category = "ristorazione_commerciale"

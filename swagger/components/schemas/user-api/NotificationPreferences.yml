@@ -1,0 +1,45 @@
+type: object
+description: User notification preferences
+properties:
+  email_enabled:
+    type: boolean
+    description: Enable email notifications
+    example: true
+  push_enabled:
+    type: boolean
+    description: Enable push notifications
+    example: true
+  sms_enabled:
+    type: boolean
+    description: Enable SMS notifications
+    example: false
+  channels:
+    type: object
+    description: Notification channels preferences
+    properties:
+      new_jobs:
+        type: boolean
+        description: Notify about new job listings
+        example: true
+      applications:
+        type: boolean
+        description: Notify about job applications
+        example: true
+      messages:
+        type: boolean
+        description: Notify about new chat messages
+        example: true
+      marketing:
+        type: boolean
+        description: Receive marketing communications
+        example: false
+    required:
+      - new_jobs
+      - applications
+      - messages
+      - marketing
+required:
+  - email_enabled
+  - push_enabled
+  - sms_enabled
+  - channels

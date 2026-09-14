@@ -1,0 +1,130 @@
+get:
+  tags:
+    - Chat
+  summary: Get chat messages
+  description: |
+    Retrieve all messages for a chat, with filtering based on user role.
+    
+    **Access Control:**
+    - Worker can only see messages in their own chats
+    - Company can only see messages in their company chats
+    - Returns messages filtered by role
+    
+    **Message Filtering:**
+    - Worker view: excludes Beezey internal notes
+    - Company view: excludes Beezey internal notes
+    - Support view: sees all messages
+    
+    **Response includes:**
+    - All messages in chronological order
+    - Chat metadata (participants, unread counts)
+    - Message states and stickers
+    - Attachment URLs (presigned if needed)
+  operationId: getChatMessages
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID to retrieve messages from
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+    - name: limit
+      in: query
+      required: false
+      description: Number of messages to return (default 25, max 100)
+      schema:
+        type: integer
+        default: 25
+        maximum: 100
+        example: 25
+    - name: cursor
+      in: query
+      required: false
+      description: Base64-encoded pagination cursor for lazy loading
+      schema:
+        type: string
+        example: "eyJjaGF0SWQiOiAiY2hhdF80MGYxNjcxZDM1NDM0NmEwIiwgInRpbWVzdGFtcCI6ICI..."
+  responses:
+    '200':
+      description: Messages retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  chat:
+                    $ref: '../../components/schemas/chat.yml#/Chat'
+                  messages:
+                    type: array
+                    items:
+                      $ref: '../../components/schemas/chat.yml#/Message'
+                  count:
+                    type: integer
+                    description: Number of messages returned
+                    example: 10
+                  hasMore:
+                    type: boolean
+                    description: Whether there are more messages available
+                    example: true
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Cursor for the next batch of messages (null if no more)
+                    example: "eyJjaGF0SWQiOiAiY2hhdF80MGYxNjcxZDM1NDM0NmEwIiwgInRpbWVzdGFtcCI6ICI..."
+                  unreadCount:
+                    type: integer
+                    description: Number of unread messages for current user
+                    example: 5
+              meta:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                    description: Limit used for this request
+                    example: 25
+          examples:
+            worker_view:
+              summary: Worker viewing chat with pagination
+              value:
+                success: true
+                data:
+                  chat:
+                    chatId: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+                    bookingId: "550e8400-e29b-41d4-a716-446655440000"
+                    workerId: "569e32f0-3091-7029-ad89-57d25dfedee8"
+                    companyRepresentativeId: "862e82c0-20a1-70c5-bc20-bd5eccf4d08d"
+                  messages:
+                    - messageId: "msg1"
+                      chatId: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+                      senderId: "569e32f0-3091-7029-ad89-57d25dfedee8"
+                      senderType: "worker"
+                      messageText: "Ciao, ho ricevuto il contratto"
+                      state: "read"
+                      timestamp: "2025-06-15T14:30:00Z"
+                  count: 10
+                  hasMore: true
+                  nextCursor: "eyJjaGF0SWQiOiAiY2hhdF80MGYxNjcxZDM1NDM0NmEwIiwgInRpbWVzdGFtcCI6ICI..."
+                  unreadCount: 5
+                meta:
+                  limit: 25
+    '403':
+      description: Forbidden (not authorized for this chat)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

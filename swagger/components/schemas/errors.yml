@@ -1,0 +1,75 @@
+# ============================================
+# Error Response Schemas
+# ============================================
+
+Error:
+  type: object
+  properties:
+    statusCode:
+      type: integer
+      description: HTTP status code
+      example: 400
+    code:
+      type: integer
+      description: |
+        Specific numeric code for precise error identification.
+        Always present alongside `statusCode`. Use this field instead of the HTTP status
+        to distinguish multiple error scenarios that share the same HTTP status code.
+        See `ChatErrorCode` for the complete chat-service code list.
+      example: 4045
+    error:
+      type: string
+      description: Error type / short message
+      example: "Invalid request"
+    message:
+      type: string
+      description: Detailed human-readable error message
+      example: "The message_text field is required"
+    details:
+      type: object
+      description: Additional error context (field names, conflicting IDs, etc.)
+      additionalProperties: true
+  required:
+    - statusCode
+    - error
+
+# ============================================
+# Chat Service – Application Error Codes
+# ============================================
+
+ChatErrorCode:
+  type: integer
+  description: |
+    Numeric `code` values returned by all **Chat** API endpoints.
+
+    The `code` field is always present in the response body alongside the HTTP `statusCode`.
+    Frontend should **switch on `code`**, not on `statusCode`, for precise handling.
+
+    ### Success codes (2xx / 3xx range)
+
+    | Code | HTTP | Description |
+    |------|------|-------------|
+    | 3006 | 201  | Message sent successfully |
+    | 3007 | 201  | Message sent **and** a backoffice operator was automatically assigned (triggered by `@beebusy` mention) |
+
+    ### Client error codes (4xx)
+
+    | Code | HTTP | Description |
+    |------|------|-------------|
+    | 4045 | 400  | Bad request – missing `message_text` **and** no `attachments` provided |
+    | 4046 | 403  | Not authorized to send messages in this chat (not a participant) |
+    | 4047 | 404  | Chat not found |
+
+    ### Server error codes (5xx)
+
+    | Code | HTTP | Description |
+    |------|------|-------------|
+    | 5011 | 500  | Internal server error in the chat service |
+
+    ### WebSocket-only errors
+
+    WebSocket errors are delivered as an `error` action event (see `WSErrorEvent`).
+    The `code` field in the WS event follows the same numbering convention.
+
+  enum: [3006, 3007, 4045, 4046, 4047, 5011]
+  example: 4045

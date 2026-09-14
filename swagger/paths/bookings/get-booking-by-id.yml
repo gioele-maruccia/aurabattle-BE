@@ -1,0 +1,80 @@
+    get:
+      tags:
+        - Bookings
+      summary: Get booking by ID
+      description: |
+        Retrieve detailed information about a specific booking.
+        
+        **Access Control:**
+        - Worker: Can view their own bookings
+        - Company: Can view bookings for their listings
+        - Backoffice: Can view all bookings
+        
+        **Worker Name Resolution:**
+        - Primary: Cognito user attributes (given_name, family_name)
+        - Fallback: Booking metadata (workerName field)
+        - If both unavailable: "Unknown Worker"
+        
+        **Returns:**
+        - Complete booking details
+        - Worker profile (if company/backoffice viewing) - names from Cognito
+        - Company and listing info (if worker viewing)
+        - Contract details (if confirmed)
+      operationId: getBooking
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Booking ID
+          example: "booking_2025_abc123"
+      responses:
+        '200':
+          description: Booking retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  booking:
+                    allOf:
+                      - $ref: '../../components/schemas/booking.yml#/Booking'
+                      - type: object
+                        properties:
+                          worker:
+                            $ref: '../../components/schemas/workerProfile.yml#/WorkerProfile'
+                          listing:
+                            $ref: '../../components/schemas/ListingSummary.yml#/ListingSummary'
+                          company:
+                            $ref: '../../components/schemas/CompanySummary.yml#/CompanySummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to view this booking
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

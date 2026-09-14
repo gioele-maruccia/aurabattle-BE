@@ -1,0 +1,24 @@
+{
+  "httpMethod": "GET",
+  "path": "/listings/my",
+  "resource": "/listings/my",
+  "requestContext": {
+    "authorizer": {
+      "claims": {
+        "sub": "f63e02b0-3071-703c-3d03-681e8ef424c6",
+        "cognito:username": "testuser@example.com",
+        "cognito:groups": "companies"
+      }
+    },
+    "requestId": "test-request-id",
+    "accountId": "123456789012",
+    "stage": "dev"
+  },
+  "queryStringParameters": null,
+  "headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer test-token"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

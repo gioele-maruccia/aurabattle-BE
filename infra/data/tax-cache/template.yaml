@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Tax Cache DynamoDB Table for storing MEF addizionali comunali
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+
+Resources:
+  TaxCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-TaxCache'
+      BillingMode: PAY_PER_REQUEST
+      
+      AttributeDefinitions:
+        - AttributeName: cache_key
+          AttributeType: S
+      
+      KeySchema:
+        - AttributeName: cache_key
+          KeyType: HASH
+      
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Cache MEF tax data
+
+Outputs:
+  TaxCacheTableName:
+    Description: Name of the Tax Cache DynamoDB table
+    Value: !Ref TaxCacheTable
+    Export:
+      Name: !Sub '${Environment}-TaxCacheTableName'
+  
+  TaxCacheTableArn:
+    Description: ARN of the Tax Cache DynamoDB table
+    Value: !GetAtt TaxCacheTable.Arn
+    Export:
+      Name: !Sub '${Environment}-TaxCacheTableArn'

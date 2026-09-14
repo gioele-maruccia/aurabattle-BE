@@ -1,0 +1,11 @@
+﻿{
+    "receiver_email":  "titocet754@naqulu.com",
+    "worker_id":  "865e9280-a041-70ad-d67a-212c99479e9c",
+    "receiver_user_id":  "c6ce4200-7061-70b3-1c79-8120a6f83eda",
+    "fcm_token":  "test-fcm-20260116201526",
+    "chat_id":  "chat_153fe864b04c48cd",
+    "company_rep_id":  "c6ce4200-7061-70b3-1c79-8120a6f83eda",
+    "api_user":  "https://8y5y7khdp8.execute-api.eu-south-1.amazonaws.com/dev",
+    "api_chat":  "https://57s2xhuuo4.execute-api.eu-south-1.amazonaws.com/dev",
+    "timestamp":  "2026-01-16 20:15:29"
+}

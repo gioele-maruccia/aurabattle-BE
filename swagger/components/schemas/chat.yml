@@ -1,0 +1,696 @@
+# ============================================
+# Chat Schemas
+# ============================================
+
+Chat:
+  type: object
+  properties:
+    chatId:
+      type: string
+      format: uuid
+      description: Unique chat identifier
+      example: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+    bookingId:
+      type: string
+      format: uuid
+      description: Associated booking ID
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    workerId:
+      type: string
+      format: uuid
+      description: Worker user ID
+      example: "569e32f0-3091-7029-ad89-57d25dfedee8"
+    companyRepresentativeId:
+      type: string
+      format: uuid
+      description: Company representative user ID
+      example: "862e82c0-20a1-70c5-bc20-bd5eccf4d08d"
+    backofficeOperatorId:
+      type: string
+      format: uuid
+      description: Backoffice operator ID (assigned when user mentions @beebusy)
+      example: "b63ee210-60f1-7072-682c-1a394a67d7e0"
+      nullable: true
+    listingId:
+      type: string
+      format: uuid
+      description: Associated job listing ID (saved when chat is created)
+      example: "450e7400-e19b-41d4-a716-446655440000"
+      nullable: true
+    jobName:
+      type: string
+      description: Job listing title (populated from booking details)
+      example: "Cameriere per evento"
+      nullable: true
+    startDate:
+      type: string
+      format: date
+      description: Booking start date (ISO 8601)
+      example: "2026-02-01"
+      nullable: true
+    endDate:
+      type: string
+      format: date
+      description: Booking end date (ISO 8601)
+      example: "2026-02-06"
+      nullable: true
+    bookingState:
+      type: string
+      description: Current booking status (redundant copy from Bookings table for performance)
+      enum: [pending, confirmed, completed, cancelled, rejected]
+      example: "confirmed"
+      nullable: true
+    lastMessage:
+      type: string
+      description: Last message text
+      example: "Ciao, il contratto è pronto"
+    lastMessageTimestamp:
+      type: string
+      format: date-time
+      description: Timestamp of last message
+      example: "2025-06-15T14:30:00Z"
+    unreadCountWorker:
+      type: integer
+      description: Unread messages count for worker
+      example: 2
+    unreadCountCompany:
+      type: integer
+      description: Unread messages count for company
+      example: 0
+    createdAt:
+      type: string
+      format: date-time
+      description: Chat creation timestamp
+      example: "2025-06-01T10:00:00Z"
+    updatedAt:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-06-15T14:30:00Z"
+
+Message:
+  type: object
+  properties:
+    messageId:
+      type: string
+      format: uuid
+      description: Unique message identifier
+      example: "9b8c7d6e-4321-8765-dcba-fedcba987654"
+    chatId:
+      type: string
+      format: uuid
+      description: Chat ID
+      example: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+    senderId:
+      type: string
+      format: uuid
+      description: Sender user ID
+      example: "569e32f0-3091-7029-ad89-57d25dfedee8"
+    senderType:
+      type: string
+      enum: [worker, company, beezey]
+      description: Sender type
+      example: "worker"
+    messageType:
+      type: string
+      enum: [text, company_accept_dates, ask_worker_review, ask_company_review]
+      description: |
+        Message type that determines UI behavior:
+        - **text**: Regular text message
+        - **company_accept_dates**: Requires company to accept/reject proposed dates (Accept/Reject buttons shown)
+        - **ask_worker_review**: Worker can leave a review
+        - **ask_company_review**: Company can leave a review
+      example: "text"
+      default: "text"
+    payload:
+      type: object
+      description: |
+        Optional payload containing additional message data.
+        For **company_accept_dates** messages: contains proposed dates in format {"start": "dd/mm/yyyy", "end": "dd/mm/yyyy", "startDate": "ISO", "endDate": "ISO"}
+      nullable: true
+      example:
+        start: "15/06/2024"
+        end: "30/06/2024"
+        startDate: "2024-06-15T00:00:00Z"
+        endDate: "2024-06-30T00:00:00Z"
+    messageText:
+      type: string
+      description: Message text content
+      example: "Ciao, ho ricevuto il contratto"
+    attachments:
+      type: array
+      description: Attachments uploaded via presigned URL
+      items:
+        type: object
+        properties:
+          fileName:
+            type: string
+            description: Original file name
+            example: "contratto.pdf"
+          fileSize:
+            type: integer
+            description: File size in bytes
+            example: 45678
+          fileType:
+            type: string
+            description: MIME type
+            example: "application/pdf"
+          s3Url:
+            type: string
+            format: uri
+            description: S3 URL returned by upload-url
+            example: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/contratto.pdf"
+          uploadedAt:
+            type: string
+            format: date-time
+            description: When the attachment was uploaded
+            example: "2025-06-15T14:29:00Z"
+    state:
+      type: string
+      enum: [sent, delivered, read]
+      description: Message delivery state
+      example: "delivered"
+    readWorker:
+      type: boolean
+      description: |
+        **Solo per messaggi inviati da `beezey_system`.**
+        Indica se il worker ha letto il messaggio.
+        Quando sia `readWorker` che `readCompany` sono `true`, il campo `state` viene automaticamente portato a `read`.
+      default: false
+      example: true
+    readCompany:
+      type: boolean
+      description: |
+        **Solo per messaggi inviati da `beezey_system`.**
+        Indica se il company representative ha letto il messaggio.
+        Quando sia `readWorker` che `readCompany` sono `true`, il campo `state` viene automaticamente portato a `read`.
+      default: false
+      example: false
+    stickers:
+      type: array
+      description: Reactions/stickers on this message
+      items:
+        type: object
+        properties:
+          userId:
+            type: string
+            format: uuid
+            description: User who added sticker
+            example: "862e82c0-20a1-70c5-bc20-bd5eccf4d08d"
+          tag:
+            type: string
+            enum: [thumbs_up, thumbs_down, heart, smile, fire, check, question]
+            description: Sticker type
+            example: "thumbs_up"
+          addedAt:
+            type: string
+            format: date-time
+            description: When sticker was added
+            example: "2025-06-15T14:35:00Z"
+    timestamp:
+      type: string
+      format: date-time
+      description: Message timestamp
+      example: "2025-06-15T14:30:00Z"
+
+CreateChatRequest:
+  type: object
+  required:
+    - booking_id
+    - worker_id
+    - company_representative_id
+  properties:
+    booking_id:
+      type: string
+      format: uuid
+      description: Booking ID to create chat for
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    worker_id:
+      type: string
+      format: uuid
+      description: Worker user ID
+      example: "569e32f0-3091-7029-ad89-57d25dfedee8"
+    company_representative_id:
+      type: string
+      format: uuid
+      description: Company representative user ID
+      example: "862e82c0-20a1-70c5-bc20-bd5eccf4d08d"
+    booking_details:
+      type: object
+      description: Booking details for welcome message
+      properties:
+        job_title:
+          type: string
+          example: "Cameriere"
+        company_name:
+          type: string
+          example: "Ristorante Da Mario"
+        start_date:
+          type: string
+          example: "2025-01-15"
+        end_date:
+          type: string
+          example: "2025-01-20"
+        compensation:
+          type: string
+          example: "120"
+
+SendMessageRequest:
+  type: object
+  required:
+    - message_text
+  properties:
+    message_text:
+      type: string
+      minLength: 1
+      maxLength: 5000
+      description: Message text
+      example: "Ciao, ho una domanda sul contratto"
+    attachments:
+      type: array
+      nullable: true
+      description: Attachments uploaded via presigned URL (from GET /chats/{chatId}/upload-url)
+      items:
+        type: object
+        required: [file_name, file_size, file_type, s3_url]
+        properties:
+          file_name:
+            type: string
+            description: Original file name
+            example: "contratto.pdf"
+          file_size:
+            type: integer
+            description: File size in bytes
+            example: 45678
+          file_type:
+            type: string
+            description: MIME type
+            example: "application/pdf"
+          s3_url:
+            type: string
+            format: uri
+            description: S3 URL returned by upload-url
+            example: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/contratto.pdf"
+
+UpdateMessageStateRequest:
+  type: object
+  required:
+    - state
+    - timestamp
+  properties:
+    state:
+      type: string
+      enum: [delivered, read]
+      description: New message state
+      example: "read"
+    timestamp:
+      type: string
+      format: date-time
+      description: |
+        **REQUIRED**: Original message timestamp (not current time!).
+        Must match the timestamp field of the message being updated.
+        Used as DynamoDB sort key to locate the message.
+      example: "2025-06-15T14:30:00.123456+00:00"
+
+SetStickerRequest:
+  type: object
+  required:
+    - sticker
+    - timestamp
+  properties:
+    sticker:
+      type: string
+      enum: [thumbs_up, thumbs_down, heart, smile, fire, check, question, ""]
+      description: Sticker to add (empty string to remove)
+      example: "thumbs_up"
+    timestamp:
+      type: string
+      format: date-time
+      description: |
+        **REQUIRED**: Original message timestamp (not current time!).
+        Must match the timestamp field of the message being updated.
+        Used as DynamoDB sort key to locate the message.
+      example: "2025-06-15T14:30:00.123456+00:00"
+
+UploadUrlResponse:
+  type: object
+  properties:
+    uploadUrl:
+      type: string
+      format: uri
+      description: Presigned S3 URL for file upload (valid 15 min)
+      example: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/..."
+    fileUrl:
+      type: string
+      format: uri
+      description: Final S3 URL to use in message attachmentUrl
+      example: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/file.pdf"
+    expiresIn:
+      type: integer
+      description: Expiration time in seconds
+      example: 900
+
+ChatListItem:
+  type: object
+  description: Chat item in personal chat list with interlocutor info
+  properties:
+    chatId:
+      type: string
+      format: uuid
+      description: Chat ID
+      example: "chat_abc123"
+    bookingId:
+      type: string
+      format: uuid
+      description: Associated booking ID
+      example: "booking_xyz789"
+    workerId:
+      type: string
+      format: uuid
+      description: Worker user ID (participant in chat)
+      example: "263e5210-a051-7047-9fe8-cd1dedc81f5f"
+    companyRepresentativeId:
+      type: string
+      format: uuid
+      description: Company representative user ID (participant in chat)
+      example: "c61e42c0-2021-70af-2387-7a07b96c6002"
+    listingId:
+      type: string
+      format: uuid
+      nullable: true
+      description: Associated job listing ID
+      example: "450e7400-e19b-41d4-a716-446655440000"
+    status:
+      type: string
+      enum: [active, archived, closed, deleted]
+      description: Chat status
+      example: "active"
+    jobName:
+      type: string
+      nullable: true
+      description: Job listing title (retrieved dynamically from booking)
+      example: "Cameriere per evento"
+    startDate:
+      type: string
+      format: date
+      nullable: true
+      description: Booking start date (retrieved dynamically from booking, always up-to-date)
+      example: "2026-02-01"
+    endDate:
+      type: string
+      format: date
+      nullable: true
+      description: Booking end date (retrieved dynamically from booking, always up-to-date)
+      example: "2026-02-06"
+    bookingStatus:
+      type: string
+      enum: [pending, confirmed, rejected, cancelled, completed]
+      nullable: true
+      description: Current booking status (retrieved dynamically from booking)
+      example: "pending"
+    createdAt:
+      type: string
+      format: date-time
+      description: Chat creation timestamp
+      example: "2025-11-01T10:00:00Z"
+    lastMessageAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: Last message timestamp
+      example: "2025-11-27T14:30:00Z"
+    lastMessagePreview:
+      type: string
+      nullable: true
+      description: Preview of last message (first 100 chars)
+      example: "Il contratto è pronto per la firma"
+    lastMessageState:
+      type: string
+      enum: [sent, delivered, read]
+      nullable: true
+      description: State of last message
+      example: "read"
+    lastMessageSenderId:
+      type: string
+      nullable: true
+      description: User ID of the sender of the last message
+      example: "user_789"
+    lastMessageReadWorker:
+      type: boolean
+      description: >
+        Whether the worker has read the last message.
+        Always `true` when `lastMessageSenderId` is not `beezey_system` (field not applicable).
+        When `lastMessageSenderId == beezey_system` reflects the actual `readWorker` flag
+        stored on that message, initially `false` and set to `true` by PATCH set-state.
+      example: false
+    lastMessageReadCompany:
+      type: boolean
+      description: >
+        Whether the company representative has read the last message.
+        Always `true` when `lastMessageSenderId` is not `beezey_system` (field not applicable).
+        When `lastMessageSenderId == beezey_system` reflects the actual `readCompany` flag
+        stored on that message, initially `false` and set to `true` by PATCH set-state.
+      example: true
+    companyId:
+      type: string
+      format: uuid
+      nullable: true
+      description: Company ID (only for worker view)
+      example: "comp_456"
+    companyName:
+      type: string
+      nullable: true
+      description: Company name (only for worker view)
+      example: "Hotel Bella Vista"
+    companyLogo:
+      type: string
+      format: uri
+      nullable: true
+      description: Company logo URL (only for worker view)
+      example: "https://beezey-profiles.s3.amazonaws.com/companies/logo.jpg"
+    interlocutorId:
+      type: string
+      format: uuid
+      description: ID of the person you're chatting with
+      example: "user_789"
+    interlocutorName:
+      type: string
+      description: Name of interlocutor
+      example: "Marco Rossi"
+    interlocutorPhoto:
+      type: string
+      format: uri
+      nullable: true
+      description: Profile photo URL of interlocutor
+      example: "https://beezey-profiles.s3.amazonaws.com/users/avatar.jpg"
+
+# ============================================
+# WebSocket Event Schemas (Server → Client)
+# ============================================
+
+MessageStateUpdatedWSEvent:
+  type: object
+  description: |
+    WebSocket event pushed to **all participants** when a message state or read flag changes.
+    For normal messages: contains `newState` (sent → delivered → read).
+    For `beezey_system` messages: contains `readWorker` and `readCompany` flags,
+    with optional `newState` only if both flags are true.
+    Received as `action: "message_state_updated"`.
+  properties:
+    action:
+      type: string
+      enum: [message_state_updated]
+      example: "message_state_updated"
+    chatId:
+      type: string
+      format: uuid
+      description: Chat ID
+      example: "chat_abc123"
+    messageId:
+      type: string
+      description: Message ID being updated
+      example: "msg_3463aa1e73a5409e"
+    newState:
+      type: string
+      enum: [sent, delivered, read]
+      nullable: true
+      description: |
+        **For normal messages:** always present (new state).
+        **For beezey_system messages:** present only when both readWorker and readCompany are true.
+      example: "read"
+    readWorker:
+      type: boolean
+      nullable: true
+      description: |
+        **Only for beezey_system messages.**
+        Indicates if the worker has read the message.
+      example: true
+    readCompany:
+      type: boolean
+      nullable: true
+      description: |
+        **Only for beezey_system messages.**
+        Indicates if the company representative has read the message.
+      example: false
+  required:
+    - action
+    - chatId
+    - messageId
+
+NewMessageWSEvent:
+  type: object
+  description: |
+    WebSocket event pushed **only to the other participant** when a new message is posted.
+    Received as `action: "new_message"`. The `message` object is the full canonical
+    `Message` structure (identical to REST GET /chats/{chatId}/messages items).
+  properties:
+    action:
+      type: string
+      enum: [new_message]
+      example: "new_message"
+    message:
+      $ref: '#/Message'
+  required:
+    - action
+    - message
+
+ChatUpdatedWSEvent:
+  type: object
+  description: |
+    WebSocket event pushed to **all participants** (sender included) after every new message
+    AND after every message-state change (e.g. delivered → read).
+
+    The payload is the **full ChatListItem** object personalised per recipient:
+    - Worker view: includes `companyId`, `companyName`, `companyLogo`
+    - Company view: does NOT include the company fields
+    - `interlocutorPhoto` is always `null` (presigned S3 URLs expire)
+
+    The frontend should find the chat by `chatId` in its local list and **replace** the
+    entire item with this payload, not only the preview fields.
+    Received as `action: "chat_updated"`.
+  allOf:
+    - $ref: '#/ChatListItem'
+    - type: object
+      properties:
+        action:
+          type: string
+          enum: [chat_updated]
+          example: "chat_updated"
+      required:
+        - action
+
+ChatsListWSEvent:
+  type: object
+  description: |
+    WebSocket response to the `getChats` client action.
+    Same structure as REST `GET /chats` but **`interlocutorPhoto` is always `null`**
+    (presigned S3 URLs expire and are not safe to push via WebSocket).
+    Received as `action: "chats_list"`.
+  properties:
+    action:
+      type: string
+      enum: [chats_list]
+      example: "chats_list"
+    count:
+      type: integer
+      description: Number of chats in the response
+      example: 3
+    chats:
+      type: array
+      items:
+        $ref: '#/ChatListItem'
+  required:
+    - action
+    - count
+    - chats
+
+TypingStatusWSEvent:
+  type: object
+  description: |
+    WebSocket event received from the server when the other participant sends a
+    `typingStatus` action. Received as `action: "typing_status"`.
+  properties:
+    action:
+      type: string
+      enum: [typing_status]
+      example: "typing_status"
+    chatId:
+      type: string
+      description: Chat in which the user is typing
+      example: "chat_b93b8c79e8954347"
+    userId:
+      type: string
+      description: userId of the user who is typing
+      example: "263e5210-a051-7047-9fe8-cd1dedc81f5f"
+    isTyping:
+      type: boolean
+      description: true = started typing, false = stopped typing
+      example: true
+  required:
+    - action
+    - chatId
+    - userId
+    - isTyping
+
+WSErrorEvent:
+  type: object
+  description: |
+    WebSocket error event sent by the server when an action cannot be processed.
+    Received as `action: "error"`.
+  properties:
+    action:
+      type: string
+      enum: [error]
+      example: "error"
+    code:
+      type: integer
+      nullable: true
+      description: Application error code (see ChatErrorCode schema)
+      example: 4401
+    message:
+      type: string
+      description: Human-readable error description
+      example: "Unauthorized: connection not registered"
+  required:
+    - action
+    - message
+
+# ============================================
+# WebSocket Action Schemas (Client → Server)
+# ============================================
+
+GetChatsWSAction:
+  type: object
+  description: |
+    WebSocket action sent by the client to request the full chat list.
+    The server responds with a `chats_list` event on the same connection.
+  properties:
+    action:
+      type: string
+      enum: [getChats]
+      example: "getChats"
+  required:
+    - action
+
+TypingStatusWSAction:
+  type: object
+  description: |
+    WebSocket action sent by the client to broadcast typing status.
+    The server forwards a `typing_status` event to the other participant.
+  properties:
+    action:
+      type: string
+      enum: [typingStatus]
+      example: "typingStatus"
+    chatId:
+      type: string
+      description: Chat in which the user is typing
+      example: "chat_b93b8c79e8954347"
+    isTyping:
+      type: boolean
+      description: true = started typing, false = stopped typing
+      example: true
+  required:
+    - action
+    - chatId
+    - isTyping

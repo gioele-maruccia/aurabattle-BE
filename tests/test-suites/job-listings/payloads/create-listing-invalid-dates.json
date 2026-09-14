@@ -1,0 +1,22 @@
+{
+  "title": "Annuncio con date invalide",
+  "description": "Test con data fine prima di data inizio",
+  "startDate": "2025-09-30",
+  "endDate": "2025-06-01",
+  "positions": 1,
+  "category": "Food & Beverage",
+  "status": "draft",
+  "location": {
+    "city": "Roma",
+    "country": "Italy",
+    "coordinates": {
+      "lat": 41.9028,
+      "lon": 12.4964
+    }
+  },
+  "salary": {
+    "min": 15,
+    "currency": "EUR",
+    "period": "hour"
+  }
+}

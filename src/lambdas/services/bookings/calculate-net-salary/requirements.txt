@@ -1,0 +1,10 @@
+# Requirements for calculate-net-salary Lambda
+boto3>=1.26.0
+
+# Testing dependencies (dev only)
+pytest>=7.0.0
+
+# Nota: requests e beautifulsoup4 NON sono più necessari a runtime.
+# Le addizionali vengono lette dal JSON offline (italian_tax_data.json).
+# Dipendenze di sviluppo per scripts/aggiorna-addizionali.py:
+#   pip install requests beautifulsoup4 lxml

@@ -1,0 +1,50 @@
+delete:
+  tags:
+    - User Profile & Settings
+  summary: Delete user account
+  description: |
+    Permanently deletes the authenticated user's account including:
+    - Cognito user account
+    - UserProfiles record from DynamoDB
+    
+    **Warning**: This action is irreversible. The user will be immediately logged out and won't be able to access the platform anymore.
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: User successfully deleted
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "User deleted successfully"
+              user_id:
+                type: string
+                format: uuid
+                example: "123e4567-e89b-12d3-a456-426614174000"
+    '401':
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Failed to delete user"
+              details:
+                type: string
+                example: "DynamoDB connection error"

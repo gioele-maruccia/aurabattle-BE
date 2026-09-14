@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Deploy ONLY PostConfirmation Lambda - NO User Pool creation (uses existing)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - staging
+      - prod
+    Description: Ambiente di deployment
+
+  UserProfilesTableName:
+    Type: String
+    Description: Nome tabella DynamoDB user profiles
+
+  UserPoolId:
+    Type: String
+    Description: ID of EXISTING User Pool (NON crea uno nuovo)
+
+  UserPoolArn:
+    Type: String
+    Description: ARN of EXISTING User Pool (NON crea uno nuovo)
+
+Resources:
+  # ==================== SOLO LAMBDA TRIGGER ====================
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-cognito-post-confirmation'
+      CodeUri: ../../../src/lambdas/core/post-confirmation/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          USER_PROFILES_TABLE: !Ref UserProfilesTableName
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+
+  PostConfirmationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PostConfirmationFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !Ref UserPoolArn
+
+Outputs:
+  LambdaArn:
+    Description: PostConfirmation Lambda ARN
+    Value: !GetAtt PostConfirmationFunction.Arn
+    Export:
+      Name: !Sub "${Environment}-PostConfirmationLambdaArn"
+  
+  LambdaName:
+    Description: PostConfirmation Lambda Function Name
+    Value: !Ref PostConfirmationFunction
+    Export:
+      Name: !Sub "${Environment}-PostConfirmationLambdaName"

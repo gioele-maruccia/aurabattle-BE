@@ -1,0 +1,187 @@
+post:
+  tags:
+    - User Profile & Settings
+  summary: Request account deletion (15-day grace period)
+  description: |
+    Marks the authenticated user's account for permanent deletion after a **15-day grace period**.
+    
+    During the grace period the user can restore the account by simply logging in (`GET /profile`
+    triggers automatic restore).
+    
+    ### What happens immediately on request
+    
+    **Worker:**
+    - `pending` bookings → auto-cancelled (`suspendedByDeletion=true`, `previousStatus` saved)
+    - `confirmed`, `accepted`, `contracted` bookings → **block** the request (409)
+    
+    **Company:**
+    - `published` listings → paused (`suspendedByDeletion=true`)
+    - `pending` bookings → auto-cancelled as above
+    - `confirmed`, `accepted`, `contracted` bookings → **block** the request (409)
+    
+    ### After 15 days (cron job at 3 AM UTC)
+    - Listings are permanently closed
+    - Documents deleted from S3 and DynamoDB
+    - Cognito user deleted
+    - UserProfile deleted
+    - Bookings and JobListings remain (orphaned, lose user reference)
+    
+    ### Restore flow
+    Re-login within 15 days → `GET /profile` auto-restores the account (relists paused listings,
+    restores cancelled bookings).
+  operationId: requestAccountDeletion
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Account successfully marked for deletion
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Account marked for deletion"
+              deletion_requested_at:
+                type: string
+                format: date-time
+                example: "2026-02-25T22:00:00.000000+00:00"
+              deletion_scheduled_at:
+                type: string
+                format: date-time
+                example: "2026-03-12T22:00:00.000000+00:00"
+              grace_period_days:
+                type: integer
+                example: 15
+              summary:
+                type: object
+                properties:
+                  bookings_cancelled:
+                    type: integer
+                    description: Number of pending bookings auto-cancelled
+                    example: 2
+                  bookings_errors:
+                    type: integer
+                    example: 0
+                  listings_paused:
+                    type: integer
+                    description: Number of published listings paused (company only)
+                    example: 3
+                  listings_errors:
+                    type: integer
+                    example: 0
+              restore_info:
+                type: string
+                example: "Log in within 15 days to automatically restore your account."
+
+    '401':
+      description: Unauthorized - Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+
+    '404':
+      description: User profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Profile not found"
+              message:
+                type: string
+                example: "User profile does not exist."
+
+    '409':
+      description: |
+        Cannot proceed — one of two distinct cases, differentiated by `errorCode`:
+        - `DELETION_ALREADY_PENDING`: endpoint was already called, account is already scheduled for deletion
+        - `BLOCKING_BOOKINGS_EXIST`: one or more bookings in `confirmed`, `accepted` or `contracted` status must be resolved first
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - code
+              - error
+              - errorCode
+              - message
+            properties:
+              code:
+                type: integer
+                description: Unique numeric error code — 4090 = already pending, 4091 = blocking bookings
+                enum: [4090, 4091]
+                example: 4091
+              error:
+                type: string
+                example: "Cannot delete account"
+              errorCode:
+                type: string
+                enum: [DELETION_ALREADY_PENDING, BLOCKING_BOOKINGS_EXIST]
+                description: Machine-readable conflict type
+                example: "BLOCKING_BOOKINGS_EXIST"
+              message:
+                type: string
+                example: "You have 1 confirmed or contracted booking(s). Please cancel or complete all confirmed bookings before requesting account deletion."
+              deletion_requested_at:
+                type: string
+                format: date-time
+                description: Present only when errorCode is DELETION_ALREADY_PENDING
+              deletion_scheduled_at:
+                type: string
+                format: date-time
+                description: Present only when errorCode is DELETION_ALREADY_PENDING
+              blocking_bookings:
+                type: array
+                description: Present only when errorCode is BLOCKING_BOOKINGS_EXIST
+                items:
+                  type: object
+                  properties:
+                    bookingId:
+                      type: string
+                    listingId:
+                      type: string
+                    jobTitle:
+                      type: string
+                    startDate:
+                      type: string
+                    endDate:
+                      type: string
+                    status:
+                      type: string
+                      enum: [confirmed, accepted, contracted]
+
+    '400':
+      description: Company profile not found (company user has no associated company record)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Company not found"
+              message:
+                type: string
+                example: "Your company profile could not be found. Please contact support."
+
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"
+              message:
+                type: string

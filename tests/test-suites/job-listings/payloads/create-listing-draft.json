@@ -1,0 +1,44 @@
+{
+  "title": "Cuoco per ristorante stagionale - BOZZA",
+  "description": "Cerchiamo cuoco esperto per ristorante sulla costa. Bozza da completare.",
+  "startDate": "2025-07-01",
+  "endDate": "2025-08-31",
+  "positions": 2,
+  "category": "Food & Beverage",
+  "status": "draft",
+  "location": {
+    "city": "Rimini",
+    "province": "RN",
+    "country": "Italy",
+    "coordinates": {
+      "lat": 44.0678,
+      "lon": 12.5695
+    }
+  },
+  "salary": {
+    "min": 18,
+    "max": 28,
+    "currency": "EUR",
+    "period": "hour"
+  },
+  "schedule": {
+    "hoursPerWeek": 40,
+    "flexibility": "flexible",
+    "shiftType": "mixed"
+  },
+  "employment": {
+    "type": "full-time",
+    "contractType": "seasonal"
+  },
+  "responsibilities": [
+    "Preparazione piatti del menu",
+    "Gestione ordini cucina",
+    "Controllo qualità"
+  ],
+  "requirements": [
+    "Esperienza minima 3 anni come cuoco",
+    "Conoscenza cucina italiana"
+  ],
+  "tags": ["cuoco", "stagionale", "full-time", "rimini"],
+  "features": ["full-time", "experience-required"]
+}

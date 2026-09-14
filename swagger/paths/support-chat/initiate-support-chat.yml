@@ -1,0 +1,90 @@
+post:
+  tags:
+    - Support Chat (Backoffice)
+  summary: Initiate support chat (Staff Only)
+  description: |
+    **BACKOFFICE ONLY**: Beezey staff initiates and assigns a support chat.
+    
+    **Permissions:**
+    - Only users with 'beezey_staff' or 'beezey_admin' Cognito group
+    - Regular users cannot access this endpoint
+    
+    **Workflow:**
+    1. User creates support chat (POST /support-chats)
+    2. Staff sees new support request in backoffice
+    3. Staff calls this endpoint to assign themselves
+    4. Chat status changes from 'open' to 'assigned'
+    
+  operationId: initiateSupportChat
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - supportChatId
+          properties:
+            supportChatId:
+              type: string
+              description: ID of support chat to assign
+              example: "support_abc123def456"
+        examples:
+          assign_chat:
+            summary: Assign support chat to staff
+            value:
+              supportChatId: "support_abc123def456"
+  responses:
+    '200':
+      description: Support chat assigned successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              supportChatId:
+                type: string
+                example: "support_abc123def456"
+              assignedTo:
+                type: string
+                description: Staff user ID
+                example: "staff_user_123"
+              status:
+                type: string
+                enum: [assigned]
+                example: "assigned"
+              message:
+                type: string
+                example: "Support chat assigned successfully"
+    '400':
+      description: Bad request - Missing or invalid supportChatId
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "supportChatId is required"
+    '403':
+      description: Forbidden - User is not staff
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Only Beezey staff can initiate support chats"
+    '404':
+      description: Support chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Support chat not found"

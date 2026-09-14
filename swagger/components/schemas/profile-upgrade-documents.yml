@@ -1,0 +1,136 @@
+UploadUrlRequest:
+  type: object
+  required:
+    - docType
+    - mime
+    - size
+  properties:
+    docType:
+      type: string
+      # TODO: re-aggiungere visura e selfie quando richiesti di nuovo
+      # enum: [id_card_front, id_card_back, passport, drivers_license, visura, selfie]
+      enum: [id_card_front, id_card_back, passport, drivers_license]
+      description: Type of document to upload
+      example: "id_card_front"
+    mime:
+      type: string
+      description: MIME type of the file
+      example: "image/jpeg"
+      enum:
+        - image/jpeg
+        - image/png
+        - image/jpg
+        - application/pdf
+    size:
+      type: integer
+      description: File size in bytes
+      example: 2048000
+      minimum: 1
+      maximum: 10485760
+
+UploadUrlResponse:
+  type: object
+  properties:
+    uploadUrl:
+      type: string
+      format: uri
+      description: Presigned S3 URL for uploading the document
+    documentId:
+      type: string
+      description: Generated document ID
+    expiresIn:
+      type: integer
+      description: URL expiration time in seconds
+      example: 3600
+
+DocumentStatus:
+  type: object
+  properties:
+    documents:
+      type: array
+      items:
+        type: object
+        properties:
+          document_id:
+            type: string
+          document_type:
+            type: string
+          status:
+            type: string
+            enum: [AWAITING_REVIEW, APPROVED, REJECTED, PENDING_UPLOAD]
+          uploaded_at:
+            type: string
+            format: date-time
+          reviewed_at:
+            type: string
+            format: date-time
+          rejection_reason:
+            type: string
+    summary:
+      type: object
+      properties:
+        total:
+          type: integer
+        approved:
+          type: integer
+        rejected:
+          type: integer
+        awaiting_review:
+          type: integer
+
+VerifyFaceRequest:
+  type: object
+  properties:
+    selfie_base64:
+      type: string
+      format: byte
+      description: Base64 encoded selfie image (JPEG or PNG)
+      example: "/9j/4AAQSkZJRgABAQEAAAAAAAD..."
+    selfie_s3_key:
+      type: string
+      description: S3 key of already uploaded selfie
+      example: "docs/12345678-1234-1234-1234-123456789abc/1234567890_selfie.jpg"
+  oneOf:
+    - required: [selfie_base64]
+    - required: [selfie_s3_key]
+
+VerifyFaceResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+      description: Whether verification was successful
+    verification:
+      type: object
+      properties:
+        face_detected:
+          type: boolean
+          description: Whether a face was detected in the selfie
+        face_confidence:
+          type: number
+          format: float
+          description: Confidence level of face detection (0-100)
+        face_match:
+          type: boolean
+          description: Whether the selfie matches the ID document
+        similarity:
+          type: number
+          format: float
+          description: Similarity score between faces (0-100)
+        quality_check:
+          type: string
+          enum: [passed, failed, bypassed]
+          description: Quality check result
+        threshold_used:
+          type: number
+          format: float
+          description: Similarity threshold used for matching
+    message:
+      type: string
+      description: Human-readable message
+    error_code:
+      type: string
+      description: Error code if success is false
+    details:
+      type: object
+      description: Additional details (varies by response)

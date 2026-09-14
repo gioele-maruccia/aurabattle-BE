@@ -1,0 +1,123 @@
+get:
+  tags:
+    - Chat
+  summary: Get download URL for message attachments
+  description: |
+    Generates presigned S3 download URLs for all attachments in a message.
+    
+    **Requirements:**
+    - User must be participant in the chat
+    - Message must exist and have attachments
+    
+    **URL Validity:**
+    - Download URLs expire after 7 days (604800 seconds)
+    - Can be used multiple times until expiration
+    
+    **Use Cases:**
+    - Download documents shared in chat
+    - Preview images before downloading
+    - Access previously uploaded files
+    
+  operationId: getDownloadUrl
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+    - name: messageId
+      in: query
+      required: true
+      description: Message ID containing attachments
+      schema:
+        type: string
+        example: "msg_abc123def456"
+  responses:
+    '200':
+      description: Download URLs generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              downloadUrls:
+                type: array
+                description: List of download URLs for each attachment
+                items:
+                  type: object
+                  properties:
+                    fileName:
+                      type: string
+                      description: Original file name
+                      example: "contract.pdf"
+                    downloadUrl:
+                      type: string
+                      format: uri
+                      description: Presigned S3 URL for downloading (valid 7 days)
+                      example: "https://dev-beezey-chat-attachments.s3.amazonaws.com/chat_abc/contract.pdf?X-Amz-..."
+                    expiresIn:
+                      type: integer
+                      description: URL expiration in seconds
+                      example: 604800
+          examples:
+            single_attachment:
+              summary: Single PDF attachment
+              value:
+                downloadUrls:
+                  - fileName: "contract.pdf"
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/chat_40f1671d354346a0/contract.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&..."
+                    expiresIn: 604800
+            multiple_attachments:
+              summary: Multiple attachments
+              value:
+                downloadUrls:
+                  - fileName: "contract.pdf"
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/chat_abc/contract.pdf?..."
+                    expiresIn: 604800
+                  - fileName: "invoice.pdf"
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/chat_abc/invoice.pdf?..."
+                    expiresIn: 604800
+    '400':
+      description: Bad request - Missing or invalid parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "messageId is required"
+    '403':
+      description: Forbidden - User is not a participant in the chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "You are not authorized to access this chat"
+    '404':
+      description: Not found - Chat or message doesn't exist, or message has no attachments
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Message not found or has no attachments"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Failed to generate download URLs"

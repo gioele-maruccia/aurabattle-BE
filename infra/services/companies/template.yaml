@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Companies API service for seasonal job platform
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - staging
+      - prod
+    Description: Environment name
+
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+
+  CompaniesAssetsBucketName:
+    Type: String
+    Description: S3 bucket name for company assets
+    Default: ""
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+        COMPANIES_BUCKET_NAME: !Ref CompaniesAssetsBucketName
+        ATECO_CATEGORIES_TABLE_NAME: !Sub '${Environment}-AtecoCategories'
+        JOB_ROLES_TABLE_NAME: !Sub '${Environment}-JobRoles'
+        LOG_LEVEL: INFO
+
+Resources:
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  CompaniesApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub '${Environment}-companies-api'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+      TracingEnabled: true
+
+  # ============================================
+  # LAMBDA FUNCTIONS
+  # ============================================
+  
+  # Create Company Profile
+  CreateCompanyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-create'
+      CodeUri: ../../../src/lambdas/services/companies/create-company/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-AtecoCategories'
+        - S3CrudPolicy:
+            BucketName: !Ref CompaniesAssetsBucketName
+      Events:
+        CreateCompanyLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies
+            Method: POST
+        CreateCompany:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies
+            Method: POST
+
+  # Get Company Profile by userId
+  GetCompanyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-get'
+      CodeUri: ../../../src/lambdas/services/companies/get-company/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - S3ReadPolicy: 
+            BucketName: !Ref CompaniesAssetsBucketName
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-profiles'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource: !Ref CognitoUserPoolArn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          COMPANIES_BUCKET_NAME: !Ref CompaniesAssetsBucketName
+          PROFILE_PHOTOS_BUCKET: !Sub '${Environment}-beezey-profiles'
+          USER_POOL_ID: !Select [1, !Split ['/', !Ref CognitoUserPoolArn]]
+      Events:
+        GetCompanyLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies/{userId}
+            Method: GET
+        GetCompany:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies/{userId}
+            Method: GET
+
+  # Get Company Profile by companyId (public endpoint)
+  GetCompanyByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-get-by-id'
+      CodeUri: ../../../src/lambdas/services/companies/get-company-by-id/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - S3ReadPolicy: 
+            BucketName: !Ref CompaniesAssetsBucketName
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-profiles'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource: !Ref CognitoUserPoolArn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          COMPANIES_BUCKET_NAME: !Ref CompaniesAssetsBucketName
+          PROFILE_PHOTOS_BUCKET: !Sub '${Environment}-beezey-profiles'
+          USER_POOL_ID: !Select [1, !Split ['/', !Ref CognitoUserPoolArn]]
+      Events:
+        GetCompanyByIdLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies/public/{companyId}
+            Method: GET
+            Auth:
+              Authorizer: NONE  # Public endpoint
+        GetCompanyById:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies/public/{companyId}
+            Method: GET
+            Auth:
+              Authorizer: NONE  # Public endpoint
+
+  # Update Company Profile
+  UpdateCompanyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-update'
+      CodeUri: ../../../src/lambdas/services/companies/update-company/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - S3CrudPolicy:
+            BucketName: !Ref CompaniesAssetsBucketName
+      Events:
+        UpdateCompanyLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies/{userId}
+            Method: PUT
+        UpdateCompany:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies/{userId}
+            Method: PUT
+
+  # List all Companies (for backoffice)
+  ListCompaniesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-list'
+      CodeUri: ../../../src/lambdas/services/companies/list-companies/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+      Events:
+        ListCompaniesLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies
+            Method: GET
+        ListCompanies:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies
+            Method: GET
+
+  # Delete Company (soft delete)
+  DeleteCompanyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-delete'
+      CodeUri: ../../../src/lambdas/services/companies/delete-company/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Companies'
+      Events:
+        DeleteCompanyLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies/{userId}
+            Method: DELETE
+        DeleteCompany:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies/{userId}
+            Method: DELETE
+
+  # Get My Applicable Job Roles
+  GetMyApplicableJobRolesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-companies-get-my-applicable-job-roles'
+      CodeUri: ../../../src/lambdas/services/companies/get-my-applicable-job-roles/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobRoles'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-AtecoCategories'
+      Events:
+        GetMyApplicableJobRolesLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /companies/my-applicable-job-roles
+            Method: GET
+        GetMyApplicableJobRoles:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CompaniesApi
+            Path: /v1/companies/my-applicable-job-roles
+            Method: GET
+
+  # ============================================
+  # IAM ROLES & POLICIES
+  # ============================================
+  CompaniesApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref CompaniesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref CompaniesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  CompaniesApiUrl:
+    Description: API Gateway endpoint URL for Companies API
+    Value: !Sub 'https://${CompaniesApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${Environment}-CompaniesApiUrl'
+
+  CompaniesApiId:
+    Description: API Gateway ID
+    Value: !Ref CompaniesApi
+    Export:
+      Name: !Sub '${Environment}-CompaniesApiId'
+
+  CreateCompanyFunctionArn:
+    Description: ARN of CreateCompany Lambda function
+    Value: !GetAtt CreateCompanyFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-CreateCompanyFunctionArn'
+
+  GetCompanyFunctionArn:
+    Description: ARN of GetCompany Lambda function
+    Value: !GetAtt GetCompanyFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-GetCompanyFunctionArn'
+
+  UpdateCompanyFunctionArn:
+    Description: ARN of UpdateCompany Lambda function
+    Value: !GetAtt UpdateCompanyFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-UpdateCompanyFunctionArn'
+
+  GetMyApplicableJobRolesFunctionArn:
+    Description: ARN of GetMyApplicableJobRoles Lambda function
+    Value: !GetAtt GetMyApplicableJobRolesFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-GetMyApplicableJobRolesFunctionArn'

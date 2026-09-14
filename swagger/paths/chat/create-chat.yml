@@ -1,0 +1,77 @@
+post:
+  tags:
+    - Chat
+  summary: Create new chat
+  description: |
+    Create a new chat room for a booking between worker and company.
+    
+    **Requirements:**
+    - Valid booking ID
+    - Worker and company IDs match the booking
+    - User must be either the worker or company of the booking
+    
+    **Business Rules:**
+    - Only one chat per booking (idempotent on bookingId)
+    - Cannot create chat for someone else's booking
+    - Both worker and company have access
+    
+    **Side Effects:**
+    - Creates chat record in DynamoDB
+    - Initializes unread counters to 0
+    - Sets createdAt and updatedAt timestamps
+  operationId: createChat
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../../components/schemas/chat.yml#/CreateChatRequest'
+        examples:
+          create_booking_chat:
+            summary: Create chat for booking
+            value:
+              bookingId: "550e8400-e29b-41d4-a716-446655440000"
+              workerId: "569e32f0-3091-7029-ad89-57d25dfedee8"
+              companyId: "862e82c0-20a1-70c5-bc20-bd5eccf4d08d"
+  responses:
+    '201':
+      description: Chat created successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              chatId:
+                type: string
+                format: uuid
+                example: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+              message:
+                type: string
+                example: "Chat created successfully"
+    '400':
+      description: Bad request (invalid parameters)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (not authorized for this booking)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '409':
+      description: Chat already exists for this booking
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Chat already exists"
+              chatId:
+                type: string
+                example: "3a8b3c2d-1234-5678-90ab-cdef12345678"

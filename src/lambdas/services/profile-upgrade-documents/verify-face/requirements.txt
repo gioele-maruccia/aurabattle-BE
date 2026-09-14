@@ -1,0 +1,3 @@
+# Requirements for verify-face Lambda
+boto3>=1.34.0
+Pillow>=10.0.0

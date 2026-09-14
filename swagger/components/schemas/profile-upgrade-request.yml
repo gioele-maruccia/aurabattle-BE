@@ -1,0 +1,33 @@
+InitiateUpgradeRequest:
+  type: object
+  required:
+    - username
+    - upgrade_type
+  properties:
+    username:
+      type: string
+      format: email
+      description: User's email/username in Cognito
+      example: "user@example.com"
+    upgrade_type:
+      type: string
+      enum: [worker, company]
+      description: Type of profile upgrade requested
+
+InitiateUpgradeResponse:
+  type: object
+  properties:
+    username:
+      type: string
+    profile_type:
+      type: string
+    verification_status:
+      type: string
+      enum: [pending_documents, documents_uploaded, under_review, verified, rejected]
+    group:
+      type: string
+    timestamp:
+      type: string
+      format: date-time
+    message:
+      type: string

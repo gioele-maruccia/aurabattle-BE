@@ -1,0 +1,138 @@
+patch:
+  tags:
+    - Support Chat
+  summary: Update support chat status
+  description: |
+    Update the status of a support chat.
+    
+    **Requirements:**
+    - Requester can update their own support chat
+    - Beezey staff (beezey_staff or beezey_admin groups) can update any support chat
+    - Valid status values: open, in_progress, resolved, closed, archived
+    
+    **Use Cases:**
+    - Mark support chat as resolved after issue is fixed
+    - Close a support chat that's no longer needed
+    - Archive old support chats for record keeping
+    - Reopen a closed chat if needed
+    
+    **Side Effects:**
+    - Updates support chat status in DynamoDB
+  operationId: updateSupportChatStatus
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support Chat ID
+      schema:
+        type: string
+        example: "support_abc123def456"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              enum: [open, in_progress, resolved, closed, archived]
+              description: New support chat status
+              example: "resolved"
+        examples:
+          mark_resolved:
+            summary: Mark as resolved
+            value:
+              status: "resolved"
+          mark_in_progress:
+            summary: Mark as in progress (staff takes ownership)
+            value:
+              status: "in_progress"
+          close_chat:
+            summary: Close support chat
+            value:
+              status: "closed"
+          archive_chat:
+            summary: Archive old support chat
+            value:
+              status: "archived"
+          reopen_chat:
+            summary: Reopen closed chat
+            value:
+              status: "open"
+  responses:
+    '200':
+      description: Support chat status updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Support chat status updated successfully"
+              supportChatId:
+                type: string
+                example: "support_abc123def456"
+              status:
+                type: string
+                enum: [open, in_progress, resolved, closed, archived]
+                example: "resolved"
+              previousStatus:
+                type: string
+                enum: [open, in_progress, resolved, closed, archived]
+                example: "in_progress"
+    '400':
+      description: Bad request (invalid status, chat already has that status, etc.)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid status. Must be one of: open, in_progress, resolved, closed, archived"
+    '401':
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized - Invalid token"
+    '403':
+      description: Forbidden - User is not authorized to modify this support chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden - You are not authorized to modify this support chat"
+    '404':
+      description: Support chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Support chat not found"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

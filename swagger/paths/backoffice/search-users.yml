@@ -1,0 +1,72 @@
+    get:
+      tags:
+        - Backoffice
+      summary: Search users
+      description: Search users by email, name, status, or type (backoffice-api-sam project)
+      operationId: searchUsers
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [email, name, status, user_type, recent]
+          description: Type of search
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query (not needed for 'recent' type)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Search results with user profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sub:
+                          type: string
+                          description: User's unique identifier from Cognito
+                        userSub:
+                          type: string
+                          description: Alias for sub
+                        firstName:
+                          type: string
+                        lastName:
+                          type: string
+                        fullName:
+                          type: string
+                        email:
+                          type: string
+                          format: email
+                        profileType:
+                          type: string
+                          enum: [basic, worker, company, company_representative]
+                          description: User profile type
+                        userStatus:
+                          type: string
+                          enum: [FORCE_CHANGE_PASSWORD, CONFIRMED, UNCONFIRMED, ARCHIVED, COMPROMISED, UNKNOWN, RESET_REQUIRED, FORCE_CHANGE_PASSWORD]
+                        enabled:
+                          type: boolean
+                        registeredAt:
+                          type: string
+                          format: date-time
+                        lastModified:
+                          type: string
+                          format: date-time
+                  count:
+                    type: integer
+                    description: Number of users returned

@@ -1,0 +1,197 @@
+    Booking:
+      type: object
+      required:
+        - bookingId
+        - listingId
+        - workerId
+        - companyId
+        - startDate
+        - endDate
+        - status
+        - bookingType
+        - createdAt
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+          description: Unique booking identifier
+          example: "booking_2025_abc123"
+        
+        listingId:
+          type: string
+          format: uuid
+          description: Job listing ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        
+        workerId:
+          type: string
+          description: Worker's Cognito userId (sub)
+          example: "worker_abc123"
+        
+        companyId:
+          type: string
+          format: uuid
+          description: Company ID (from listing)
+          example: "company_xyz789"
+        
+        bookingType:
+          type: string
+          enum: [application, blackout]
+          description: |
+            Type of booking:
+            - application: Worker application for a job
+            - blackout: Company-defined unavailable period
+          example: "application"
+        
+        # Date fields
+        startDate:
+          type: string
+          format: date
+          description: Booking/blackout start date (ISO 8601)
+          example: "2025-06-15"
+        
+        endDate:
+          type: string
+          format: date
+          description: Booking/blackout end date (ISO 8601)
+          example: "2025-08-31"
+        
+        # Status
+        status:
+          type: string
+          enum: [pending, confirmed, rejected, cancelled, completed, no_show]
+          description: |
+            Booking status:
+            - **pending**: Awaiting company decision (initial state)
+            - **confirmed**: Company approved the application
+            - **rejected**: Company rejected the application
+            - **cancelled**: Cancelled by worker or company
+            - **completed**: Work period finished successfully
+            - **no_show**: Worker didn't show up (company marked)
+          example: "pending"
+        
+        # Application details (for application bookings)
+        message:
+          type: string
+          maxLength: 500
+          description: Worker's message to company (optional)
+          example: "I have 3 years of experience in hospitality and I'm fluent in English and Italian."
+        
+        preferredShift:
+          type: string
+          enum: [morning, afternoon, evening, night, flexible]
+          description: Worker's preferred shift
+          example: "morning"
+        
+        # Company response
+        companyResponse:
+          type: object
+          nullable: true
+          properties:
+            message:
+              type: string
+              description: Company's response message
+              example: "We're excited to have you join our team!"
+            respondedAt:
+              type: string
+              format: date-time
+              description: When company responded
+              example: "2025-05-16T14:30:00Z"
+            respondedBy:
+              type: string
+              description: Company user ID who responded
+              example: "user_company_owner"
+        
+        # Contract details (populated after confirmation)
+        contract:
+          type: object
+          nullable: true
+          properties:
+            hourlyRate:
+              type: number
+              format: float
+              description: Agreed hourly rate (EUR)
+              example: 12.50
+            hoursPerWeek:
+              type: integer
+              description: Expected hours per week
+              example: 40
+            totalHours:
+              type: integer
+              description: Total estimated hours for the period
+              example: 480
+            benefits:
+              type: array
+              items:
+                type: string
+              description: Additional benefits
+              example: ["Meals included", "Accommodation provided"]
+            startTime:
+              type: string
+              description: Daily start time
+              example: "08:00"
+            endTime:
+              type: string
+              description: Daily end time
+              example: "16:00"
+        
+        # Blackout details (for blackout bookings)
+        blackoutReason:
+          type: string
+          maxLength: 200
+          description: Reason for blackout period (company use)
+          example: "Restaurant closed for maintenance"
+        
+        # Timestamps
+        createdAt:
+          type: string
+          format: date-time
+          description: Booking creation timestamp
+          example: "2025-05-15T10:30:00Z"
+        
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-05-15T10:30:00Z"
+        
+        confirmedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Confirmation timestamp
+          example: "2025-05-16T14:30:00Z"
+        
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Cancellation timestamp
+        
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Completion timestamp
+        
+        # Denormalized metadata (for performance)
+        metadata:
+          type: object
+          description: Cached data to reduce lookups
+          properties:
+            workerName:
+              type: string
+              example: "Mario Rossi"
+            workerProfileImage:
+              type: string
+              format: uri
+              example: "https://s3.amazonaws.com/profiles/worker_abc123.jpg"
+            companyName:
+              type: string
+              example: "Beachside Restaurant"
+            listingTitle:
+              type: string
+              example: "Summer Waiter - Beach Location"
+            listingCategory:
+              type: string
+              example: "hospitality"

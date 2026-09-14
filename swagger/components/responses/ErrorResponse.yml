@@ -1,0 +1,24 @@
+    ErrorResponse:
+      type: object
+      required:
+        - statusCode
+        - error
+        - message
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        code:
+          type: integer
+          description: Specific error code for detailed error identification (e.g., 4001, 4012, 5005)
+          example: 4001
+        error:
+          type: string
+          example: "Bad Request"
+        message:
+          type: string
+          example: "Invalid date range: end date must be after start date"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true

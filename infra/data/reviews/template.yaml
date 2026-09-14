@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Reviews DynamoDB table for Beezey booking system
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - staging
+      - prod
+    Description: Environment name
+
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Description: DynamoDB billing mode
+
+Resources:
+  # ============================================
+  # DYNAMODB TABLE - REVIEWS
+  # ============================================
+  ReviewsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Reviews'
+      BillingMode: !Ref BillingMode
+      
+      # Backup automatico abilitato
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      
+      # Stream per trigger
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      # Definizione attributi usati nelle chiavi
+      AttributeDefinitions:
+        # Primary Key: reviewId
+        - AttributeName: reviewId
+          AttributeType: S
+        
+        # Attributi per GSI - Query by target (company_id o worker_id)
+        - AttributeName: targetId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+        
+        # Attributi per tracking del reviewer
+        - AttributeName: reviewerId
+          AttributeType: S
+        
+        # Attributi per tipo di revisione (per future analytics)
+        - AttributeName: reviewType
+          AttributeType: S
+      
+      # Primary Key
+      KeySchema:
+        - AttributeName: reviewId
+          KeyType: HASH
+      
+      # Global Secondary Indexes
+      GlobalSecondaryIndexes:
+        # Per recuperare tutte le recensioni di un target (company_id o worker_id) ordinate per data
+        # CRITICO: usato per calcolare media delle recensioni e mostrare la lista completa
+        - IndexName: targetId-createdAt-index
+          KeySchema:
+            - AttributeName: targetId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        
+        # Per recuperare tutte le recensioni scritte da un reviewer (worker_id o company_id)
+        # Utile per verificare se un utente ha già scritto una recensione per un booking
+        - IndexName: reviewerId-createdAt-index
+          KeySchema:
+            - AttributeName: reviewerId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        
+        # Per filtrare recensioni per tipo (worker-to-company, company-to-worker)
+        # Utile per analytics e reporting
+        - IndexName: reviewType-createdAt-index
+          KeySchema:
+            - AttributeName: reviewType
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      
+      # Protezione cancellazione accidentale
+      DeletionProtectionEnabled: !If
+        - IsProduction
+        - true
+        - false
+      
+      # Tags per organizzazione
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Reviews
+        - Key: ManagedBy
+          Value: SAM
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod]
+
+Outputs:
+  # DynamoDB Outputs
+  ReviewsTableName:
+    Description: Nome della tabella Reviews
+    Value: !Ref ReviewsTable
+    Export:
+      Name: !Sub '${Environment}-ReviewsTableName'
+
+  ReviewsTableArn:
+    Description: ARN della tabella Reviews
+    Value: !GetAtt ReviewsTable.Arn
+    Export:
+      Name: !Sub '${Environment}-ReviewsTableArn'
+
+  ReviewsTableStreamArn:
+    Description: ARN dello stream DynamoDB per trigger
+    Value: !GetAtt ReviewsTable.StreamArn
+    Export:
+      Name: !Sub '${Environment}-ReviewsTableStreamArn'
+
+  ReviewsGSI1Name:
+    Description: Nome del GSI targetId-createdAt
+    Value: targetId-createdAt-index
+    Export:
+      Name: !Sub '${Environment}-ReviewsGSI1Name'
+
+  ReviewsGSI2Name:
+    Description: Nome del GSI reviewerId-createdAt
+    Value: reviewerId-createdAt-index
+    Export:
+      Name: !Sub '${Environment}-ReviewsGSI2Name'
+
+  ReviewsGSI3Name:
+    Description: Nome del GSI reviewType-createdAt
+    Value: reviewType-createdAt-index
+    Export:
+      Name: !Sub '${Environment}-ReviewsGSI3Name'

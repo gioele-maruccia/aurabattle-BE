@@ -1,0 +1,73 @@
+version = 0.1
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "dev-reference-data-configuration-services"
+template_file = "infra/services/reference-data-configuration/template.yaml"
+resolve_s3 = false
+s3_prefix = "reference-data-configuration"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = [
+    "Environment=dev"
+]
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "dev-reference-data-configuration-services"
+template_file = "infra/services/reference-data-configuration/template.yaml"
+resolve_s3 = false
+s3_prefix = "reference-data-configuration"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = [
+    "Environment=dev"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "prod-reference-data-configuration-services"
+template_file = "infra/services/reference-data-configuration/template.yaml"
+resolve_s3 = false
+s3_prefix = "reference-data-configuration"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = [
+    "Environment=prod"
+]

@@ -1,0 +1,82 @@
+version = 0.1
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[default.deploy.parameters]
+stack_name = "profile-upgrade-documents-dev"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-docs"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=dev"
+]
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[dev.deploy.parameters]
+stack_name = "profile-upgrade-documents-dev"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-docs"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=dev"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[prod.deploy.parameters]
+stack_name = "profile-upgrade-documents-prod"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-docs"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=prod",
+    "ExistingBucketName=beezey-prod-user-documents",
+    "ExistingUserPoolId=eu-south-1_iCBtUlJO6",
+    "ExistingKMSKeyId=aa45aed4-3d74-476e-a67e-b9616eb4235c"
+]

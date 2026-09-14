@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Lambda per iniziare processo upgrade profilo utente
+
+Globals:
+  Function:
+    Runtime: python3.13
+
+Parameters:
+  UserPoolId:
+    Type: String
+    Description: ID del Cognito User Pool
+  
+  UserPoolArn:
+    Type: String
+    Description: ARN del Cognito User Pool
+  
+  UserProfilesTableName:
+    Type: String
+    Description: Nome della tabella DynamoDB UserProfiles
+  
+  Environment:
+    Type: String
+    Default: dev
+    Description: Ambiente di deployment
+
+Resources:
+  # IAM Role
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminUpdateUserAttributes
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminRemoveUserFromGroup
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminListGroupsForUser
+                Resource: !Ref UserPoolArn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}'
+
+  # API Gateway
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !Ref UserPoolArn
+
+  # Lambda Function
+  UpgradeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-user-initiate-upgrade"
+      Runtime: python3.13
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-request/initiate-upgrade/
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolId
+          USER_PROFILES_TABLE: !Ref UserProfilesTableName
+          ENVIRONMENT: !Ref Environment
+      Events:
+        PostApiLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /initiate-upgrade
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuth
+        PostApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /v1/initiate-upgrade
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuth
+
+  # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref Api
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref Api
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/initiate-upgrade"
+  
+  FunctionName:
+    Value: !Ref UpgradeFunction

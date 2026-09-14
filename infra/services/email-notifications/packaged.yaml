@@ -1,0 +1,255 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "Email Notifications Service \u2014 SES-based transactional & marketing\
+  \ emails"
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - dev-be
+    - prod
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+  JobListingsTableName:
+    Type: String
+    Description: DynamoDB Job Listings table name
+  BookingsTableName:
+    Type: String
+    Description: DynamoDB Bookings table name
+  CompaniesTableName:
+    Type: String
+    Description: DynamoDB Companies table name
+  SesFromAddress:
+    Type: String
+    Default: noreply@girolavoro.it
+    Description: SES verified sender address (must be verified in SES)
+  SesRegion:
+    Type: String
+    Default: eu-south-1
+    Description: AWS region where SES identity is verified
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 300
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        USER_PROFILES_TABLE:
+          Ref: UserProfilesTableName
+        JOB_LISTINGS_TABLE:
+          Ref: JobListingsTableName
+        BOOKINGS_TABLE:
+          Ref: BookingsTableName
+        COMPANIES_TABLE:
+          Ref: CompaniesTableName
+        SES_FROM_ADDRESS:
+          Ref: SesFromAddress
+        SES_REGION:
+          Ref: SesRegion
+        SEND_EMAIL_FUNCTION:
+          Fn::Sub: ${Environment}-email-send
+Resources:
+  SendEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-email-send
+      CodeUri: s3://beezey-prod/email-notifications/20260420-113447/081d281fab012d854f58809f1a682492
+      Handler: app.handler
+      Description: "Generic SES email sender \u2014 invoked by other Lambdas"
+      Timeout: 30
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - ses:SendEmail
+          - ses:SendRawEmail
+          Resource: '*'
+    Metadata:
+      SamResourceId: SendEmailFunction
+  AppUpdateBroadcastFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-email-app-update-broadcast
+      CodeUri: s3://beezey-prod/email-notifications/20260420-113447/ecf26e084b472168ea9e3d62a41e99e0
+      Handler: app.lambda_handler
+      Description: 'Sends an app-update email to ALL active users. Trigger manually
+        from AWS Console Test with: {"version":"x.y.z","notes_html":"<ul><li>...</li></ul>"}
+
+        '
+      Timeout: 600
+      MemorySize: 512
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - SendEmailFunction
+            - Arn
+    Metadata:
+      SamResourceId: AppUpdateBroadcastFunction
+  WeeklyUpgradeReminderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-email-weekly-upgrade-reminder
+      CodeUri: s3://beezey-prod/email-notifications/20260420-113447/4779228c15d1a43de7677f0a20a1fd9e
+      Handler: app.lambda_handler
+      Description: Weekly (Thu 09:00 UTC) upgrade-to-premium reminder for basic users
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          - dynamodb:UpdateItem
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - SendEmailFunction
+            - Arn
+      Events:
+        WeeklyThursday:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 9 ? * 5 *)
+            Name:
+              Fn::Sub: ${Environment}-email-upgrade-reminder-weekly
+            Description: "Thursday 09:00 UTC \u2014 upgrade reminder for basic users"
+            Enabled: true
+    Metadata:
+      SamResourceId: WeeklyUpgradeReminderFunction
+  WeeklyCompanyNoListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-email-weekly-company-no-listing
+      CodeUri: s3://beezey-prod/email-notifications/20260420-113447/91431e0dbec37696548608864b6f0895
+      Handler: app.lambda_handler
+      Description: Weekly (Mon 08:00 UTC) nudge to company users who have no listings
+        yet
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: JobListingsTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: CompaniesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          - dynamodb:UpdateItem
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CompaniesTableName}
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - SendEmailFunction
+            - Arn
+      Events:
+        WeeklyMonday:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 8 ? * 2 *)
+            Name:
+              Fn::Sub: ${Environment}-email-company-no-listing-weekly
+            Description: "Monday 08:00 UTC \u2014 nudge company users with no listings"
+            Enabled: true
+    Metadata:
+      SamResourceId: WeeklyCompanyNoListingFunction
+  WeeklyWorkerNoApplicationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-email-weekly-worker-no-application
+      CodeUri: s3://beezey-prod/email-notifications/20260420-113447/d13dfe30e836b5e01d1f3da28be8b284
+      Handler: app.lambda_handler
+      Description: Weekly (Fri 08:00 UTC) nudge to workers who have never applied
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BookingsTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          - dynamodb:UpdateItem
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${BookingsTableName}/index/workerId-startDate-index
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - SendEmailFunction
+            - Arn
+      Events:
+        WeeklyFriday:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 8 ? * 6 *)
+            Name:
+              Fn::Sub: ${Environment}-email-worker-no-application-weekly
+            Description: "Friday 08:00 UTC \u2014 nudge workers with no applications"
+            Enabled: true
+    Metadata:
+      SamResourceId: WeeklyWorkerNoApplicationFunction
+Outputs:
+  SendEmailFunctionArn:
+    Description: ARN of the generic SES sender Lambda
+    Value:
+      Fn::GetAtt:
+      - SendEmailFunction
+      - Arn
+  AppUpdateBroadcastFunctionArn:
+    Description: ARN of the app-update broadcast Lambda
+    Value:
+      Fn::GetAtt:
+      - AppUpdateBroadcastFunction
+      - Arn

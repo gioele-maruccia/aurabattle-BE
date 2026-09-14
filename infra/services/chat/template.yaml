@@ -1,0 +1,985 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Chat Service API for Beezey
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+
+  CognitoUserPoolId:
+    Type: String
+    Description: ID of the Cognito User Pool
+    Default: eu-south-1_0oK9agPYd   # DEV pool default - OVERRIDE in deploy scripts for other envs
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        CHATS_TABLE_NAME: !Sub '${Environment}-Chats'
+        MESSAGES_TABLE_NAME: !Sub '${Environment}-Messages'
+        CONNECTION_MANAGER_TABLE_NAME: !Sub '${Environment}-ConnectionManager'
+        CHAT_ATTACHMENTS_BUCKET_NAME: !Sub '${Environment}-beezey-chat-attachments'
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: chat
+        POWERTOOLS_METRICS_NAMESPACE: Beezey
+    Layers:
+      - !Ref ChatSharedLayer
+      - !Ref FirebaseAdminLayer
+
+Resources:
+  # ============================================
+  # LAMBDA LAYER (SHARED CODE)
+  # ============================================
+  ChatSharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${Environment}-chat-shared-layer'
+      Description: Shared models and DB manager for chat service
+      ContentUri: ../../../src/lambdas/layers/chat-shared/python/
+      CompatibleRuntimes:
+        - python3.13
+        - python3.12
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+
+  FirebaseAdminLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${Environment}-firebase-admin-layer'
+      Description: Firebase Admin SDK for push notifications
+      ContentUri: ../../../src/lambdas/layers/firebase-admin/python/
+      CompatibleRuntimes:
+        - python3.13
+        - python3.12
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+
+  # ============================================
+  # REST API GATEWAY
+  # ============================================
+  ChatApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub '${Environment}-chat-api'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+      TracingEnabled: true
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # ============================================
+  # WEBSOCKET API GATEWAY
+  # ============================================
+  ChatWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${Environment}-chat-websocket-api'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  ChatWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # ============================================
+  # LAMBDA FUNCTIONS
+  # ============================================
+
+  # 1. CREATE CHAT (chiamata automaticamente da booking)
+  CreateChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-create'
+      CodeUri: ../../../src/lambdas/services/chat/create-chat/
+      Handler: app.lambda_handler
+      Description: Create a new chat when a booking is created
+      Environment:
+        Variables:
+          USER_PROFILES_TABLE: !Sub '${Environment}-UserProfiles'
+          FIREBASE_SERVICE_ACCOUNT_PATH: /opt/python/beebusy-99d60-firebase-adminsdk-fbsvc-b37bca6781.json
+          USER_POOL_ID: !Ref CognitoUserPoolId
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+          BOOKINGS_TABLE_NAME: !Sub '${Environment}-Bookings'
+          JOB_LISTINGS_TABLE_NAME: !Sub '${Environment}-JobListings'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-UserProfiles'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobListings'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/${Environment}/POST/@connections/*'
+      Events:
+        CreateChatLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats
+            Method: POST
+        CreateChat:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 2. GET MY CHATS (lista chat personali)
+  GetMyChatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-my-chats'
+      CodeUri: ../../../src/lambdas/services/chat/get-my-chats/
+      Handler: app.lambda_handler
+      Description: Get list of user chats with profile photos
+      Environment:
+        Variables:
+          COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+          BOOKINGS_TABLE_NAME: !Sub '${Environment}-Bookings'
+          JOB_LISTINGS_TABLE_NAME: !Sub '${Environment}-JobListings'
+          PROFILE_PHOTOS_BUCKET: !Sub '${Environment}-beezey-profiles'
+          USER_POOL_ID: !Ref CognitoUserPoolId
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobListings'
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-profiles'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+      Events:
+        GetMyChatsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats
+            Method: GET
+        GetMyChats:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 2.5 GET UNREAD COUNT (conteggio totale messaggi non letti)
+  GetUnreadCountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-unread-count'
+      CodeUri: ../../../src/lambdas/services/chat/get-unread-count/
+      Handler: app.lambda_handler
+      Description: Get total unread message count across all user chats
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*'
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Messages/index/*'
+      Events:
+        GetUnreadCountLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/unread-count
+            Method: GET
+        GetUnreadCount:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/unread-count
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 3. GET MESSAGES (con paginazione)
+  GetMessagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-messages'
+      CodeUri: ../../../src/lambdas/services/chat/get-messages/
+      Handler: app.lambda_handler
+      Description: Get messages for a chat with pagination
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'  # Needed for update lastMessageState
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'  # Per update stato a "delivered"
+      Events:
+        GetMessagesLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/messages
+            Method: GET
+        GetMessages:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/messages
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 4. SEND MESSAGE
+  SendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-send-message'
+      CodeUri: ../../../src/lambdas/services/chat/send-message/
+      Handler: app.lambda_handler
+      Description: Send a message in a chat
+      Environment:
+        Variables:
+          USER_PROFILES_TABLE: !Sub '${Environment}-UserProfiles'
+          FIREBASE_SERVICE_ACCOUNT_PATH: /opt/python/beebusy-99d60-firebase-adminsdk-fbsvc-b37bca6781.json
+          USER_POOL_ID: !Ref CognitoUserPoolId
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTION_MANAGER_TABLE_NAME: !Sub '${Environment}-ConnectionManager'
+          COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+          BOOKINGS_TABLE_NAME: !Sub '${Environment}-Bookings'
+          JOB_LISTINGS_TABLE_NAME: !Sub '${Environment}-JobListings'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'  # Per update lastMessage
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-UserProfiles'  # For FCM tokens
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'  # For WebSocket connections
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobListings'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/${Environment}/POST/@connections/*'
+      Events:
+        SendMessageLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/messages
+            Method: POST
+        SendMessage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/messages
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 5. UPDATE MESSAGE STATE (sent -> delivered -> read)
+  UpdateMessageStateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-update-message-state'
+      CodeUri: ../../../src/lambdas/services/chat/update-message-state/
+      Handler: app.lambda_handler
+      Description: Update message state (delivered/read)
+      Environment:
+        Variables:
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTION_MANAGER_TABLE_NAME: !Sub '${Environment}-ConnectionManager'
+          COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+          BOOKINGS_TABLE_NAME: !Sub '${Environment}-Bookings'
+          JOB_LISTINGS_TABLE_NAME: !Sub '${Environment}-JobListings'
+          USER_POOL_ID: !Ref CognitoUserPoolId
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'  # Permesso UPDATE per lastMessageState
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobListings'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Messages/index/*'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/${Environment}/POST/@connections/*'
+      Events:
+        UpdateMessageStateLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/messages/{message_id}/state
+            Method: PATCH
+        UpdateMessageState:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/messages/{message_id}/state
+            Method: PATCH
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 6. SET STICKER (reazioni)
+  SetStickerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-set-sticker'
+      CodeUri: ../../../src/lambdas/services/chat/set-sticker/
+      Handler: app.lambda_handler
+      Description: Add a sticker/reaction to a message
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Messages/index/*'
+      Events:
+        SetStickerLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/messages/{message_id}/sticker
+            Method: POST
+        SetSticker:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/messages/{message_id}/sticker
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 7. GET UPLOAD URL (presigned URL per allegati)
+  GetUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-upload-url'
+      CodeUri: ../../../src/lambdas/services/chat/get-upload-url/
+      Handler: app.lambda_handler
+      Description: Generate presigned URL for file upload
+      Environment:
+        Variables:
+          CHAT_ATTACHMENTS_BUCKET: !Sub '${Environment}-beezey-chat-attachments'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - S3CrudPolicy:
+            BucketName: !Sub '${Environment}-beezey-chat-attachments'
+      Events:
+        GetUploadUrlLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/upload-url
+            Method: GET
+        GetUploadUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/upload-url
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 7b. GET DOWNLOAD URL (Presigned URL for attachments)
+  GetDownloadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-download-url'
+      CodeUri: ../../../src/lambdas/services/chat/get-download-url/
+      Handler: app.lambda_handler
+      Description: Generate presigned URL for file download
+      Environment:
+        Variables:
+          MESSAGES_TABLE_NAME: !Sub '${Environment}-Messages'
+          CHAT_ATTACHMENTS_BUCKET: !Sub '${Environment}-beezey-chat-attachments'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-chat-attachments'
+      Events:
+        GetDownloadUrlLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/download-url
+            Method: GET
+        GetDownloadUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/download-url
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 8. REQUEST BEEZEY HELP
+  RequestBeezeyHelpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-request-beezey-help'
+      CodeUri: ../../../src/lambdas/services/chat/request-beezey-help/
+      Handler: app.lambda_handler
+      Description: Request help from Beezey assistant
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'  # Per update lastMessage
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+      Events:
+        RequestBeezeyHelpLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/request-help
+            Method: POST
+        RequestBeezeyHelp:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/request-help
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 9. BACKOFFICE - GET CHATS WITH BEEZEY HELP REQUESTS
+  BackofficeGetChatWithHelpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-backoffice-get-chat-with-help'
+      CodeUri: ../../../src/lambdas/services/chat/backoffice-get-chat-with-help/
+      Handler: app.lambda_handler
+      Description: Get chats where Beezey help was requested (backoffice only)
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Messages'
+      Events:
+        GetChatsWithHelpLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /backoffice/chats/with-help-requests
+            Method: GET
+        GetChatsWithHelp:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/backoffice/chats/with-help-requests
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 10. DELETE CHAT (soft delete - imposta status a "deleted")
+  DeleteChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-delete'
+      CodeUri: ../../../src/lambdas/services/chat/delete-chat/
+      Handler: app.lambda_handler
+      Description: Soft delete a chat (sets status to deleted)
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'
+      Events:
+        DeleteChatLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}
+            Method: DELETE
+        DeleteChat:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 11. UPDATE CHAT STATUS
+  UpdateChatStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-update-status'
+      CodeUri: ../../../src/lambdas/services/chat/update-chat-status/
+      Handler: app.lambda_handler
+      Description: Update chat status (active, archived, closed, deleted)
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Chats'
+      Events:
+        UpdateChatStatusLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /chats/{chat_id}/status
+            Method: PATCH
+        UpdateChatStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ChatApi
+            Path: /v1/chats/{chat_id}/status
+            Method: PATCH
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # ============================================
+  # WEBSOCKET LAMBDA FUNCTIONS
+  # ============================================
+
+  # 11. ON CONNECT (WebSocket $connect route)
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-on-connect'
+      CodeUri: ../../../src/lambdas/services/chat/on-connect/
+      Handler: app.lambda_handler
+      Description: Handle WebSocket connection
+      Environment:
+        Variables:
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 11. ON DISCONNECT (WebSocket $disconnect route)
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-on-disconnect'
+      CodeUri: ../../../src/lambdas/services/chat/on-disconnect/
+      Handler: app.lambda_handler
+      Description: Handle WebSocket disconnection
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 12. TYPING STATUS (WebSocket typingStatus action)
+  TypingStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-typing-status'
+      CodeUri: ../../../src/lambdas/services/chat/typing-status/
+      Handler: app.lambda_handler
+      Description: Broadcast typing status to chat participant
+      Environment:
+        Variables:
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Messages'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/${Environment}/POST/@connections/*'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # 13. GET MY CHATS via WebSocket (WebSocket getChats action)
+  GetMyChatsWsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-chat-get-my-chats-ws'
+      CodeUri: ../../../src/lambdas/services/chat/get-my-chats-ws/
+      Handler: app.lambda_handler
+      Description: Return the user chat list via WebSocket (action=getChats)
+      Environment:
+        Variables:
+          COMPANIES_TABLE_NAME: !Sub '${Environment}-Companies'
+          BOOKINGS_TABLE_NAME: !Sub '${Environment}-Bookings'
+          JOB_LISTINGS_TABLE_NAME: !Sub '${Environment}-JobListings'
+          USER_POOL_ID: !Ref CognitoUserPoolId
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Chats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Companies'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-Bookings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-JobListings'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/${Environment}/POST/@connections/*'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: Chat
+
+  # ============================================
+  # WEBSOCKET INTEGRATION
+  # ============================================
+
+  # WebSocket routes
+  OnConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations'
+
+  OnConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      RouteKey: $connect
+      Target: !Sub 'integrations/${OnConnectIntegration}'
+
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/*/*'
+
+  OnDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations'
+
+  OnDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub 'integrations/${OnDisconnectIntegration}'
+
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/*/*'
+
+  TypingStatusIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TypingStatusFunction.Arn}/invocations'
+
+  TypingStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      RouteKey: typingStatus
+      Target: !Sub 'integrations/${TypingStatusIntegration}'
+
+  TypingStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TypingStatusFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/*/*'
+
+  GetMyChatsWsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetMyChatsWsFunction.Arn}/invocations'
+
+  GetMyChatsWsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ChatWebSocketApi
+      RouteKey: getChats
+      Target: !Sub 'integrations/${GetMyChatsWsIntegration}'
+
+  GetMyChatsWsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetMyChatsWsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApi}/*/*'
+
+  # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref ChatApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref ChatApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  # API Gateway Outputs
+  ChatApiUrl:
+    Description: URL base dell'API Gateway REST
+    Value: !Sub 'https://${ChatApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Export:
+      Name: !Sub '${Environment}-ChatApiUrl'
+
+  ChatApiId:
+    Description: ID dell'API Gateway REST
+    Value: !Ref ChatApi
+    Export:
+      Name: !Sub '${Environment}-ChatApiId'
+
+  # WebSocket API Outputs
+  ChatWebSocketApiUrl:
+    Description: URL WebSocket API Gateway
+    Value: !Sub 'wss://${ChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${Environment}-ChatWebSocketApiUrl'
+
+  ChatWebSocketApiId:
+    Description: ID dell'API Gateway WebSocket
+    Value: !Ref ChatWebSocketApi
+    Export:
+      Name: !Sub '${Environment}-ChatWebSocketApiId'
+
+  # Layer Output
+  ChatSharedLayerArn:
+    Description: ARN del layer condiviso
+    Value: !Ref ChatSharedLayer
+    Export:
+      Name: !Sub '${Environment}-ChatSharedLayerArn'
+
+  FirebaseAdminLayerArn:
+    Description: ARN del Firebase Admin SDK layer
+    Value: !Ref FirebaseAdminLayer
+    Export:
+      Name: !Sub '${Environment}-FirebaseAdminLayerArn'
+
+  # Lambda Function ARNs
+  CreateChatFunctionArn:
+    Description: ARN della Lambda create-chat
+    Value: !GetAtt CreateChatFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-CreateChatFunctionArn'
+
+  SendMessageFunctionArn:
+    Description: ARN della Lambda send-message
+    Value: !GetAtt SendMessageFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-SendMessageFunctionArn'
+
+  # WebSocket Lambda ARNs
+  OnConnectFunctionArn:
+    Description: ARN della Lambda on-connect (WebSocket)
+    Value: !GetAtt OnConnectFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-OnConnectFunctionArn'
+
+  OnDisconnectFunctionArn:
+    Description: ARN della Lambda on-disconnect (WebSocket)
+    Value: !GetAtt OnDisconnectFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-OnDisconnectFunctionArn'
+
+  TypingStatusFunctionArn:
+    Description: ARN della Lambda typing-status (WebSocket)
+    Value: !GetAtt TypingStatusFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-TypingStatusFunctionArn'

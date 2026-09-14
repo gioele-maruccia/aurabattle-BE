@@ -1,0 +1,115 @@
+post:
+  tags:
+    - Chat
+  summary: Send message
+  description: |
+    Send a new message in a chat.
+    
+    **Requirements:**
+    - User must be participant in the chat (worker or company)
+    - Content cannot be empty
+    - For attachments: first get upload URL, upload file, then send message with fileUrl
+    
+    **Side Effects:**
+    - Creates message in DynamoDB
+    - Updates chat lastMessage and timestamp
+    - Increments unread counter for recipient
+    - Triggers push notification to recipient (if FCM token is registered)
+    - ⚡ **WebSocket broadcast:** After the message is saved, two WS events are pushed:
+        1. `new_message` → sent to the **other participant** only (full MessageResponse)
+        2. `chat_updated` → sent to **all participants** (preview update for chat list UI)
+    - ⚡ **NEW:** If message contains "@beebusy" (case insensitive), automatically assigns
+      a backoffice operator to the chat. The operator gains full read/write access as a
+      third participant. A system confirmation message is sent automatically.
+    
+    **Push Notification Payload:**
+    The recipient receives a Firebase push notification with the following structure:
+    ```json
+    {
+      "notification": {
+        "title": "Francesco Cassano",
+        "body": "Message preview text..."
+      },
+      "data": {
+        "actionType": "chat",
+        "chatId": "3a8b3c2d-1234-5678-90ab-cdef12345678",
+        "bookingId": "550e8400-e29b-41d4-a716-446655440000",
+        "bookingStatus": "confirmed",
+        "jobListingId": "450e7400-e19b-41d4-a716-446655440000",
+        "senderId": "569e32f0-3091-7029-ad89-57d25dfedee8",
+        "senderName": "Francesco Cassano",
+        "bookingRange": "2026/02/01 - 2026/10/10",
+        "jobListingTitle": "Cameriere per evento",
+        "messagePreview": "Message preview text...",
+        "timestamp": "1640995200000"
+      }
+    }
+    ```
+    
+    **Message State:**
+    - Initially set to 'sent'
+    - Recipient can update to 'delivered' or 'read'
+  operationId: sendMessage
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID to send message to
+      schema:
+        type: string
+        example: \"chat_40f1671d354346a0\"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../../components/schemas/chat.yml#/SendMessageRequest'
+        examples:
+          text_message:
+            summary: Simple text message
+            value:
+              message_text: "Ciao, ho una domanda sul contratto"
+          message_with_attachment:
+            summary: Message with PDF attachment
+            value:
+              message_text: "Allego il documento richiesto"
+              attachments:
+                - file_name: "contract.pdf"
+                  file_size: 45678
+                  file_type: "application/pdf"
+                  s3_url: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/contract.pdf"
+  responses:
+    '201':
+      description: Message sent successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              messageId:
+                type: string
+                format: uuid
+                example: "9b8c7d6e-4321-8765-dcba-fedcba987654"
+              message:
+                type: string
+                example: "Message sent successfully"
+    '400':
+      description: Bad request (empty content or invalid attachment)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (not authorized for this chat)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

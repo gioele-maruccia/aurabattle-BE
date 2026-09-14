@@ -1,0 +1,49 @@
+version = 0.1
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "dev-user-profiles-data"
+s3_prefix = "user-profiles"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev"
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "dev-user-profiles-data"
+s3_prefix = "user-profiles"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev"
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "prod-user-profiles-data"
+s3_prefix = "user-profiles"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod"

@@ -1,0 +1,494 @@
+get:
+  tags:
+    - Job listings
+  summary: List / search job listings
+  description: |
+    Returns a paginated list of published job listings, optionally filtered and sorted.
+    Used by workers to browse and find jobs.
+
+    **Public endpoint — no authentication required.**
+
+    **Filtering:**
+    All filters are optional and can be combined freely. When `status` is omitted, only
+    `published` listings are returned by default.
+
+    **Pagination:**
+    Cursor-based pagination. Pass the `nextCursor` from a previous response as `cursor`
+    to retrieve the next page.
+
+    **Company data:**
+    Each listing includes enriched company information (name, logo, rating) fetched in
+    real-time from the Companies table.
+
+    **Listing types:**
+    - **CCNL listings** (`isManual: false`) — full CCNL contract details, job role, employment type, schedule
+    - **Manual listings** (`isManual: true`) — simplified fields: `salary`, `employmentType`, no contract object
+  operationId: listListings
+  security: []
+  parameters:
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+      description: Number of listings per page (max 50)
+      example: 20
+    - name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Pagination cursor (base64-encoded DynamoDB LastEvaluatedKey) returned by the previous page
+      example: "eyJsaXN0aW5nSWQiOiAiYWJjMTIzIn0="
+    - name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [published, draft, paused, closed, expired]
+        default: published
+      description: Filter by listing status. Defaults to `published`.
+      example: published
+    - name: category
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter by job category (e.g. `hospitality`, `food_service`)
+      example: hospitality
+    - name: city
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter by city name (case-insensitive)
+      example: Roma
+    - name: province
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter by province
+      example: RM
+    - name: country
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter by country code
+      example: IT
+    - name: companyId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Filter listings belonging to a specific company
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    - name: level
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [Qa, Qb, "1", "2", "3", "4", "5", "6S", "6", "7"]
+      description: Filter by CCNL contract level (only for CCNL listings)
+      example: "3"
+    - name: paragraph
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [I, II]
+      description: Filter by CCNL paragraph (I or II, only for CCNL listings)
+      example: I
+    - name: minHoursPerWeek
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+      description: Minimum weekly hours
+      example: 30
+    - name: maxHoursPerWeek
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 60
+      description: Maximum weekly hours
+      example: 40
+    - name: startDateFrom
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: |
+        Start of dates overlap range. Returns listings whose period overlaps with
+        [startDateFrom, startDateTo]. Use together with `startDateTo`.
+      example: "2025-06-01"
+    - name: startDateTo
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: |
+        End of dates overlap range. Returns listings whose period overlaps with
+        [startDateFrom, startDateTo]. Use together with `startDateFrom`.
+      example: "2025-09-30"
+    - name: alloggio
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: "If `true`, only return listings that include accommodation (`alloggio: true`)"
+      example: true
+    - name: sortBy
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [publishedAt, startDate]
+        default: publishedAt
+      description: Field to sort by
+      example: publishedAt
+    - name: sortOrder
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: Sort order
+      example: desc
+  responses:
+    '200':
+      description: Listings retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              listings:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    listingId:
+                      type: string
+                      description: Unique listing ID
+                      example: "job_2025_abc123"
+                    title:
+                      type: string
+                      example: "Cameriere di sala"
+                    description:
+                      type: string
+                      description: Truncated description (max 200 chars + "...")
+                      example: "Siamo alla ricerca di un cameriere esperto..."
+                    company:
+                      type: object
+                      properties:
+                        companyId:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                          example: "Hotel Bella Vista S.r.l."
+                        logoUrl:
+                          type: string
+                          format: uri
+                          nullable: true
+                        rating:
+                          type: number
+                          format: float
+                          example: 4.5
+                        reviewsCount:
+                          type: integer
+                          example: 12
+                    location:
+                      type: object
+                      properties:
+                        city:
+                          type: string
+                          example: "Roma"
+                        province:
+                          type: string
+                          example: "RM"
+                        region:
+                          type: string
+                          example: "Lazio"
+                        country:
+                          type: string
+                          example: "IT"
+                        displayText:
+                          type: string
+                          example: "Roma, RM, Lazio, IT"
+                    compensation:
+                      type: object
+                      properties:
+                        base:
+                          type: number
+                          format: float
+                          example: 1228.88
+                        contingency:
+                          type: number
+                          format: float
+                          example: 528.26
+                        superminimo:
+                          type: number
+                          format: float
+                          nullable: true
+                          example: 400.0
+                        grossPay:
+                          type: number
+                          format: float
+                          example: 2157.14
+                        estimatedNet:
+                          type: number
+                          format: float
+                          description: "Estimated net monthly pay after IRPEF + INPS. Indicative only."
+                          example: 1612.34
+                        currency:
+                          type: string
+                          example: "EUR"
+                        displayText:
+                          type: string
+                          example: "€2,157.14/month"
+                        includesSuperminimo:
+                          type: boolean
+                          example: true
+                    startDate:
+                      type: string
+                      format: date
+                      example: "2025-06-15"
+                    endDate:
+                      type: string
+                      format: date
+                      example: "2025-09-15"
+                    category:
+                      type: string
+                      example: "hospitality"
+                    positions:
+                      type: integer
+                      example: 2
+                    publishedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    status:
+                      type: string
+                      enum: [published, draft, paused, closed, expired]
+                      example: published
+                    isManual:
+                      type: boolean
+                      description: If true, listing was created with manual salary (non-CCNL sector)
+                      example: false
+                    vitto:
+                      type: boolean
+                      description: Meals included
+                      example: true
+                    alloggio:
+                      type: boolean
+                      description: Accommodation available
+                      example: false
+                    alloggioPricePerDay:
+                      type: number
+                      nullable: true
+                      description: Price per day for accommodation (null if free or not offered)
+                    alloggioDescription:
+                      type: string
+                      example: "Camera singola in residence"
+                    minConsecutiveDays:
+                      type: integer
+                      nullable: true
+                      description: Minimum consecutive days required
+                    minNoticeDays:
+                      type: integer
+                      nullable: true
+                      description: Minimum notice days before start
+                    viewsCount:
+                      type: integer
+                      example: 145
+                    applicationsCount:
+                      type: integer
+                      example: 7
+                    schedule:
+                      type: object
+                      properties:
+                        hoursPerWeek:
+                          type: integer
+                          nullable: true
+                          example: 40
+                        workDays:
+                          type: array
+                          items:
+                            type: string
+                          example: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+                        displayText:
+                          type: string
+                          example: "40 hrs/week"
+                    # CCNL-only fields (present when isManual = false)
+                    contract:
+                      type: object
+                      nullable: true
+                      description: Present only for CCNL listings (isManual = false)
+                      properties:
+                        level:
+                          type: string
+                          example: "3"
+                        levelName:
+                          type: string
+                          example: "3° Livello"
+                        ccnlType:
+                          type: string
+                          example: "turismo"
+                        paragraph:
+                          type: string
+                          example: "I"
+                        displayText:
+                          type: string
+                          example: "CCNL Turismo - 3° Livello"
+                    employment:
+                      type: object
+                      nullable: true
+                      description: Present only for CCNL listings (isManual = false)
+                      properties:
+                        typeId:
+                          type: string
+                        typeName:
+                          type: string
+                          example: "Tempo Determinato"
+                        displayText:
+                          type: string
+                    jobRole:
+                      type: object
+                      nullable: true
+                      description: Present only for CCNL listings (isManual = false)
+                      properties:
+                        roleId:
+                          type: string
+                        roleName:
+                          type: string
+                          example: "Cameriere"
+                        category:
+                          type: string
+                          example: "hospitality"
+                    # Manual-only fields (present when isManual = true)
+                    salary:
+                      type: number
+                      nullable: true
+                      description: Gross monthly salary in EUR (manual listings only)
+                      example: 1400.0
+                    employmentType:
+                      type: string
+                      nullable: true
+                      description: Employment type string (manual listings only)
+                      example: "Full-time"
+              count:
+                type: integer
+                description: Number of listings in this page
+                example: 20
+              total:
+                type: integer
+                description: Total number of listings matching the filters (when available)
+                nullable: true
+                example: 152
+              nextCursor:
+                type: string
+                nullable: true
+                description: Cursor for the next page. Null if there are no more results.
+                example: "eyJsaXN0aW5nSWQiOiAieHl6NDU2In0="
+          examples:
+            published_listings:
+              summary: Published listings with filters
+              value:
+                listings:
+                  - listingId: "job_2025_abc123"
+                    title: "Cameriere di sala"
+                    description: "Siamo alla ricerca di un cameriere esperto per la stagione estiva..."
+                    company:
+                      companyId: "comp-uuid-123"
+                      name: "Hotel Bella Vista S.r.l."
+                      logoUrl: "https://beezey-prod-companies-assets.s3.eu-south-1.amazonaws.com/companies/comp-uuid-123/profile.jpg"
+                      rating: 4.5
+                      reviewsCount: 12
+                    location:
+                      city: "Roma"
+                      province: "RM"
+                      region: "Lazio"
+                      country: "IT"
+                      displayText: "Roma, RM, Lazio, IT"
+                    compensation:
+                      base: 1072.24
+                      contingency: 528.26
+                      superminimo: null
+                      grossPay: 1600.50
+                      estimatedNet: 1213.32
+                      currency: "EUR"
+                      displayText: "€1,600.50/month"
+                      includesSuperminimo: false
+                    startDate: "2025-06-15"
+                    endDate: "2025-09-15"
+                    category: "hospitality"
+                    positions: 2
+                    publishedAt: "2025-04-01T10:00:00Z"
+                    status: "published"
+                    isManual: false
+                    vitto: true
+                    alloggio: false
+                    minConsecutiveDays: 30
+                    minNoticeDays: 7
+                    viewsCount: 145
+                    applicationsCount: 7
+                    schedule:
+                      hoursPerWeek: 40
+                      workDays: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+                      displayText: "40 hrs/week"
+                    contract:
+                      level: "3"
+                      levelName: "3° Livello"
+                      ccnlType: "turismo"
+                      paragraph: "I"
+                      displayText: "CCNL Turismo - 3° Livello"
+                    employment:
+                      typeId: "seasonal"
+                      typeName: "Tempo Determinato"
+                      displayText: "Tempo Determinato"
+                    jobRole:
+                      roleId: "waiter"
+                      roleName: "Cameriere"
+                      category: "hospitality"
+                count: 1
+                nextCursor: null
+    '400':
+      description: Invalid query parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "BadRequest"
+            message: "Invalid limit value. Must be between 1 and 50."
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "InternalServerError"
+            message: "An unexpected error occurred"

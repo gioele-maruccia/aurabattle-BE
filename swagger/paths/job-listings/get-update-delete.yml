@@ -1,0 +1,1622 @@
+    get:
+      tags:
+        - Job listings
+      summary: Get job listing by ID (Public)
+      description: |
+        Retrieve a single job listing by its ID. Public endpoint - no authentication required.
+        
+        **Manual vs CCNL Listings:**
+        - **CCNL listings** (FIPE companies): Have `contract` object with calculation, level, paragraph
+        - **Manual listings** (non-FIPE companies): Have `contract: null` and use `salary` field
+        
+        **Returns complete listing details with new CCNL schema:**
+        - Full contract information (CCNL calculation, superminimo, paragraph) - null for manual listings
+        - Job role details (roleId, roleName, category)
+        - Detailed schedule with workTimeSlots
+        - Calculated compensation (from contract for CCNL, from salary for manual)
+        - Company information with logo and recruiter details
+        - Application statistics and view counts
+        
+        **New Fields (CCNL Schema):**
+        - `contract.calculation`: Complete base pay calculation (CCNL only)
+        - `contract.superminimo`: Optional additional pay above CCNL (CCNL only)
+        - `contract.paragraph`: I or II - determines increment schedule (CCNL only)
+        - `jobRole`: Complete role information from JobRoles table
+        - `schedule.workTimeSlots`: Detailed time slots (single/split/flexible)
+        - `compensation`: Calculated total compensation (from contract or salary)
+        - `compensation.estimatedNet`: Estimated net after IRPEF + INPS (calculated on full grossPay including superminimo)
+        - `salary`: Direct salary field for manual listings (when contract is null)
+        
+        **Removed Fields:**
+        - `tags` (no longer used)
+        - `features` (no longer used)
+        
+        **Use Cases:**
+        - Job seeker viewing job details
+        - Display full job description with CCNL details
+        - Show company information and recruiter contact
+        - View work schedule and compensation breakdown
+      
+      operationId: getJobListing
+      security: []  # Public endpoint
+      
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job listing ID (UUID)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      
+      responses:
+        '200':
+          description: Job listing found and returned successfully
+          headers:
+            Cache-Control:
+              description: Cache control header
+              schema:
+                type: string
+                example: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      listing:
+                        type: object
+                        description: Complete job listing with CCNL contract details
+                        properties:
+                          listingId:
+                            type: string
+                            format: uuid
+                            example: "550e8400-e29b-41d4-a716-446655440000"
+                          
+                          companyId:
+                            type: string
+                            format: uuid
+                            example: "660e8400-e29b-41d4-a716-446655440001"
+                          
+                          title:
+                            type: string
+                            example: "Cameriere di sala per stagione estiva"
+                          
+                          description:
+                            type: string
+                            example: "Cerchiamo cameriere esperto per la stagione estiva 2025..."
+                          
+                          category:
+                            type: string
+                            description: Job category from JobCategories table
+                            example: "hospitality"
+                          
+                          jobRole:
+                            type: object
+                            description: Complete job role information
+                            properties:
+                              roleId:
+                                type: string
+                                description: Role ID from JobRoles table
+                                example: "FIPE_L4_016"
+                              roleName:
+                                type: string
+                                example: "Cameriere di ristorante"
+                              category:
+                                type: string
+                                example: "sala"
+                              roleDescription:
+                                type: string
+                                example: "Cameriere addetto al servizio in sala"
+                          
+                          contract:
+                            type: object
+                            description: Complete CCNL contract information
+                            properties:
+                              contractId:
+                                type: string
+                                example: "CCNL#turismo#4"
+                              ccnlType:
+                                type: string
+                                example: "turismo"
+                              level:
+                                type: string
+                                example: "4"
+                              levelName:
+                                type: string
+                                example: "Livello 4"
+                              description:
+                                type: string
+                                example: "Mansioni operative con conoscenze tecniche"
+                              paragraph:
+                                type: string
+                                enum: ["I", "II"]
+                                description: |
+                                  Paragraph determines increment schedule:
+                                  - I: Standard companies (June increments)
+                                  - II: Hotels (September increments)
+                                example: "II"
+                              coefficient:
+                                type: number
+                                format: decimal
+                                example: 3.36
+                              displayText:
+                                type: string
+                                description: Formatted contract display string
+                                example: "CCNL Turismo - Livello 4"
+                          
+                          location:
+                            type: object
+                            properties:
+                              address:
+                                type: string
+                                example: "Lungomare Augusto 123"
+                              city:
+                                type: string
+                                example: "Rimini"
+                              province:
+                                type: string
+                                example: "RN"
+                              region:
+                                type: string
+                                example: "Emilia-Romagna"
+                              country:
+                                type: string
+                                example: "IT"
+                              postalCode:
+                                type: string
+                                example: "47921"
+                              coordinates:
+                                type: object
+                                properties:
+                                  lat:
+                                    type: number
+                                    format: decimal
+                                    example: 44.0678
+                                  lon:
+                                    type: number
+                                    format: decimal
+                                    example: 12.5695
+                              displayText:
+                                type: string
+                                example: "Rimini, IT"
+                          
+                          schedule:
+                            type: object
+                            description: Work schedule with detailed time slots
+                            properties:
+                              hoursPerWeek:
+                                type: integer
+                                example: 40
+                              workTimeSlots:
+                                type: array
+                                description: Detailed work time slot definitions
+                                items:
+                                  type: object
+                                  properties:
+                                    type:
+                                      type: string
+                                      enum: [single, split, flexible]
+                                      example: "single"
+                                    slots:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          start:
+                                            type: string
+                                            pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+                                            example: "17:00"
+                                          end:
+                                            type: string
+                                            pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+                                            example: "23:00"
+                                    days:
+                                      type: array
+                                      items:
+                                        type: string
+                                        enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                                      example: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+                              workDays:
+                                type: array
+                                description: Summary of all working days
+                                items:
+                                  type: string
+                                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                                example: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+                              notes:
+                                type: string
+                                example: "Turni serali con un giorno di riposo infrasettimanale"
+                              displayText:
+                                type: string
+                                description: Formatted schedule display string
+                                example: "40 hrs/week • Single shift"
+                          
+                          employment:
+                            type: object
+                            properties:
+                              typeId:
+                                type: string
+                                example: "seasonal"
+                              typeName:
+                                type: string
+                                example: "Stagionale"
+                              contractDuration:
+                                type: string
+                                enum: [determinato, indeterminato]
+                                example: "determinato"
+                              benefits:
+                                type: array
+                                items:
+                                  type: string
+                                example: ["Alloggio incluso", "Vitto completo"]
+                              displayText:
+                                type: string
+                                example: "Stagionale"
+                          
+                          compensation:
+                            type: object
+                            description: Aggregated compensation breakdown
+                            properties:
+                              base:
+                                type: number
+                                format: decimal
+                                description: CCNL base monthly pay
+                                example: 1228.88
+                              contingency:
+                                type: number
+                                format: decimal
+                                description: Contingency allowance (indennità di contingenza)
+                                example: 528.26
+                              superminimo:
+                                type: number
+                                format: decimal
+                                nullable: true
+                                description: Optional additional pay above CCNL minimum
+                                example: 400.0
+                              grossPay:
+                                type: number
+                                format: decimal
+                                description: "Total gross monthly pay: base + contingency + superminimo"
+                                example: 2157.14
+                              estimatedNet:
+                                type: number
+                                format: decimal
+                                description: "Estimated net monthly pay after IRPEF (23% with detrazione lavoro €1880) and INPS (9.19%). Indicative - may vary based on individual deductions."
+                                example: 1612.34
+                              currency:
+                                type: string
+                                example: "EUR"
+                              displayText:
+                                type: string
+                                example: "€2,157.14/month"
+                          
+                          responsibilities:
+                            type: string
+                            example: "• Accoglienza e gestione clienti\n• Servizio ai tavoli..."
+                          
+                          requirements:
+                            type: string
+                            example: "• Esperienza minima 1 anno\n• Disponibilità weekend..."
+                          
+                          benefits:
+                            type: string
+                            example: "• Alloggio fornito\n• Vitto completo..."
+                          
+                          vitto:
+                            type: boolean
+                            description: Indicates if meals are provided to workers
+                            example: true
+                          
+                          alloggio:
+                            type: boolean
+                            description: Indicates if accommodation is provided to workers
+                            example: true
+                          
+                          alloggioPricePerDay:
+                            type: number
+                            format: decimal
+                            nullable: true
+                            description: Price per day for accommodation (if alloggio=true)
+                            example: 0
+                          
+                          alloggioDescription:
+                            type: string
+                            nullable: true
+                            maxLength: 1000
+                            description: Description of the accommodation (if alloggio=true)
+                            example: "Bello"
+                          
+                          minConsecutiveDays:
+                            type: integer
+                            nullable: true
+                            description: Minimum number of consecutive days required for a booking
+                            example: 7
+                          
+                          minNoticeDays:
+                            type: integer
+                            nullable: true
+                            description: Minimum notice days required before booking start date
+                            example: 5
+                          
+                          startDate:
+                            type: string
+                            format: date
+                            example: "2025-06-01"
+                          
+                          endDate:
+                            type: string
+                            format: date
+                            example: "2025-09-30"
+                          
+                          positions:
+                            type: integer
+                            example: 3
+                          
+                          status:
+                            type: string
+                            enum: [draft, published, paused, closed, archived]
+                            example: "published"
+                          
+                          viewsCount:
+                            type: integer
+                            example: 342
+                          
+                          applicationsCount:
+                            type: integer
+                            example: 28
+                          
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-05-01T10:00:00Z"
+                          
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-05-01T10:00:00Z"
+                          
+                          publishedAt:
+                            type: string
+                            format: date-time
+                            nullable: true
+                            example: "2025-05-01T10:00:00Z"
+                          
+                          expiresAt:
+                            type: string
+                            format: date-time
+                            nullable: true
+                            example: "2025-05-31T23:59:59Z"
+                      
+                      company:
+                        type: object
+                        nullable: true
+                        description: Company information with recruiter details
+                        properties:
+                          companyId:
+                            type: string
+                            format: uuid
+                            example: "660e8400-e29b-41d4-a716-446655440001"
+                          businessName:
+                            type: string
+                            example: "Grand Hotel Rimini"
+                          description:
+                            type: string
+                            example: "Hotel 4 stelle sul lungomare di Rimini"
+                          logoUrl:
+                            type: string
+                            format: uri
+                            nullable: true
+                            description: Presigned S3 URL (valid for 1 hour)
+                            example: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/..."
+                          location:
+                            type: object
+                            properties:
+                              city:
+                                type: string
+                                example: "Rimini"
+                              province:
+                                type: string
+                                example: "RN"
+                              country:
+                                type: string
+                                example: "IT"
+                          averageRating:
+                            type: number
+                            format: float
+                            minimum: 0
+                            maximum: 5
+                            nullable: true
+                            example: 4.5
+                          totalReviews:
+                            type: integer
+                            nullable: true
+                            example: 120
+                          recruiterInfo:
+                            type: object
+                            nullable: true
+                            description: Recruiter/contact person information from Cognito
+                            properties:
+                              userId:
+                                type: string
+                                example: "cognito-user-id-123"
+                              firstName:
+                                type: string
+                                nullable: true
+                                example: "Marco"
+                              lastName:
+                                type: string
+                                nullable: true
+                                example: "Rossi"
+                              profileImage:
+                                type: string
+                                format: uri
+                                nullable: true
+              
+              examples:
+                seasonalWaiterParagraph2:
+                  summary: Seasonal waiter - Paragraph II (hotel)
+                  description: Complete listing with CCNL calculation and superminimo
+                  value:
+                    success: true
+                    data:
+                      listing:
+                        listingId: "550e8400-e29b-41d4-a716-446655440000"
+                        companyId: "660e8400-e29b-41d4-a716-446655440001"
+                        title: "Cameriere di sala per stagione estiva"
+                        description: "Cerchiamo cameriere esperto per la stagione estiva 2025 in hotel 4 stelle a Rimini..."
+                        category: "hospitality"
+                        jobRole:
+                          roleId: "FIPE_L4_016"
+                          roleName: "Cameriere di ristorante"
+                          category: "sala"
+                          roleDescription: "Cameriere addetto al servizio in sala, ai tavoli e gestione ordini"
+                        contract:
+                          contractId: "CCNL#turismo#4"
+                          ccnlType: "turismo"
+                          level: "4"
+                          levelName: "Livello 4"
+                          description: "Mansioni operative con conoscenze tecniche in autonomia esecutiva"
+                          paragraph: "II"
+                          coefficient: 3.36
+                          calculation:
+                            basePay: 1127.75
+                            contingencyAllowance: 524.94
+                            article162Reduction: 3.36
+                            grossBasePay: 1649.33
+                            calculationDate: "2025-11-20T00:00:00Z"
+                            formula: "1127.75 + 524.94 - 3.36 = 1649.33 €"
+                            explanation: "Calcolo della retribuzione base lorda per il livello 4..."
+                          superminimo:
+                            amount: 200.0
+                            currency: "EUR"
+                            description: "Superminimo aziendale per esperienza e qualifica superiore"
+                          displayText: "CCNL Turismo - Livello 4"
+                        location:
+                          address: "Lungomare Augusto 123"
+                          city: "Rimini"
+                          province: "RN"
+                          region: "Emilia-Romagna"
+                          country: "IT"
+                          postalCode: "47921"
+                          coordinates:
+                            lat: 44.0678
+                            lon: 12.5695
+                          displayText: "Rimini, IT"
+                        schedule:
+                          hoursPerWeek: 40
+                          workTimeSlots:
+                            - type: "single"
+                              slots:
+                                - start: "17:00"
+                                  end: "23:00"
+                              days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+                          workDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+                          notes: "Turni serali con un giorno di riposo infrasettimanale (domenica)"
+                          displayText: "40 hrs/week • Single shift"
+                        employment:
+                          typeId: "seasonal"
+                          typeName: "Stagionale"
+                          contractDuration: "determinato"
+                          benefits:
+                            - "Alloggio incluso"
+                            - "Vitto completo"
+                            - "Bonus produzione fine stagione"
+                          displayText: "Stagionale"
+                        compensation:
+                          basePay: 1649.33
+                          superminimo: 200.0
+                          totalMonthly: 1849.33
+                          currency: "EUR"
+                          displayText: "€1,649.33-€1,849.33/month"
+                        responsibilities: "• Accoglienza e gestione clienti con cortesia e professionalità\n• Servizio ai tavoli..."
+                        requirements: "• Esperienza minima 1 anno come cameriere\n• Disponibilità weekend..."
+                        benefits: "• Alloggio fornito dalla struttura\n• Vitto completo incluso..."
+                        vitto: true
+                        alloggio: true
+                        minConsecutiveDays: 7
+                        minNoticeDays: 5
+                        startDate: "2025-06-01"
+                        endDate: "2025-09-30"
+                        positions: 3
+                        status: "published"
+                        viewsCount: 342
+                        applicationsCount: 28
+                        createdAt: "2025-05-01T10:00:00Z"
+                        updatedAt: "2025-05-01T10:00:00Z"
+                        publishedAt: "2025-05-01T10:00:00Z"
+                      company:
+                        companyId: "660e8400-e29b-41d4-a716-446655440001"
+                        businessName: "Grand Hotel Rimini"
+                        description: "Hotel 4 stelle sul lungomare di Rimini con tradizione dal 1950"
+                        logoUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/660e8400-e29b-41d4-a716-446655440001/profile.jpg?..."
+                        location:
+                          city: "Rimini"
+                          province: "RN"
+                          country: "IT"
+                        averageRating: 4.5
+                        totalReviews: 120
+                        recruiterInfo:
+                          userId: "cognito-user-id-123"
+                          firstName: "Marco"
+                          lastName: "Rossi"
+                          profileImage: null
+        
+        '404':
+          description: Job listing not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: "Not Found"
+                message: "Job listing not found"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: "Internal Server Error"
+                message: "An error occurred while fetching the job listing"
+                
+    delete:
+      tags:
+        - Job listings
+      summary: Delete job listing (Company owner only)
+      description: |
+        Delete a job listing. Only the company that owns the listing can delete it.
+        
+        **Soft delete:**
+        - Sets status to 'deleted'
+        - Preserves data for audit/recovery
+        - Removes from public listings
+        - Maintains booking history
+        
+        **Restrictions:**
+        - Cannot delete if has active bookings
+        - Must cancel/close bookings first
+      operationId: deleteJobListing
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Job listing ID
+      responses:
+        '200':
+          description: Listing deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Job listing deleted successfully"
+                  listingId:
+                    type: string
+                    format: uuid
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  deletedAt:
+                    type: string
+                    format: date-time
+                    example: "2026-02-14T12:00:00Z"
+                  cancelledBookingsCount:
+                    type: integer
+                    description: Number of active bookings that were automatically cancelled
+                    example: 3
+                  cancelledBookingsReason:
+                    type: string
+                    description: Reason why bookings were cancelled (only present if cancelledBookingsCount > 0)
+                    example: "All active bookings were cancelled because the job listing was deleted"
+              examples:
+                deletedWithBookings:
+                  summary: Deleted with active bookings
+                  value:
+                    message: "Job listing deleted successfully"
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    deletedAt: "2026-02-14T12:00:00Z"
+                    cancelledBookingsCount: 3
+                    cancelledBookingsReason: "All active bookings were cancelled because the job listing was deleted"
+                deletedNoBookings:
+                  summary: Deleted without bookings
+                  value:
+                    message: "Job listing deleted successfully"
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    deletedAt: "2026-02-14T12:00:00Z"
+        '400':
+          description: Cannot delete listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "LISTING_HAS_CONFIRMED_BOOKINGS"
+                  message:
+                    type: string
+                    example: "Cannot delete listing: 2 confirmed booking(s) exist"
+                  confirmedBookingsCount:
+                    type: integer
+                    description: Number of confirmed bookings preventing deletion
+                    example: 2
+                  pendingBookingsCount:
+                    type: integer
+                    description: Number of pending bookings that would be auto-cancelled
+                    example: 1
+              examples:
+                confirmedBookings:
+                  summary: Deletion blocked by confirmed bookings
+                  value:
+                    error: "LISTING_HAS_CONFIRMED_BOOKINGS"
+                    message: "Cannot delete listing: 2 confirmed booking(s) exist. Please coordinate with workers to cancel their bookings first.\n- Worker: John Doe, Dates: 2026-05-15 to 2026-05-25\n- Worker: Jane Smith, Dates: 2026-06-01 to 2026-06-30"
+                    confirmedBookingsCount: 2
+                    pendingBookingsCount: 1
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not the listing owner
+        '404':
+          description: Listing not found
+        '500':
+          description: Internal server error
+
+
+    put:
+      tags:
+        - Job listings
+      summary: Update job listing (Company owner only)
+      description: |
+        Update an existing job listing with CCNL Turismo contract schema validation. Only available for the company that owns the listing.
+        
+        **Access Control:**
+        - Must be authenticated as company user (in 'companies' Cognito group)
+        - Can only update own listings
+        - Cannot update deleted listings
+        
+        **Date Change Rules:**
+        - If the new date range fully contains all confirmed bookings → update proceeds, pending bookings outside
+          the range are auto-cancelled.
+        - If any confirmed booking falls outside the new date range → **409 BOOKING_CONFLICT** is returned.
+          The company must coordinate with the affected worker(s) first.
+        
+        **New CCNL Contract Structure:**
+        - Contract now includes full calculation details (basePay, contingencyAllowance, grossBasePay)
+        - Paragraph field (I or II) determines increment schedule
+        - Optional superminimo field for pay above CCNL minimum
+        - Mathematical validation of grossBasePay calculation
+        - Level validation (Qa, Qb, 1-7, 6S)
+        
+        **Validation:**
+        - All fields validated against reference tables (JobCategories, JobRoles, Contracts, EmploymentTypes)
+        - Category, jobRole, contract, and employment must reference active items
+        - Contract calculation verified: grossBasePay = basePay + contingencyAllowance - article162Reduction
+        - Text field length limits enforced (5000 chars for description/responsibilities/requirements/benefits)
+        - Date ranges validated (startDate < endDate)
+        - Coordinates validated if provided (-90 to 90 lat, -180 to 180 lon)
+        - Schedule workTimeSlots must include valid time formats and day names
+        
+        **Updatable Fields:**
+        - title, description (updated length limits)
+        - startDate, endDate, positions
+        - category (must exist in JobCategories)
+        - jobRole (simplified: roleId, roleName, category, roleDescription)
+        - contract (full CCNL structure with calculation, paragraph, coefficient, superminimo)
+        - location (with optional coordinates)
+        - schedule (hoursPerWeek, workTimeSlots with detailed time definitions, workDays, notes)
+        - employment (must include typeId that exists in EmploymentTypes)
+        - responsibilities, requirements, benefits (updated length limits)
+        - vitto, alloggio, alloggioPricePerDay, alloggioDescription
+        - minConsecutiveDays, minNoticeDays
+        - status (draft, published, closed, archived)
+        - expiresAt (optional expiration date)
+        
+        **Removed Fields:**
+        - salary (replaced by contract.calculation and contract.superminimo)
+        
+        **Protected Fields (cannot be changed):**
+        - listingId, companyId
+        - createdAt
+        - publishedAt (auto-set when status becomes 'published')
+        - updatedAt (auto-updated on every change)
+        - viewsCount, applicationsCount
+        
+        **Partial Updates:**
+        - Only fields included in request body will be updated
+        - Other fields remain unchanged
+        - Always updates `updatedAt` timestamp automatically
+        - Sets `publishedAt` automatically when status changes to 'published' (if not already set)
+        - Validation applies only to fields being updated
+        
+        **Common Update Scenarios:**
+        1. **CCNL Increment Update**: Update contract.calculation after calling calculate_base_pay
+        2. **Add/Update Superminimo**: Update contract.superminimo only
+        3. **Change Schedule**: Update schedule with new workTimeSlots
+        4. **Publish Draft**: Update status to 'published'
+        5. **Increase Positions**: Update positions and optionally title
+        6. **Update Descriptions**: Update responsibilities, requirements, benefits
+        
+        **Workflow for CCNL Updates:**
+        1. Call POST /calculate-base-pay to get new calculation
+        2. Copy calculation object to contract.calculation
+        3. PUT /listings/{listingId} with updated contract
+      operationId: updateJobListing
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job listing ID to update
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        description: |
+          Partial update payload. Only include fields you want to update.
+          All validations apply only to the fields being updated.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                  description: Job title
+                  example: "Cameriere di sala - Stagione estiva 2025"
+                
+                description:
+                  type: string
+                  minLength: 10
+                  maxLength: 5000
+                  description: Detailed job description
+                  example: "Cerchiamo cameriere esperto per la stagione estiva 2025..."
+                
+                startDate:
+                  type: string
+                  format: date
+                  description: Job start date (ISO 8601, cannot be more than 30 days in the past)
+                  example: "2025-06-01"
+                
+                endDate:
+                  type: string
+                  format: date
+                  description: Job end date (ISO 8601, cannot be more than 2 years in the future, must be after startDate)
+                  example: "2025-09-30"
+                
+                positions:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  description: Number of positions available
+                  example: 5
+                
+                category:
+                  type: string
+                  description: Category ID - must exist in JobCategories table and be active
+                  example: "hospitality"
+                
+                jobRole:
+                  type: object
+                  description: |
+                    Job role details (simplified structure - ATECO removed, now in company).
+                    roleId must exist in JobRoles table and be active.
+                  required:
+                    - roleId
+                    - roleName
+                    - category
+                  properties:
+                    roleId:
+                      type: string
+                      description: Role ID from JobRoles reference table (new format FIPE_L{level}_{seq})
+                      example: "FIPE_L4_016"
+                    roleName:
+                      type: string
+                      description: Display name of the role
+                      example: "Cameriere di ristorante"
+                    category:
+                      type: string
+                      description: Role category (sala, cucina, bar, reception, etc.)
+                      example: "sala"
+                    roleDescription:
+                      type: string
+                      description: Optional detailed description
+                      example: "Cameriere addetto al servizio in sala, ai tavoli e gestione ordini"
+                
+                contract:
+                  type: object
+                  description: |
+                    CCNL Turismo contract details with complete calculation.
+                    contractId must exist in Contracts table and be active.
+                    
+                    **IMPORTANT:** Use calculate_base_pay API first to get accurate calculation values.
+                  required:
+                    - contractId
+                    - ccnlType
+                    - level
+                    - levelName
+                    - description
+                    - paragraph
+                    - calculation
+                  properties:
+                    contractId:
+                      type: string
+                      pattern: '^CCNL#turismo#(Qa|Qb|[1-7]|6S)$'
+                      description: Contract ID (format CCNL#turismo#{level})
+                      example: "CCNL#turismo#4"
+                    
+                    ccnlType:
+                      type: string
+                      enum: [turismo]
+                      description: CCNL type (currently only 'turismo')
+                      example: "turismo"
+                    
+                    level:
+                      type: string
+                      enum: [Qa, Qb, "1", "2", "3", "4", "5", "6S", "6", "7"]
+                      description: Contract level (Qa, Qb for management; 1-7, 6S for levels)
+                      example: "4"
+                    
+                    levelName:
+                      type: string
+                      description: Full level name
+                      example: "Livello 4"
+                    
+                    description:
+                      type: string
+                      description: Job description for this CCNL level
+                      example: "Mansioni operative con conoscenze tecniche in autonomia esecutiva"
+                    
+                    paragraph:
+                      type: string
+                      enum: ["I", "II"]
+                      description: |
+                        Paragraph determines increment schedule:
+                        - I: Standard companies (June increments)
+                        - II: Hotel companies (September increments)
+                      example: "II"
+                    
+                    coefficient:
+                      type: number
+                      format: decimal
+                      minimum: 0
+                      description: Optional CCNL coefficient
+                      example: 3.36
+                    
+                    calculation:
+                      type: object
+                      required:
+                        - basePay
+                        - contingencyAllowance
+                        - grossBasePay
+                        - calculationDate
+                      description: |
+                        Base pay calculation details from calculate_base_pay API.
+                        Validated: grossBasePay = basePay + contingencyAllowance - article162Reduction
+                      properties:
+                        basePay:
+                          type: number
+                          format: decimal
+                          minimum: 0
+                          description: Monthly base pay from CCNL table
+                          example: 1167.75
+                        
+                        contingencyAllowance:
+                          type: number
+                          format: decimal
+                          minimum: 0
+                          description: Contingency allowance (Indennità di Contingenza)
+                          example: 524.94
+                        
+                        article162Reduction:
+                          type: number
+                          format: decimal
+                          minimum: 0
+                          description: Optional reduction for small businesses (≤15 employees)
+                          example: 3.36
+                        
+                        grossBasePay:
+                          type: number
+                          format: decimal
+                          minimum: 0
+                          description: Total gross base pay (validated against formula)
+                          example: 1689.33
+                        
+                        calculationDate:
+                          type: string
+                          format: date-time
+                          description: Date when calculation was performed
+                          example: "2026-09-01T00:00:00Z"
+                        
+                        formula:
+                          type: string
+                          description: Optional human-readable formula
+                          example: "1167.75 + 524.94 - 3.36 = 1689.33 €"
+                        
+                        explanation:
+                          type: string
+                          description: Optional detailed explanation
+                          example: "Calcolo della retribuzione base lorda..."
+                    
+                    superminimo:
+                      type: object
+                      description: Optional additional pay above CCNL minimum
+                      properties:
+                        amount:
+                          type: number
+                          format: decimal
+                          minimum: 0
+                          description: Monthly superminimo amount
+                          example: 250.0
+                        
+                        currency:
+                          type: string
+                          enum: [EUR, USD, GBP]
+                          default: EUR
+                          description: Currency
+                          example: "EUR"
+                        
+                        description:
+                          type: string
+                          maxLength: 500
+                          description: Reason for superminimo
+                          example: "Superminimo per esperienza e performance eccellenti"
+                
+                location:
+                  type: object
+                  description: Job location details
+                  required:
+                    - city
+                    - country
+                  properties:
+                    address:
+                      type: string
+                      maxLength: 200
+                      example: "Lungomare Augusto 123"
+                    city:
+                      type: string
+                      maxLength: 100
+                      example: "Rimini"
+                    province:
+                      type: string
+                      maxLength: 10
+                      example: "RN"
+                    region:
+                      type: string
+                      maxLength: 100
+                      example: "Emilia-Romagna"
+                    country:
+                      type: string
+                      maxLength: 2
+                      example: "IT"
+                    postalCode:
+                      type: string
+                      maxLength: 20
+                      example: "47921"
+                    coordinates:
+                      type: object
+                      properties:
+                        lat:
+                          type: number
+                          format: decimal
+                          minimum: -90
+                          maximum: 90
+                          example: 44.0678
+                        lon:
+                          type: number
+                          format: decimal
+                          minimum: -180
+                          maximum: 180
+                          example: 12.5695
+                
+                schedule:
+                  type: object
+                  description: Work schedule details with time slots
+                  required:
+                    - hoursPerWeek
+                    - workTimeSlots
+                  properties:
+                    hoursPerWeek:
+                      type: integer
+                      minimum: 20
+                      maximum: 48
+                      description: Weekly hours CCNL limits 20-48 for most levels
+                      example: 40
+                    
+                    workTimeSlots:
+                      type: array
+                      minItems: 1
+                      description: Detailed work time slot definitions
+                      items:
+                        type: object
+                        required:
+                          - type
+                          - slots
+                        properties:
+                          type:
+                            type: string
+                            enum: [single, split, flexible]
+                            description: Shift type (single=continuous, split=with break, flexible=variable)
+                            example: "split"
+                          
+                          slots:
+                            type: array
+                            minItems: 1
+                            items:
+                              type: object
+                              required:
+                                - start
+                                - end
+                              properties:
+                                start:
+                                  type: string
+                                  pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+                                  description: Start time (HH:MM, 24h format)
+                                  example: "11:00"
+                                end:
+                                  type: string
+                                  pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+                                  description: End time (HH:MM, 24h format)
+                                  example: "15:00"
+                          
+                          days:
+                            type: array
+                            items:
+                              type: string
+                              enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                            description: Days when this time slot applies
+                            example: ["tuesday", "wednesday", "thursday", "friday", "saturday"]
+                    
+                    workDays:
+                      type: array
+                      items:
+                        type: string
+                        enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                      description: Summary of all working days (union of workTimeSlots days)
+                      example: ["tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                    
+                    notes:
+                      type: string
+                      maxLength: 500
+                      description: Additional schedule notes
+                      example: "Turno spezzato mar-sab, turno unico domenica. Lunedì riposo."
+                
+                employment:
+                  type: object
+                  description: Employment type - typeId must exist in EmploymentTypes table and be active
+                  required:
+                    - typeId
+                  properties:
+                    typeId:
+                      type: string
+                      description: Employment type ID from EmploymentTypes reference table
+                      example: "seasonal"
+                    typeName:
+                      type: string
+                      description: Display name
+                      example: "Stagionale"
+                    contractDuration:
+                      type: string
+                      enum: [determinato, indeterminato]
+                      description: Contract duration type
+                      example: "determinato"
+                    benefits:
+                      type: array
+                      items:
+                        type: string
+                      description: Additional benefits
+                      example: ["Alloggio incluso", "Vitto completo", "Bonus produzione"]
+                
+                responsibilities:
+                  type: string
+                  maxLength: 5000
+                  description: Job responsibilities (increased from 2000 to 5000 chars)
+                  example: "• Accoglienza clienti\n• Servizio ai tavoli\n• Gestione ordini"
+                
+                requirements:
+                  type: string
+                  maxLength: 5000
+                  description: Job requirements (increased from 2000 to 5000 chars)
+                  example: "• Esperienza minima 1 anno\n• Disponibilità weekend"
+                
+                benefits:
+                  type: string
+                  maxLength: 5000
+                  description: Job benefits (increased from 2000 to 5000 chars)
+                  example: "• Alloggio fornito\n• Vitto incluso\n• Mance"
+                
+                vitto:
+                  type: boolean
+                  description: Indicates if meals are provided to workers
+                  example: true
+                
+                alloggio:
+                  type: boolean
+                  description: Indicates if accommodation is provided to workers
+                  example: true
+                
+                alloggioPricePerDay:
+                  type: number
+                  format: decimal
+                  minimum: 0
+                  maximum: 500
+                  description: |
+                    Optional: Price per day for accommodation (if alloggio=true).
+                    This is the daily rate charged to workers for the provided accommodation.
+                  example: 15.00
+                
+                alloggioDescription:
+                  type: string
+                  maxLength: 1000
+                  description: |
+                    Optional: Description of the accommodation (if alloggio=true).
+                    Details about rooms, facilities, location, etc.
+                  example: "Camera doppia in residence a 100m dal lavoro. Wi-Fi, cucina condivisa, biancheria inclusa."
+                
+                minConsecutiveDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  description: |
+                    Minimum number of consecutive days required for a booking.
+                    If set, workers must book at least this many days consecutively.
+                  example: 7
+                
+                minNoticeDays:
+                  type: integer
+                  minimum: 0
+                  maximum: 90
+                  description: |
+                    Minimum number of days in advance required for booking.
+                    If set, workers cannot book last-minute; they must book at least this many days before the start date.
+                  example: 5
+                
+                status:
+                  type: string
+                  enum: [draft, published, closed, archived]
+                  description: |
+                    Listing status. When changed to 'published', publishedAt is auto-set if not already set.
+                  example: "published"
+                
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Optional expiration date for the listing
+                  example: "2025-05-31T23:59:59Z"
+            
+            examples:
+              update_contract_ccnl_increment:
+                summary: Update contract after CCNL increment
+                description: Update contract calculation after calling calculate_base_pay for new increment
+                value:
+                  contract:
+                    contractId: "CCNL#turismo#4"
+                    ccnlType: "turismo"
+                    level: "4"
+                    levelName: "Livello 4"
+                    description: "Mansioni operative con conoscenze tecniche in autonomia esecutiva"
+                    paragraph: "II"
+                    coefficient: 3.36
+                    calculation:
+                      basePay: 1167.75
+                      contingencyAllowance: 524.94
+                      article162Reduction: 3.36
+                      grossBasePay: 1689.33
+                      calculationDate: "2026-09-01T00:00:00Z"
+                      formula: "1167.75 + 524.94 - 3.36 = 1689.33 €"
+              
+              update_superminimo:
+                summary: Add or update superminimo
+                description: Add additional pay above CCNL minimum
+                value:
+                  contract:
+                    superminimo:
+                      amount: 300.0
+                      currency: "EUR"
+                      description: "Superminimo per esperienza pluriennale e qualifiche aggiuntive"
+              
+              update_schedule_to_split_shift:
+                summary: Change schedule to split shift
+                description: Update from evening shift to split shift (lunch + dinner)
+                value:
+                  schedule:
+                    hoursPerWeek: 40
+                    workTimeSlots:
+                      - type: "split"
+                        slots:
+                          - start: "11:00"
+                            end: "15:00"
+                          - start: "18:00"
+                            end: "22:00"
+                        days: ["tuesday", "wednesday", "thursday", "friday", "saturday"]
+                      - type: "single"
+                        slots:
+                          - start: "11:00"
+                            end: "17:00"
+                        days: ["sunday"]
+                    workDays: ["tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                    notes: "Turno spezzato mar-sab, turno unico domenica. Lunedì riposo."
+              
+              publish_draft:
+                summary: Publish a draft listing
+                description: Change status from draft to published (auto-sets publishedAt)
+                value:
+                  status: "published"
+              
+              increase_positions:
+                summary: Increase available positions
+                description: Update positions and optionally title to reflect urgency
+                value:
+                  positions: 5
+                  title: "Cameriere di sala per stagione estiva - POSIZIONI AUMENTATE"
+              
+              update_descriptions:
+                summary: Update job descriptions
+                description: Improve or expand responsibilities, requirements, benefits
+                value:
+                  responsibilities: "• Accoglienza e gestione clienti con cortesia\n• Servizio ai tavoli e consulenza sul menù\n• Gestione ordini e coordinamento con la cucina\n• Preparazione mise en place sala e tavoli\n• Supporto durante eventi speciali"
+                  requirements: "• Esperienza minima 1 anno come cameriere\n• Disponibilità a lavorare nei weekend\n• Conoscenza base inglese (B1)\n• Conoscenza tedesco (preferibile)\n• Capacità di lavorare sotto pressione"
+                  benefits: "• Alloggio fornito (camera singola)\n• Vitto completo (3 pasti/giorno)\n• Mance secondo policy aziendale\n• Bonus performance mensili\n• Formazione continua\n• Assicurazione integrativa"
+              
+              partial_update_title_only:
+                summary: Update only title
+                description: Minimal update example - only title changed
+                value:
+                  title: "Cameriere di sala - Stagione estiva 2025 AGGIORNATO"
+      
+      responses:
+        '200':
+          description: Job listing updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Job listing updated successfully"
+                  listing:
+                    type: object
+                    description: Complete updated listing object
+                  updatedFields:
+                    type: array
+                    items:
+                      type: string
+                    description: List of fields that were updated
+                    example: ["title", "positions", "status"]
+                  cancelledBookingsCount:
+                    type: integer
+                    description: Number of bookings automatically cancelled due to date changes (only present if > 0)
+                    example: 2
+                  cancelledBookingsReason:
+                    type: string
+                    description: Reason why bookings were cancelled (only present if cancelledBookingsCount > 0)
+                    example: "Bookings were outside the new date range"
+              examples:
+                basicUpdate:
+                  summary: Update without date changes
+                  value:
+                    message: "Job listing updated successfully"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      companyId: "uuid-456"
+                      title: "Cameriere di sala - Stagione estiva 2025"
+                      positions: 5
+                      status: "published"
+                      updatedAt: "2025-11-20T16:30:00Z"
+                      publishedAt: "2025-11-20T16:30:00Z"
+                    updatedFields: ["title", "positions", "status"]
+                dateChangeWithCancelledBookings:
+                  summary: Date change causing booking cancellations
+                  value:
+                    message: "Job listing updated successfully"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      companyId: "uuid-456"
+                      startDate: "2026-06-01"
+                      endDate: "2026-08-31"
+                      updatedAt: "2026-02-14T12:00:00Z"
+                    updatedFields: ["startDate", "endDate"]
+                    cancelledBookingsCount: 2
+                    cancelledBookingsReason: "Bookings were outside the new date range"
+        
+        '409':
+          description: Conflict - Confirmed bookings fall outside the new date range
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                  - errorCode
+                  - message
+                properties:
+                  error:
+                    type: string
+                    example: "Conflict"
+                  errorCode:
+                    type: string
+                    enum: [BOOKING_CONFLICT]
+                    description: Machine-readable error code for the frontend to handle
+                    example: "BOOKING_CONFLICT"
+                  message:
+                    type: string
+                    description: Human-readable explanation with affected booking details (up to 3 shown)
+                    example: "Cannot modify dates: 2 confirmed booking(s) would fall outside the new date range (2026-03-16 – 2026-09-30). Please coordinate with the worker(s) or cancel their bookings first.\n- Worker: worker-uuid-1, Dates: 2026-03-01 to 2026-03-25\n- Worker: worker-uuid-2, Dates: 2026-03-15 to 2026-03-31"
+              examples:
+                booking_conflict:
+                  summary: Confirmed bookings fall outside new date range
+                  description: |
+                    Returned when startDate/endDate is changed and at least one confirmed booking
+                    would no longer be contained within the new date range.
+                    Bookings that are fully within the new range are NOT affected.
+                  value:
+                    error: "Conflict"
+                    errorCode: "BOOKING_CONFLICT"
+                    message: "Cannot modify dates: 2 confirmed booking(s) would fall outside the new date range (2026-03-16 – 2026-09-30). Please coordinate with the worker(s) or cancel their bookings first.\n- Worker: worker-uuid-1, Dates: 2026-03-01 to 2026-03-25\n- Worker: worker-uuid-2, Dates: 2026-03-15 to 2026-03-31"
+        
+        '400':
+          description: Bad Request - Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                no_fields:
+                  summary: No fields to update
+                  value:
+                    error: "Bad Request"
+                    message: "No valid fields to update"
+                
+                validation_error:
+                  summary: Field validation error
+                  value:
+                    error: "Validation Error"
+                    message: "Title must be at least 3 characters long"
+                
+                invalid_level:
+                  summary: Invalid contract level
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid contract level: 8. Must be one of: Qa, Qb, 1, 2, 3, 4, 5, 6S, 6, 7"
+                
+                invalid_paragraph:
+                  summary: Invalid paragraph
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid paragraph: III. Must be 'I' or 'II'"
+                
+                calculation_mismatch:
+                  summary: Calculation validation failed
+                  value:
+                    error: "Validation Error"
+                    message: "Gross base pay calculation mismatch: expected 1689.33, got 1649.33"
+                
+                invalid_category:
+                  summary: Invalid category reference
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid category: 'invalid_cat' does not exist in JobCategories"
+                
+                invalid_role:
+                  summary: Invalid job role reference
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid jobRole: 'ROLE#999' does not exist in JobRoles"
+                
+                invalid_contract:
+                  summary: Invalid contract reference
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid contract: 'CCNL#invalid#999' does not exist in Contracts"
+                
+                invalid_employment:
+                  summary: Invalid employment type
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid employment type: 'invalid_type' does not exist in EmploymentTypes"
+                
+                inactive_reference:
+                  summary: Inactive reference
+                  value:
+                    error: "Validation Error"
+                    message: "Job role 'FIPE_L4_016' is not active"
+                
+                invalid_dates:
+                  summary: Invalid date range
+                  value:
+                    error: "Validation Error"
+                    message: "Start date must be before end date"
+                
+                date_too_far_past:
+                  summary: Start date too far in past
+                  value:
+                    error: "Validation Error"
+                    message: "Start date cannot be more than 30 days in the past"
+                
+                date_too_far_future:
+                  summary: End date too far in future
+                  value:
+                    error: "Validation Error"
+                    message: "End date cannot be more than 2 years in the future"
+                
+                text_too_long:
+                  summary: Text field exceeds limit
+                  value:
+                    error: "Validation Error"
+                    message: "Description must be at most 5000 characters long"
+                
+                invalid_coordinates:
+                  summary: Invalid coordinates
+                  value:
+                    error: "Validation Error"
+                    message: "Latitude must be between -90 and 90"
+                
+                invalid_time_slot:
+                  summary: Invalid work time slot
+                  value:
+                    error: "Validation Error"
+                    message: "Work time slot type must be one of: single, split, flexible"
+                
+                invalid_json:
+                  summary: Malformed JSON
+                  value:
+                    error: "Bad Request"
+                    message: "Invalid JSON in request body"
+                
+                deleted_listing:
+                  summary: Cannot update deleted listing
+                  value:
+                    error: "Bad Request"
+                    message: "Cannot update a deleted job listing"
+        
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: "Unauthorized"
+                message: "Invalid or missing authentication token"
+        
+        '403':
+          description: Forbidden - Not authorized to update this listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                not_company:
+                  summary: Not a company user
+                  value:
+                    error: "Forbidden"
+                    message: "Only company users can update job listings"
+                
+                not_owner:
+                  summary: Not the listing owner
+                  value:
+                    error: "Forbidden"
+                    message: "You can only update your own job listings"
+        
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                listing_not_found:
+                  summary: Listing not found
+                  value:
+                    error: "Not Found"
+                    message: "Job listing not found"
+                
+                company_not_found:
+                  summary: Company profile not found
+                  value:
+                    error: "Not Found"
+                    message: "Company profile not found"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                general_error:
+                  summary: General error
+                  value:
+                    error: "Internal Server Error"
+                    message: "An error occurred while updating the job listing"
+                
+                company_fetch_error:
+                  summary: Error fetching company
+                  value:
+                    error: "Internal Server Error"
+                    message: "Error fetching company information"
+                
+                listing_fetch_error:
+                  summary: Error fetching listing
+                  value:
+                    error: "Internal Server Error"
+                    message: "Error fetching job listing"
+                
+                update_error:
+                  summary: Error during update
+                  value:
+                    error: "Internal Server Error"
+                    message: "Error updating job listing"

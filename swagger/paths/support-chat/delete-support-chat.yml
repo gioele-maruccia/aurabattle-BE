@@ -1,0 +1,53 @@
+delete:
+  tags:
+    - Support Chat
+  summary: Delete support chat
+  description: |
+    Soft-delete a support chat. Sets status to 'deleted'.
+    
+    **Permissions:**
+    - Only chat requester can delete
+    - Staff cannot delete (only close/resolve)
+    
+  operationId: deleteSupportChat
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support chat ID to delete
+      schema:
+        type: string
+        example: "support_abc123def456"
+  responses:
+    '200':
+      description: Support chat deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Support chat deleted successfully"
+    '403':
+      description: Forbidden - User not authorized to delete
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Only the chat requester can delete this chat"
+    '404':
+      description: Support chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Support chat not found"

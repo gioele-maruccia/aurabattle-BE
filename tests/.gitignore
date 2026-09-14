@@ -1,0 +1,21 @@
+# Authentication tokens (sensitive)
+config/auth.json
+
+# Test results
+results/
+*.log
+
+# Temporary files
+*.tmp
+/tmp/
+.proxy.pid
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

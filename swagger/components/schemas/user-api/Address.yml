@@ -1,0 +1,24 @@
+type: object
+description: User address information
+properties:
+  street:
+    type: string
+    maxLength: 200
+    example: "Via Roma 123"
+  city:
+    type: string
+    maxLength: 100
+    example: "Milano"
+  postal_code:
+    type: string
+    maxLength: 20
+    example: "20100"
+  province:
+    type: string
+    maxLength: 2
+    example: "MI"
+  country:
+    type: string
+    maxLength: 2
+    default: "IT"
+    example: "IT"

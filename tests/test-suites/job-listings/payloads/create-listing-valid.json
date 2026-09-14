@@ -1,0 +1,40 @@
+{
+  "title": "Cameriere per stagione estiva",
+  "description": "Cerchiamo cameriere motivato per la stagione estiva. Esperienza preferibile ma non obbligatoria. Ambiente dinamico e giovanile con possibilità di crescita professionale.",
+  "startDate": "2025-06-01",
+  "endDate": "2025-09-30",
+  "positions": 3,
+  "category": "Food & Beverage",
+  "status": "published",
+  "location": {
+    "address": "Via Roma 123",
+    "city": "Milano",
+    "province": "MI",
+    "postalCode": "20100",
+    "country": "Italy",
+    "coordinates": {
+      "lat": 45.4642,
+      "lon": 9.1900
+    }
+  },
+  "salary": {
+    "min": 15,
+    "max": 25,
+    "currency": "EUR",
+    "period": "hour"
+  },
+  "schedule": {
+    "hoursPerWeek": 20,
+    "flexibility": "immediate",
+    "shiftType": "day"
+  },
+  "employment": {
+    "type": "part-time",
+    "contractType": "seasonal"
+  },
+  "responsibilities": "Accogliere i clienti con cortesia e professionalità. Prendere le ordinazioni in modo accurato utilizzando il sistema POS. Servire cibo e bevande seguendo gli standard di qualità del locale. Gestire i pagamenti e mantenere l'area di lavoro pulita e ordinata.",
+  "benefits": "Paga oraria competitiva più mance. Orari flessibili compatibili con altri impegni. Pasti inclusi durante il turno di lavoro. Ambiente giovane e dinamico con possibilità di crescita professionale.",
+  "requirements": "Esperienza pregressa nel settore ristorazione preferibile ma non obbligatoria. Attitudine friendly ed energica con spiccate capacità comunicative. Disponibilità a lavorare nei weekend e festivi. Conoscenza base dell'inglese gradita.",
+  "tags": ["cameriere", "stagionale", "part-time", "milano"],
+  "features": ["immediate-start", "part-time", "flexible-schedule", "meals-included"]
+}

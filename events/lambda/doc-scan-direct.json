@@ -1,0 +1,17 @@
+{
+  "version": "0",
+  "id": "abcd-1234",
+  "detail-type": "Object Created",
+  "source": "aws.s3",
+  "account": "111122223333",
+  "time": "2025-09-11T07:00:00Z",
+  "region": "eu-south-1",
+  "resources": [],
+  "detail": {
+    "bucket": {"name": "4seasonsjob-dev-userdocs-eusouth1"},
+    "object": {
+      "key": "docs/USER123/1757399658891_id_card_front.png",
+      "size": 524288
+    }
+  }
+}

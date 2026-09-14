@@ -1,0 +1,94 @@
+get:
+  tags:
+    - Chat
+  summary: Get my chats
+  description: |
+    Get list of all personal chats with profile photos and details.
+    
+    **Response includes:**
+    - Chat metadata (chatId, bookingId, status, timestamps)
+    - **Booking details (startDate, endDate, bookingStatus)** - Retrieved DYNAMICALLY from Bookings table (always up-to-date)
+    - Interlocutor information (name, profile photo)
+    - Company information (for workers: logo + representative photo)
+    - Last message preview and state
+    - Unread count (if implemented)
+    
+    **Business Logic:**
+    - Worker sees: Company logo + Representative photo
+    - Company representative sees: Worker photo
+    - Chats ordered by most recent message first
+    - Only active/archived chats shown (not closed)
+    - **Booking dates are fetched in real-time** - If a booking's dates change via PATCH /bookings/{id}/dates, the updated dates appear immediately in GET /chats
+  operationId: getMyChats
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Chats retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              chats:
+                type: array
+                items:
+                  $ref: '../../components/schemas/chat.yml#/ChatListItem'
+              count:
+                type: integer
+                description: Total number of chats
+                example: 5
+          examples:
+            worker_view:
+              summary: Worker viewing chats
+              value:
+                chats:
+                  - chatId: "chat_abc123"
+                    bookingId: "booking_xyz789"
+                    status: "active"
+                    jobName: "Cameriere per evento"
+                    startDate: "2026-02-01"
+                    endDate: "2026-02-06"
+                    bookingStatus: "pending"
+                    lastMessageAt: "2025-11-27T14:30:00Z"
+                    lastMessagePreview: "Il contratto è pronto"
+                    lastMessageState: "read"
+                    lastMessageSenderId: "user_789"
+                    companyId: "comp_456"
+                    companyName: "Hotel Bella Vista"
+                    companyLogo: "https://..."
+                    interlocutorId: "user_789"
+                    interlocutorName: "Marco Rossi"
+                    interlocutorPhoto: "https://..."
+                count: 1
+            company_view:
+              summary: Company representative viewing chats
+              value:
+                chats:
+                  - chatId: "chat_def456"
+                    bookingId: "booking_abc123"
+                    status: "active"
+                    jobName: "Barista per stagione estiva"
+                    startDate: "2026-06-01"
+                    endDate: "2026-08-31"
+                    bookingStatus: "confirmed"
+                    lastMessageAt: "2025-11-27T15:00:00Z"
+                    lastMessagePreview: "Quando posso iniziare?"
+                    lastMessageState: "delivered"
+                    lastMessageSenderId: "worker_123"
+                    interlocutorId: "worker_123"
+                    interlocutorName: "Giuseppe Verdi"
+                    interlocutorPhoto: "https://..."
+                count: 1
+    '401':
+      description: Unauthorized (invalid or missing token)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

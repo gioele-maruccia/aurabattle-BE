@@ -1,0 +1,23 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "eu-south-1",
+      "eventTime": "2025-09-10T18:40:18.000Z",
+      "eventName": "ObjectCreated:Put",
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "bucket": {
+          "name": "4seasonsjob-dev-userdocs-eusouth1",
+          "arn": "arn:aws:s3:::4seasonsjob-dev-userdocs-eusouth1"
+        },
+        "object": {
+          "key": "docs/e65e8250-c061-7022-db46-cc947249f3dc/1757574314404_id_card_front.png",
+          "size": 396640,
+          "eTag": "0123456789abcdef0123456789abcdef"
+        }
+      }
+    }
+  ]
+}

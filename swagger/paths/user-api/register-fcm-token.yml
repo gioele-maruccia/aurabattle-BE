@@ -1,0 +1,132 @@
+post:
+  tags:
+    - User API
+  summary: Register FCM Token
+  description: |
+    Register or update Firebase Cloud Messaging (FCM) token for push notifications.
+    
+    **Called after every user login** - the FCM token can change on each login,
+    so the app should call this endpoint after each successful authentication.
+    
+    The token is stored in the user's profile and used to send push notifications for:
+    
+    **1. Chat Messages** - When a new message is received:
+    ```json
+    {
+      "notification": {
+        "title": "Francesco Cassano",
+        "body": "Ciao, come va?..."
+      },
+      "data": {
+        "actionType": "chat",
+        "chatId": "chat-uuid",
+        "bookingId": "booking-uuid",
+        "bookingStatus": "confirmed",
+        "jobListingId": "listing-uuid",
+        "senderId": "sender-uuid",
+        "senderName": "Francesco Cassano",
+        "bookingRange": "2026/02/01 - 2026/10/10",
+        "jobListingTitle": "Cameriere per evento",
+        "messagePreview": "Ciao, come va?...",
+        "timestamp": "1640995200000"
+      }
+    }
+    ```
+    
+    **2. Profile Upgrade Status** - When profile verification completes:
+    ```json
+    {
+      "notification": {
+        "title": "Profilo verificato!",
+        "body": "La verifica del tuo profilo come azienda/lavoratore è andata a buon fine."
+      },
+      "data": {
+        "actionType": "upgrade"
+      }
+    }
+    ```
+    
+    **Security**: User can only register token for their own profile.
+  operationId: registerFcmToken
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: userId
+      in: path
+      required: true
+      description: User's Cognito sub (UUID) - must match authenticated user
+      schema:
+        type: string
+        format: uuid
+      example: "12345678-1234-1234-1234-123456789abc"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - fcm_token
+          properties:
+            fcm_token:
+              type: string
+              description: Firebase Cloud Messaging token from the device
+              example: "fcm-device-token-from-firebase-sdk"
+  responses:
+    '200':
+      description: FCM token registered successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "FCM token registered successfully"
+              user_id:
+                type: string
+                format: uuid
+                example: "12345678-1234-1234-1234-123456789abc"
+              fcm_token_updated_at:
+                type: string
+                format: date-time
+                example: "2026-01-16T10:00:00Z"
+    '400':
+      description: Bad Request - Missing or invalid fcm_token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "BadRequest"
+              message:
+                type: string
+                example: "fcm_token is required"
+    '403':
+      description: Forbidden - User trying to register token for another user
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden"
+              message:
+                type: string
+                example: "You can only register FCM token for your own profile"
+    '500':
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "InternalServerError"
+              message:
+                type: string
+                example: "Failed to register FCM token"

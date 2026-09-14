@@ -1,0 +1,140 @@
+get:
+  tags:
+    - Support Chat
+  summary: Get support messages
+  description: |
+    Retrieves messages from a support chat with pagination.
+    
+    **Permissions:**
+    - Chat requester can access messages
+    - Assigned staff can access messages
+    - Other users get 403 Forbidden
+    
+  operationId: getSupportMessages
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support chat ID
+      schema:
+        type: string
+        example: "support_abc123def456"
+    - name: limit
+      in: query
+      required: false
+      description: Maximum number of messages to return (default 50, max 200)
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+        example: 50
+    - name: cursor
+      in: query
+      required: false
+      description: Base64-encoded pagination cursor for lazy loading
+      schema:
+        type: string
+        example: "eyJzdXBwb3J0Q2hhdElkIjogInN1cHBvcnRfYWJjMTIzZGVmNDU2IiwgInRpbWVzdGFtcCI6ICI..."
+  responses:
+    '200':
+      description: Messages retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        supportChatId:
+                          type: string
+                          example: "support_abc123def456"
+                        messageId:
+                          type: string
+                          example: "msg_12345"
+                        senderId:
+                          type: string
+                        senderType:
+                          type: string
+                          enum: [worker, company, beezey, support]
+                        messageText:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+                        state:
+                          type: string
+                          enum: [sent, delivered, read]
+                        attachments:
+                          type: array
+                          items:
+                            type: object
+                  count:
+                    type: integer
+                    description: Number of messages returned
+                    example: 10
+                  hasMore:
+                    type: boolean
+                    description: Whether there are more messages available
+                    example: true
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Cursor for the next batch of messages (null if no more)
+                    example: "eyJzdXBwb3J0Q2hhdElkIjogInN1cHBvcnRfYWJjMTIzZGVmNDU2IiwgInRpbWVzdGFtcCI6ICI..."
+              meta:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                    description: Limit used for this request
+                    example: 50
+          examples:
+            with_pagination:
+              summary: Messages retrieved with pagination
+              value:
+                success: true
+                data:
+                  messages:
+                    - supportChatId: "support_abc123def456"
+                      messageId: "msg_12345"
+                      senderId: "user123"
+                      senderType: "company"
+                      messageText: "Ho bisogno di aiuto"
+                      timestamp: "2025-12-17T15:30:00.123456+00:00"
+                      state: "read"
+                      attachments: []
+                    - supportChatId: "support_abc123def456"
+                      messageId: "msg_12346"
+                      senderId: "support123"
+                      senderType: "support"
+                      messageText: "Come posso aiutarti?"
+                      timestamp: "2025-12-17T15:35:00.123456+00:00"
+                      state: "delivered"
+                      attachments: []
+                  count: 10
+                  hasMore: true
+                  nextCursor: "eyJzdXBwb3J0Q2hhdElkIjogInN1cHBvcnRfYWJjMTIzZGVmNDU2IiwgInRpbWVzdGFtcCI6ICI..."
+                meta:
+                  limit: 50
+    '403':
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    '404':
+      description: Support chat not found

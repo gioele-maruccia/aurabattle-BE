@@ -1,0 +1,180 @@
+get:
+  tags:
+    - User Profile & Settings
+  summary: List user's bookmarked job listings
+  description: |
+    Retrieve all job listings bookmarked by the user with full details including company info, 
+    compensation, schedule, and location. Uses the same formatting as job-listings API for consistency.
+    
+    **Manual vs CCNL Listings:**
+    - **CCNL listings**: Have `contract` object with calculation details
+    - **Manual listings**: Have `contract: null` and compensation from `salary` field
+    
+    By default, only published job listings are returned. Use `include_inactive=true` to see 
+    paused, closed, archived listings, or to identify deleted listings.
+  operationId: listBookmarkedJobListings
+  security:
+    - CognitoAuth: []
+  
+  parameters:
+    - name: include_inactive
+      in: query
+      description: Include job listings that are not published (paused, closed, archived)
+      required: false
+      schema:
+        type: boolean
+        default: false
+      example: false
+  
+  responses:
+    '200':
+      description: Bookmarked job listings retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      $ref: '../../components/schemas/jobListingUI.yml#/JobListingUI'
+                  count:
+                    type: integer
+                    description: Number of listings returned
+                    example: 5
+              meta:
+                type: object
+                properties:
+                  totalBookmarked:
+                    type: integer
+                    description: Total number of bookmarks saved
+                    example: 8
+                  includeInactive:
+                    type: boolean
+                    example: false
+                  filtered:
+                    type: integer
+                    description: Number of listings filtered out (paused, closed, etc.)
+                    example: 2
+                  notFound:
+                    type: integer
+                    description: Number of listings that were deleted
+                    example: 1
+          examples:
+            withActiveListings:
+              summary: Response with active bookmarks
+              value:
+                success: true
+                data:
+                  listings:
+                    - listingId: "job-123"
+                      title: "Cameriere/a di sala"
+                      description: "Cerchiamo cameriere/a esperto/a per stagione estiva..."
+                      company:
+                        companyId: "comp-456"
+                        name: "Hotel Bella Vista"
+                        logoUrl: "https://s3.amazonaws.com/..."
+                        rating: 4.5
+                        reviewsCount: 23
+                      location:
+                        city: "Rimini"
+                        province: "RN"
+                        country: "IT"
+                        displayText: "Rimini, IT"
+                      compensation:
+                        minMonthly: 1800
+                        maxMonthly: 1800
+                        currency: "EUR"
+                        displayText: "€1,800.00/month"
+                        basePay: 1800
+                        includesSuperminimo: false
+                      contract:
+                        level: "4"
+                        levelName: "Quarto livello"
+                        ccnlType: "turismo"
+                        paragraph: "I"
+                        displayText: "CCNL Turismo - Quarto livello"
+                      schedule:
+                        hoursPerWeek: 40
+                        workDays: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+                        displayText: "40 hrs/week"
+                      employment:
+                        typeId: "seasonal-full-time"
+                        typeName: "Seasonal"
+                        displayText: "Seasonal"
+                      jobRole:
+                        roleId: "waiter"
+                        roleName: "Cameriere/a di sala"
+                        category: "Sala"
+                      startDate: "2024-06-01"
+                      endDate: "2024-09-30"
+                      category: "hospitality"
+                      positions: 3
+                      publishedAt: "2024-03-15T10:00:00Z"
+                      status: "published"
+                      viewsCount: 156
+                      applicationsCount: 12
+                  count: 1
+                meta:
+                  totalBookmarked: 1
+                  includeInactive: false
+                  filtered: 0
+                  notFound: 0
+            
+            withFilteredListings:
+              summary: Response with filtered/deleted bookmarks
+              value:
+                success: true
+                data:
+                  listings: []
+                  count: 0
+                meta:
+                  totalBookmarked: 5
+                  includeInactive: false
+                  filtered: 3
+                  notFound: 2
+    
+    '401':
+      description: Unauthorized - Invalid or missing authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Unauthorized"
+    
+    '404':
+      description: User profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Not Found"
+              message:
+                type: string
+                example: "User profile not found"
+    
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal Server Error"
+              message:
+                type: string
+                example: "An unexpected error occurred"

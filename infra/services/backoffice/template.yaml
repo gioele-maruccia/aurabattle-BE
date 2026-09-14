@@ -1,0 +1,721 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  documents-backoffice
+  SAM Template for document management backoffice APIs
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 60
+    MemorySize: 512
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref ExistingTableName
+        BUCKET_NAME: !Ref ExistingBucketName
+        REGION: !Ref AWS::Region
+        BUCKET_REGION: !Ref AWS::Region
+        COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+        FORCE_UPDATE: "2025-09-30_v4"  # Updated timestamp
+
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin: "'*'"  # In produzione: specifica i domini del backoffice
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+  ExistingBucketName:
+    Type: String
+    Description: Name of S3 bucket containing documents
+  ExistingTableName:
+    Type: String
+    Description: Name of DynamoDB table containing document metadata
+  CognitoUserPoolId:
+    Type: String
+    Description: Cognito User Pool ID containing user profiles
+  KMSKeyId:
+    Type: String
+    Description: KMS Key ID for S3 encryption (actual key ID from error message)
+
+Resources:
+  # ---------------------------
+  # LAMBDA LAYERS
+  # ---------------------------
+  FirebaseAdminLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${Environment}-firebase-admin-layer'
+      Description: Firebase Admin SDK for push notifications
+      ContentUri: ../../../src/lambdas/layers/firebase-admin/python/
+      CompatibleRuntimes:
+        - python3.13
+        - python3.12
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+
+  # ---------------------------
+  # API Gateway con autorizzatore Cognito
+  # ---------------------------
+  BackofficeApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${Environment}-documents-backoffice-api"
+      StageName: !Ref Environment
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+            Header: Authorization
+            IdentitySource: method.request.header.Authorization
+            AuthType: COGNITO_USER_POOLS
+        AddDefaultAuthorizerToCorsPreflight: false
+
+  # ---------------------------
+  # 1) LAMBDA: list-documents
+  # ---------------------------
+  ListDocumentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-list-documents"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-list-documents/
+      Handler: app.lambda_handler
+      Description: List documents for backoffice review
+      Events:
+        ListAllDocumentsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ListAllDocuments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ListAllDocumentsOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        ListAllDocumentsOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        ListUserDocumentsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/user/{user_sub}
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ListUserDocuments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/user/{user_sub}
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ListUserDocumentsOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/user/{user_sub}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        ListUserDocumentsOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/user/{user_sub}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbReadDocuments
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:GetItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}/index/*
+            - Sid: CognitoReadUserProfiles
+              Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:ListUsers
+              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+            - Sid: KMSDecryptForListing
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+
+  # ---------------------------
+  # 2) LAMBDA: get-document-url (AGGIORNATA CON PERMESSI KMS)
+  # ---------------------------
+  GetDocumentUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-get-document-url"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-get-document-url/
+      Handler: app.lambda_handler
+      Description: Generate presigned URL for secure document download
+      Timeout: 30  # Shorter timeout for URL generation
+      Events:
+        GetDocumentUrlLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/download/{user_sub}/{doc_id}
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetDocumentUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/download/{user_sub}/{doc_id}
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetDocumentUrlOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/download/{user_sub}/{doc_id}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        GetDocumentUrlOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/download/{user_sub}/{doc_id}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbReadDocument
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}
+            - Sid: S3GeneratePresignedUrl
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}/*
+            - Sid: S3HeadObject
+              Effect: Allow
+              Action:
+                - s3:HeadObject
+                - s3:ListBucket
+                - s3:GetBucketLocation
+              Resource: 
+                - !Sub arn:aws:s3:::${ExistingBucketName}
+                - !Sub arn:aws:s3:::${ExistingBucketName}/*
+            - Sid: KMSDecryptForDownload
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+
+  # ---------------------------
+  # 3) LAMBDA: update-document-status
+  # ---------------------------
+
+  UpdateDocumentStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-update-document-status"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-update-document-status/
+      Handler: app.lambda_handler
+      Description: Update document status (approve/reject) and manage user verification
+      Environment:
+        Variables:
+          # Aggiungi questa variabile per il User Pool ID dell'app principale
+          USER_POOL_ID: !Ref CognitoUserPoolId
+          # Add Companies table name for creating company records
+          COMPANIES_TABLE_NAME: !Sub "${Environment}-Companies"
+          USER_PROFILES_TABLE: !Sub "${Environment}-UserProfiles"
+          FIREBASE_SERVICE_ACCOUNT_PATH: /opt/python/beebusy-99d60-firebase-adminsdk-fbsvc-b37bca6781.json
+      Layers:
+        - !Ref FirebaseAdminLayer
+      Events:
+        UpdateStatusLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/{user_sub}/{doc_id}/status
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/{user_sub}/{doc_id}/status
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateStatusOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/{user_sub}/{doc_id}/status
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        UpdateStatusOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/{user_sub}/{doc_id}/status
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            # Policy esistente per DynamoDB
+            - Sid: DdbUpdateDocument
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}
+            
+            # Policy esistente per S3
+            - Sid: S3TaggingForApproval
+              Effect: Allow
+              Action:
+                - s3:GetObjectTagging
+                - s3:PutObjectTagging
+                - s3:GetObject
+                - s3:HeadObject
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}/*
+            
+            # Policy esistente per KMS
+            - Sid: KMSDecryptForUpdate
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+            
+            # ========================================
+            # NUOVE POLICY PER COGNITO USER MANAGEMENT
+            # ========================================
+            - Sid: CognitoUserManagement
+              Effect: Allow
+              Action:
+                # Leggere attributi utente
+                - cognito-idp:AdminGetUser
+                # Aggiornare attributi custom (verification_status)
+                - cognito-idp:AdminUpdateUserAttributes
+                # Gestire gruppi utente
+                - cognito-idp:AdminListGroupsForUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+            
+            # ========================================
+            # POLICY PER COMPANIES TABLE
+            # ========================================
+            - Sid: CompaniesTableAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies'
+            
+            # ========================================
+            # POLICY PER USER PROFILES TABLE (FCM TOKENS + RETENTION STATE)
+            # ========================================
+            - Sid: UserProfilesTableAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-UserProfiles'
+
+            # ========================================
+            # POLICY PER RETENTION KILL SWITCH (EventBridge Scheduler)
+            # ========================================
+            - Sid: RetentionSchedulerKillSwitch
+              Effect: Allow
+              Action:
+                - scheduler:DeleteSchedule
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*'
+
+  # ---------------------------
+  # 4) LAMBDA: get-document-stats
+  # ---------------------------
+  GetDocumentStatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-get-document-stats"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-get-document-stats/
+      Handler: app.lambda_handler
+      Description: Get document statistics for dashboard
+      Timeout: 120  # Longer timeout for statistics calculation
+      MemorySize: 1024  # More memory for data processing
+      Events:
+        GetStatsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/stats
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetStats:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/stats
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetStatsOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /documents/stats
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        GetStatsOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/documents/stats
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbScanForStats
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+                - dynamodb:DescribeTable
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}/index/*
+            - Sid: KMSDecryptForStats
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+
+  # ---------------------------
+  # 5) LAMBDA: search-users
+  # ---------------------------
+  SearchUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-search-users"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-search-users/
+      Handler: app.lambda_handler
+      Description: Search users in Cognito for backoffice
+      Events:
+        SearchUsersLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /users/search
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        SearchUsers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/users/search
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        SearchUsersOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /users/search
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        SearchUsersOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/users/search
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: CognitoSearchUsers
+              Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminListGroupsForUser
+              Resource: 
+                - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+
+  # ---------------------------
+  # 6) LAMBDA: reset-profile
+  # ---------------------------
+  ResetProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-reset-profile"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-reset-profile/
+      Handler: app.lambda_handler
+      Description: Reset user profile to basic (removes worker/company data)
+      Timeout: 180  # Longer timeout for data deletion
+      MemorySize: 1024  # More memory for batch operations
+      Environment:
+        Variables:
+          BOOKINGS_TABLE: !Sub "${Environment}-Bookings"
+          JOB_LISTINGS_TABLE: !Sub "${Environment}-JobListings"
+          COMPANIES_TABLE: !Sub "${Environment}-Companies"
+          DOCUMENTS_TABLE: !Ref ExistingTableName
+      Events:
+        ResetProfileLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /reset-profile
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ResetProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/reset-profile
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ResetProfileOptionsLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /reset-profile
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        ResetProfileOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/reset-profile
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            # DynamoDB permissions for all tables
+            - Sid: DdbQueryDeleteBookings
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:DeleteItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/*
+            
+            - Sid: DdbQueryDeleteJobListings
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:DeleteItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings/index/*
+            
+            - Sid: DdbDeleteCompanies
+              Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies
+            
+            - Sid: DdbReadUserProfiles
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-UserProfiles
+            
+            - Sid: DdbQueryDeleteDocuments
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:DeleteItem
+              Resource: 
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}
+            
+            # KMS permissions for encrypted UserDocuments table
+            - Sid: KMSDecryptDocuments
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKeyId}
+            
+            # Cognito permissions
+            - Sid: CognitoUserManagementReset
+              Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminListGroupsForUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+
+  # ---------------------------
+  # CloudWatch Alarms
+  # ---------------------------
+  ApiGatewayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-backoffice-api-errors"
+      AlarmDescription: High error rate on backoffice API
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "${Environment}-documents-backoffice-api"
+
+  DocumentDownloadErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-backoffice-download-errors"
+      AlarmDescription: High error rate on document downloads
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub "${Environment}-backoffice-get-document-url"
+
+Outputs:
+  BackofficeApiEndpoint:
+    Description: API Gateway endpoint URL for backoffice
+    Value: !Sub "https://${BackofficeApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "${Environment}-BackofficeApiEndpoint"
+  
+  ListDocumentsFunctionName:
+    Description: List Documents Lambda Function Name
+    Value: !Ref ListDocumentsFunction
+    Export:
+      Name: !Sub "${Environment}-ListDocumentsFunction"
+    
+  SearchUsersFunctionName:
+    Description: Search Users Lambda Function Name
+    Value: !Ref SearchUsersFunction
+    Export:
+      Name: !Sub "${Environment}-SearchUsersFunction"
+    
+  GetDocumentUrlFunctionName:
+    Description: Get Document URL Lambda Function Name
+    Value: !Ref GetDocumentUrlFunction
+    Export:
+      Name: !Sub "${Environment}-GetDocumentUrlFunction"
+
+  GetDocumentStatsFunctionName:
+    Description: Get Document Stats Lambda Function Name
+    Value: !Ref GetDocumentStatsFunction
+    Export:
+      Name: !Sub "${Environment}-GetDocumentStatsFunction"
+
+  UpdateDocumentStatusFunctionName:
+    Description: Update Document Status Lambda Function Name
+    Value: !Ref UpdateDocumentStatusFunction
+    Export:
+      Name: !Sub "${Environment}-UpdateDocumentStatusFunction"
+
+  ResetProfileFunctionName:
+    Description: Reset Profile Lambda Function Name
+    Value: !Ref ResetProfileFunction
+    Export:
+      Name: !Sub "${Environment}-ResetProfileFunction"
+
+  KMSKeyId:
+    Description: KMS Key ID used for S3 encryption
+    Value: !Ref KMSKeyId
+    Export:
+      Name: !Sub "${Environment}-KMSKeyId"
+      
+  ApiEndpoints:
+    Description: All API endpoints for easy reference
+    Value: !Sub |
+      Base URL: https://${BackofficeApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+      
+      Endpoints:
+      - GET /documents (list documents with filters)
+      - GET /documents/user/{user_sub} (user-specific documents)
+      - GET /users/search (search users)
+      - POST /documents/download/{user_sub}/{doc_id} (secure download)
+      - PUT /documents/{user_sub}/{doc_id}/status (update status)
+      - GET /documents/stats (statistics dashboard)
+      - POST /reset-profile (reset user profile to basic)
+    Export:
+      Name: !Sub "${Environment}-ApiEndpoints"

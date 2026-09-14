@@ -1,0 +1,142 @@
+    post:
+      tags:
+        - Bookings
+      summary: Create blackout period
+      description: |
+        Create a blackout period for a job listing. Blackout periods are date ranges where the listing
+        is temporarily unavailable for bookings (e.g., maintenance, holidays, fully booked by external means).
+        
+        **Access Control:**
+        - Company: Can create blackouts for their own listings
+        - Backoffice: Can create blackouts for any listing
+        
+        **Business Rules:**
+        - Cannot overlap with existing confirmed bookings
+        - Can overlap with pending bookings (will reject them)
+        - Must be for a published listing
+        - Start date cannot be in the past
+        
+        **Use Cases:**
+        - Restaurant closed for renovations
+        - Company holiday period
+        - Already fully booked through other channels
+        - Weather-related closures
+        
+        **Side Effects:**
+        - Creates a blackout booking record (bookingType: 'blackout')
+        - Automatically rejects any pending applications in the date range
+        - Prevents new applications for the period
+      operationId: createBlackout
+      security:
+        - CognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - listingId
+                - startDate
+                - endDate
+              properties:
+                listingId:
+                  type: string
+                  format: uuid
+                  description: Job listing ID
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                startDate:
+                  type: string
+                  format: date
+                  description: Blackout start date
+                  example: "2025-07-15"
+                endDate:
+                  type: string
+                  format: date
+                  description: Blackout end date
+                  example: "2025-07-22"
+                reason:
+                  type: string
+                  maxLength: 200
+                  description: Reason for blackout (visible to applicants)
+                  example: "Restaurant closed for summer maintenance"
+            examples:
+              maintenance_closure:
+                summary: Maintenance period
+                value:
+                  listingId: "550e8400-e29b-41d4-a716-446655440000"
+                  startDate: "2025-07-15"
+                  endDate: "2025-07-22"
+                  reason: "Restaurant closed for summer maintenance"
+              holiday_period:
+                summary: Company holiday
+                value:
+                  listingId: "550e8400-e29b-41d4-a716-446655440000"
+                  startDate: "2025-12-24"
+                  endDate: "2025-01-02"
+                  reason: "Closed for Christmas holidays"
+      responses:
+        '201':
+          description: Blackout period created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: "Blackout period created successfully"
+                  blackout:
+                    $ref: '../../components/schemas/booking.yml'
+                  rejectedBookings:
+                    type: array
+                    description: Pending bookings that were automatically rejected
+                    items:
+                      type: string
+                    example: ["booking_123", "booking_456"]
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+              examples:
+                overlap_confirmed:
+                  summary: Overlaps with confirmed booking
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Cannot create blackout: overlaps with confirmed booking"
+                past_date:
+                  summary: Start date in past
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Blackout start date cannot be in the past"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to create blackout for this listing
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse' 
+        '404':
+          description: Listing not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

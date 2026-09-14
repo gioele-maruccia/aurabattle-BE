@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: User Profiles Data - Simple DynamoDB table
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod]
+
+Resources:
+  UserProfilesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-UserProfiles'
+      BillingMode: PAY_PER_REQUEST
+      
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: profile_type
+          AttributeType: S
+      
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        
+        - IndexName: profile-type-index
+          KeySchema:
+            - AttributeName: profile_type
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+      
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Beezey
+
+Outputs:
+  TableName:
+    Value: !Ref UserProfilesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+  
+  TableArn:
+    Value: !GetAtt UserProfilesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'
+  
+  StreamArn:
+    Value: !GetAtt UserProfilesTable.StreamArn
+    Export:
+      Name: !Sub '${AWS::StackName}-StreamArn'

@@ -1,0 +1,134 @@
+delete:
+  tags:
+    - Job listings
+  summary: Delete job listing (Company owner only)
+  description: |
+    Delete a job listing. Only available for the company that owns the listing.
+    
+    **Soft Delete:**
+    - Does NOT physically remove the listing from the database
+    - Sets status to 'deleted'
+    - Adds deletedAt timestamp
+    - Preserves all data for audit/reporting purposes
+    
+    **Access Control:**
+    - Must be authenticated as company user
+    - Can only delete own listings
+    - Cannot delete already deleted listings
+    
+    **Use Cases:**
+    - Remove job posting that is no longer needed
+    - Cancel a listing before it goes live (draft)
+    - Clean up old/expired listings
+    
+    **Note:** Deleted listings:
+    - Will NOT appear in public searches
+    - Will NOT appear in GET /listings/my by default (unless filtered for status=deleted)
+    - Cannot be restored (would need to create new listing)
+    - Are kept for reporting and audit purposes
+  operationId: deleteJobListing
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: listingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Job listing ID to delete
+      example: "550e8400-e29b-41d4-a716-446655440000"
+  responses:
+    '200':
+      description: Job listing deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Job listing deleted successfully"
+              listingId:
+                type: string
+                format: uuid
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              deletedAt:
+                type: string
+                format: date-time
+                example: "2025-01-28T10:30:00Z"
+          example:
+            message: "Job listing deleted successfully"
+            listingId: "550e8400-e29b-41d4-a716-446655440000"
+            deletedAt: "2025-01-28T10:30:00Z"
+    
+    '400':
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+          examples:
+            already_deleted:
+              summary: Listing already deleted
+              value:
+                error: "Bad Request"
+                message: "Job listing is already deleted"
+            missing_param:
+              summary: Missing listingId parameter
+              value:
+                error: "Bad Request"
+                message: "Missing required parameter: listingId"
+    
+    '401':
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    
+    '403':
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+          examples:
+            not_company:
+              summary: Not a company user
+              value:
+                error: "Forbidden"
+                message: "Only company users can delete job listings"
+            not_owner:
+              summary: Not the listing owner
+              value:
+                error: "Forbidden"
+                message: "You can only delete your own job listings"
+    
+    '404':
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+          examples:
+            listing_not_found:
+              summary: Listing not found
+              value:
+                error: "Not Found"
+                message: "Job listing not found"
+            company_not_found:
+              summary: Company profile not found
+              value:
+                error: "Not Found"
+                message: "Company profile not found"
+    
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+          example:
+            error: "Internal Server Error"
+            message: "An error occurred while deleting the job listing"

@@ -1,0 +1,54 @@
+# Get Review Summary
+get:
+  summary: Get review summary for a target (company or worker)
+  operationId: getReviewSummary
+  description: |
+    Get a summary of all reviews for a specific target.
+    Returns only the average ratings without full review details.
+    This is useful for displaying a quick rating score.
+  tags:
+    - Bookings - Reviews
+  parameters:
+    - name: targetId
+      in: path
+      required: true
+      description: The company ID or worker ID to get reviews for
+      schema:
+        type: string
+        format: uuid
+  responses:
+    200:
+      description: Review summary retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              targetId:
+                type: string
+                format: uuid
+              reviewCount:
+                type: integer
+                description: Total number of reviews
+              averageRating:
+                type: number
+                format: float
+                nullable: true
+                description: Average rating across all reviews
+              workerReviewsCount:
+                type: integer
+                description: Number of worker-to-company reviews
+              companyReviewsCount:
+                type: integer
+                description: Number of company-to-worker reviews
+            example:
+              targetId: "company-123"
+              reviewCount: 15
+              averageRating: 4.2
+              workerReviewsCount: 10
+              companyReviewsCount: 5
+    400:
+      description: Bad request
+    500:
+      description: Internal server error
+  security: []

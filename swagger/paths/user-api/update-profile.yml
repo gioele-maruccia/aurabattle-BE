@@ -1,0 +1,97 @@
+put:
+  tags:
+    - User Profile & Settings
+  summary: Update user profile
+  description: |
+    Update user profile information including personal details and address.
+    Updates both Cognito (name, phone) and DynamoDB (all fields).
+  operationId: updateUserProfile
+  security:
+    - CognitoAuth: []
+  
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            profile:
+              $ref: '../../components/schemas/user-api/ProfileInfo.yml'
+            address:
+              $ref: '../../components/schemas/user-api/Address.yml'
+        
+        examples:
+          updateName:
+            summary: Update name only
+            value:
+              profile:
+                given_name: "Mario"
+                family_name: "Rossi"
+          
+          updateAddress:
+            summary: Update address only
+            value:
+              address:
+                street: "Via Roma 123"
+                city: "Milano"
+                postal_code: "20100"
+                province: "MI"
+                country: "IT"
+          
+          fullUpdate:
+            summary: Update everything
+            value:
+              profile:
+                given_name: "Mario"
+                family_name: "Rossi"
+                phone_number: "+393331234567"
+              address:
+                street: "Via Roma 123"
+                city: "Milano"
+                postal_code: "20100"
+                province: "MI"
+                country: "IT"
+  
+  responses:
+    '200':
+      description: Profile updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              message:
+                type: string
+                example: "Profile updated successfully"
+    
+    '400':
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "No fields to update"
+    
+    '404':
+      description: User not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "User not found in Cognito"
+    
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

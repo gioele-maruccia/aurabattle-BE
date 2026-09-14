@@ -1,0 +1,83 @@
+AvailabilityResult:
+  type: object
+  required:
+    - available
+    - listingId
+  properties:
+    available:
+      type: boolean
+      description: Whether the dates are available for booking
+      example: true
+    
+    listingId:
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    listing:
+      $ref: './listingSummary.yml#/ListingSummary'
+    
+    conflicts:
+      type: array
+      description: Conflicting bookings (if any)
+      items:
+        type: object
+        properties:
+          bookingId:
+            type: string
+          bookingType:
+            type: string
+            enum: [application, blackout]
+          startDate:
+            type: string
+            format: date
+          endDate:
+            type: string
+            format: date
+          status:
+            type: string
+          listingTitle:
+            type: string
+          reason:
+            type: string
+            description: Why this is a conflict
+            example: "Worker already has confirmed booking for this period"
+    
+    blackouts:
+      type: array
+      description: Blackout periods in the requested range
+      items:
+        type: object
+        properties:
+          startDate:
+            type: string
+            format: date
+          endDate:
+            type: string
+            format: date
+          reason:
+            type: string
+    
+    warnings:
+      type: array
+      description: Non-blocking warnings
+      items:
+        type: object
+        properties:
+          code:
+            type: string
+            enum: [CLOSE_TO_START, LIMITED_POSITIONS, HIGH_DEMAND]
+          message:
+            type: string
+    
+    reasons:
+      type: array
+      description: Reasons why booking is not available (if available=false)
+      items:
+        type: object
+        properties:
+          code:
+            type: string
+            enum: [DATE_CONFLICT, NO_POSITIONS, LISTING_CLOSED, INVALID_DATES, WORKER_NOT_APPROVED, BLACKOUT_PERIOD]
+          message:
+            type: string

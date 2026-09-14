@@ -1,0 +1,69 @@
+    patch:
+      tags:
+        - Job listings
+      summary: Pause job listing (Company owner only)
+      description: |
+        Pause a published listing. Only the company owner can pause.
+        
+        **Status transitions:**
+        - published → paused: Removes from public searches
+        
+        **Restrictions:**
+        - Can only pause published listings
+        - Cannot pause draft, closed, or expired listings
+        
+        **Effect:**
+        - Listing hidden from public searches
+        - No new applications/bookings accepted
+        - Existing bookings remain active
+        - Can be re-published later
+      operationId: pauseJobListing
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Job listing ID
+      responses:
+        '200':
+          description: Listing paused successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                  listing:
+                    $ref: '../../components/schemas/jobListing.yml#/JobListing'
+        '400':
+          description: Cannot pause (invalid status)
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'
+              examples:
+                already_paused:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Listing is already paused"
+                wrong_status:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Can only pause published listings"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not the listing owner
+        '404':
+          description: Listing not found
+        '500':
+          description: Internal server error

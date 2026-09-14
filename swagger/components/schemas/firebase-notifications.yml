@@ -1,0 +1,144 @@
+# ============================================
+# Firebase Push Notifications Schemas
+# ============================================
+
+FirebaseChatNotificationPayload:
+  type: object
+  description: Payload structure for chat message push notifications
+  properties:
+    notification:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Sender's full name
+          example: "Francesco Cassano"
+        body:
+          type: string
+          description: Message preview (truncated to ~100 chars)
+          example: "Ciao, come va? Ti volevo chiedere..."
+      required:
+        - title
+        - body
+    data:
+      type: object
+      properties:
+        actionType:
+          type: string
+          enum: [chat]
+          description: Action type for routing in the app
+          example: "chat"
+        chatId:
+          type: string
+          format: uuid
+          description: Chat identifier
+          example: "3a8b3c2d-1234-5678-90ab-cdef12345678"
+        bookingId:
+          type: string
+          format: uuid
+          description: Associated booking ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        bookingStatus:
+          type: string
+          description: Current booking status
+          enum: [pending, confirmed, completed, cancelled, rejected]
+          example: "confirmed"
+        jobListingId:
+          type: string
+          format: uuid
+          description: Associated job listing ID
+          example: "450e7400-e19b-41d4-a716-446655440000"
+        senderId:
+          type: string
+          format: uuid
+          description: Message sender user ID
+          example: "569e32f0-3091-7029-ad89-57d25dfedee8"
+        senderName:
+          type: string
+          description: Sender's full name
+          example: "Francesco Cassano"
+        bookingRange:
+          type: string
+          description: Booking date range in format YYYY/MM/DD - YYYY/MM/DD
+          example: "2026/02/01 - 2026/10/10"
+        jobListingTitle:
+          type: string
+          description: Job listing title
+          example: "Tester per bombe nucleari"
+        messagePreview:
+          type: string
+          description: Message preview text
+          example: "Ciao, come va? Ti volevo chiedere..."
+        timestamp:
+          type: string
+          description: Unix timestamp in milliseconds as string
+          example: "1640995200000"
+      required:
+        - actionType
+        - chatId
+        - senderId
+        - senderName
+        - messagePreview
+        - timestamp
+    token:
+      type: string
+      description: FCM device token
+      example: "fcm-device-token-from-firebase-sdk"
+  required:
+    - notification
+    - data
+    - token
+
+FirebaseProfileUpgradeNotificationPayload:
+  type: object
+  description: Payload structure for profile upgrade/verification push notifications
+  properties:
+    notification:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Notification title
+          example: "Profilo verificato!"
+        body:
+          type: string
+          description: Notification body text
+          example: "La verifica del tuo profilo come azienda è andata a buon fine."
+      required:
+        - title
+        - body
+    data:
+      type: object
+      properties:
+        actionType:
+          type: string
+          enum: [upgrade]
+          description: Action type for routing in the app
+          example: "upgrade"
+      required:
+        - actionType
+    token:
+      type: string
+      description: FCM device token
+      example: "fcm-device-token-from-firebase-sdk"
+  required:
+    - notification
+    - data
+    - token
+
+FirebaseNotificationResponse:
+  type: object
+  description: Response from Firebase when sending a notification
+  properties:
+    success:
+      type: boolean
+      description: Whether the notification was sent successfully
+      example: true
+    messageId:
+      type: string
+      description: FCM message ID (if successful)
+      example: "projects/beebusy-b0a51/messages/0:1234567890"
+    error:
+      type: string
+      description: Error message (if failed)
+      example: "Invalid FCM token"

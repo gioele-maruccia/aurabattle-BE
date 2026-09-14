@@ -1,0 +1,133 @@
+    get:
+      tags:
+        - Bookings
+      summary: List worker's bookings
+      description: |
+        Retrieve all bookings for a specific worker.
+        
+        **Returns:**
+        - All bookings where the worker is the applicant
+        - Sorted by creation date (newest first)
+        - Includes listing and company information
+        
+        **Filters:**
+        - status: Filter by booking status
+        - active: Only active/upcoming bookings
+        - dateRange: Filter by start date
+        
+        **Use Cases:**
+        - Worker dashboard: "My Applications"
+        - View upcoming jobs
+        - Check application history
+        - Track booking statuses
+      operationId: listWorkerBookings
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: workerId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Worker's user ID (must match authenticated user unless backoffice)
+          example: "worker_abc123"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, rejected, cancelled, completed, all]
+            default: all
+          description: Filter by booking status
+        - name: active
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Only show active/upcoming bookings (pending or confirmed, not past)
+        - name: startDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter bookings starting from this date
+          example: "2025-06-01"
+        - name: startDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter bookings starting before this date
+          example: "2025-09-30"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Items per page
+        - name: lastKey
+          in: query
+          schema:
+            type: string
+          description: Pagination token from previous response
+      responses:
+        '200':
+          description: Worker bookings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  bookings:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '../../components/schemas/booking.yml'
+                        - type: object
+                          properties:
+                            listing:
+                              $ref: '../../components/schemas/ListingSummary.yml#/ListingSummary'
+                            company:
+                              $ref: '../../components/schemas/CompanySummary.yml#/CompanySummary'
+                  count:
+                    type: integer
+                    description: Number of bookings in this response
+                  stats:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      pending:
+                        type: integer
+                      confirmed:
+                        type: integer
+                      rejected:
+                        type: integer
+                      completed:
+                        type: integer
+                  lastKey:
+                    type: string
+                    nullable: true
+                    description: Pagination token for next page
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Can only view own bookings
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

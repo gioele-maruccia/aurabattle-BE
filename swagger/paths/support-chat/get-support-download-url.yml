@@ -1,0 +1,136 @@
+get:
+  tags:
+    - Support Chat
+  summary: Get download URL for support message attachments
+  description: |
+    Generates presigned S3 download URLs for all attachments in a support chat message.
+    
+    **Requirements:**
+    - User must be participant in the support chat (client or admin)
+    - Message must exist and have attachments
+    
+    **URL Validity:**
+    - Download URLs expire after 1 hour (3600 seconds)
+    - Can be used multiple times until expiration
+    
+    **Use Cases:**
+    - Download documents shared in support chat
+    - Preview images before downloading
+    - Access previously uploaded files
+    
+  operationId: getSupportDownloadUrl
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support Chat ID
+      schema:
+        type: string
+        example: "support_chat_abc123"
+    - name: messageId
+      in: query
+      required: true
+      description: Message ID containing attachments
+      schema:
+        type: string
+        example: "msg_abc123def456"
+  responses:
+    '200':
+      description: Download URLs generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              attachments:
+                type: array
+                description: List of download URLs for each attachment
+                items:
+                  type: object
+                  properties:
+                    fileName:
+                      type: string
+                      description: Original file name
+                      example: "screenshot.png"
+                    fileType:
+                      type: string
+                      description: MIME type of the file
+                      example: "image/png"
+                    fileSize:
+                      type: integer
+                      description: File size in bytes
+                      example: 248063
+                    downloadUrl:
+                      type: string
+                      format: uri
+                      description: Presigned S3 URL for downloading (valid 1 hour)
+                      example: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support_chat_abc/screenshot.png?X-Amz-..."
+              expiresIn:
+                type: integer
+                description: URL expiration in seconds
+                example: 3600
+          examples:
+            single_attachment:
+              summary: Single image attachment
+              value:
+                attachments:
+                  - fileName: "screenshot.png"
+                    fileType: "image/png"
+                    fileSize: 248063
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support_chat_abc/screenshot.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&..."
+                expiresIn: 3600
+            multiple_attachments:
+              summary: Multiple attachments
+              value:
+                attachments:
+                  - fileName: "issue.pdf"
+                    fileType: "application/pdf"
+                    fileSize: 158835
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support_chat_abc/issue.pdf?..."
+                  - fileName: "log.txt"
+                    fileType: "text/plain"
+                    fileSize: 2048
+                    downloadUrl: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support_chat_abc/log.txt?..."
+                expiresIn: 3600
+    '400':
+      description: Bad request - Missing or invalid parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "messageId is required"
+    '403':
+      description: Forbidden - User is not authorized to access this support chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "You are not authorized to access this support chat"
+    '404':
+      description: Not found - Support chat or message doesn't exist, or message has no attachments
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Message not found or has no attachments"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Failed to generate download URLs"

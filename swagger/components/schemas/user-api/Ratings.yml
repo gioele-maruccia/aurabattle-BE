@@ -1,0 +1,54 @@
+type: object
+description: User ratings and reviews statistics
+properties:
+  average:
+    type: number
+    format: float
+    minimum: 0
+    maximum: 5
+    description: Overall average rating
+    example: 4.5
+  count:
+    type: integer
+    minimum: 0
+    description: Total number of reviews
+    example: 23
+  as_worker:
+    type: object
+    description: Ratings received as a worker
+    properties:
+      average:
+        type: number
+        format: float
+        minimum: 0
+        maximum: 5
+        example: 4.7
+      count:
+        type: integer
+        minimum: 0
+        example: 15
+    required:
+      - average
+      - count
+  as_employer:
+    type: object
+    description: Ratings received as an employer
+    properties:
+      average:
+        type: number
+        format: float
+        minimum: 0
+        maximum: 5
+        example: 4.2
+      count:
+        type: integer
+        minimum: 0
+        example: 8
+    required:
+      - average
+      - count
+required:
+  - average
+  - count
+  - as_worker
+  - as_employer

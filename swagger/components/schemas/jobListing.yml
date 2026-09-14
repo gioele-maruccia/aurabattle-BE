@@ -1,0 +1,658 @@
+JobListing:
+  type: object
+  description: |
+    Job listing object. Can be either CCNL-based (FIPE companies) or manual (non-FIPE companies).
+    
+    **CCNL Listings:**
+    - Have `contract` object with full CCNL details (level, paragraph, calculation)
+    - Compensation calculated from contract.calculation.grossBasePay + superminimo
+    
+    **Manual Listings:**
+    - Have `contract: null`
+    - Use `salary` field directly for compensation
+    - Identified by checking if `contract` is null (not by ccnlType field)
+  properties:
+    listingId:
+      type: string
+      description: Unique job listing ID
+      example: "job_2025_abc123"
+    companyId:
+      type: string
+      format: uuid
+      description: Company UUID
+      example: "12345678-1234-1234-1234-123456789012"
+    title:
+      type: string
+      maxLength: 200
+      example: "Cameriere per stagione estiva"
+    description:
+      type: string
+      maxLength: 5000
+    ccnlType:
+      type: string
+      enum: ['turismo', 'manuale']
+      description: "Contract type. 'turismo' for FIPE companies using CCNL Turismo, 'manuale' for non-FIPE manual entry"
+      example: "turismo"
+    location:
+      type: object
+      properties:
+        address:
+          type: string
+        city:
+          type: string
+        province:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+            lon:
+              type: number
+    startDate:
+      type: string
+      format: date
+      example: "2025-06-01"
+    endDate:
+      type: string
+      format: date
+      example: "2025-09-30"
+    positions:
+      type: integer
+      description: Total positions available
+      example: 3
+    positionsFilled:
+      type: integer
+      description: Number of positions filled
+      default: 0
+      example: 0
+    category:
+      type: string
+      example: "Food & Beverage"
+    status:
+      type: string
+      enum: [draft, published, paused, closed, expired, deleted]
+      example: "published"
+    salary:
+      type: number
+      description: "For manual entry listings - annual gross salary or fixed amount"
+      example: 35000
+    hoursPerWeek:
+      type: integer
+      description: "Hours per week"
+      example: 40
+    employmentType:
+      type: string
+      description: "For manual entry - employment type like full-time, part-time"
+      example: "full-time"
+    contractId:
+      type: string
+      description: "For manual entry - custom contract identifier"
+      example: "custom_dev_001"
+    schedule:
+      type: object
+      properties:
+        hoursPerWeek:
+          type: integer
+        flexibility:
+          type: string
+        shiftType:
+          type: string
+    employment:
+      type: object
+      properties:
+        type:
+          type: string
+        contractType:
+          type: string
+    responsibilities:
+      type: array
+      items:
+        type: string
+      description: "For manual entry - array of responsibility strings"
+    benefits:
+      type: string
+      maxLength: 2000
+    isHousingIncluded:
+      type: boolean
+      description: Indicates if housing/accommodation is provided by the employer
+      default: false
+      example: true
+    
+    # Booking/Accommodation Requirements (NEW)
+    vitto:
+      type: boolean
+      description: Meals provided by employer
+      default: false
+      example: true
+    alloggio:
+      type: boolean
+      description: Accommodation available
+      default: false
+      example: true
+    alloggioPricePerDay:
+      type: number
+      description: Daily accommodation price (if alloggio=true)
+      example: 15.00
+    alloggioDescription:
+      type: string
+      description: Description of accommodation facilities
+      example: "Camera doppia in residence aziendale"
+      maxLength: 500
+    minConsecutiveDays:
+      type: integer
+      description: Minimum consecutive booking days required
+      example: 7
+    minNoticeDays:
+      type: integer
+      description: Minimum advance notice days for booking
+      example: 3
+    
+    requirements:
+      type: array
+      items:
+        type: string
+      description: "For manual entry - array of requirement strings"
+    tags:
+      type: array
+      items:
+        type: string
+    features:
+      type: array
+      items:
+        type: string
+    viewsCount:
+      type: integer
+      default: 0
+      description: Number of views
+    applicationsCount:
+      type: integer
+      default: 0
+      description: Number of applications
+    createdAt:
+      type: string
+      format: date-time
+      example: "2025-01-17T10:30:00Z"
+    updatedAt:
+      type: string
+      format: date-time
+      example: "2025-01-17T10:30:00Z"
+    publishedAt:
+      type: string
+      format: date-time
+      description: When the listing was published
+      example: "2025-01-17T10:30:00Z"
+    expiresAt:
+      type: string
+      format: date-time
+      description: Automatic expiration (usually endDate + 1 day)
+      example: "2025-10-01T00:00:00Z"
+    closedAt:
+      type: string
+      format: date-time
+      description: When the listing was closed
+    deletedAt:
+      type: string
+      format: date-time
+      description: When the listing was deleted (soft delete)
+
+CreateJobListingRequest:
+  type: object
+  required:
+    - title
+    - startDate
+    - endDate
+    - positions
+    - category
+    - location
+    - salary
+  properties:
+    title:
+      type: string
+      description: Job title
+      example: "Cameriere per stagione estiva"
+      maxLength: 200
+    description:
+      type: string
+      description: Detailed job description
+      example: "Cerchiamo cameriere motivato per la stagione estiva"
+      maxLength: 5000
+    location:
+      type: object
+      required:
+        - city
+        - country
+      properties:
+        address:
+          type: string
+          example: "Via Roma 123"
+        city:
+          type: string
+          example: "Milano"
+        province:
+          type: string
+          example: "MI"
+        postalCode:
+          type: string
+          example: "20100"
+        country:
+          type: string
+          example: "Italy"
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+              example: 45.4642
+            lon:
+              type: number
+              example: 9.1900
+    startDate:
+      type: string
+      format: date
+      description: Job start date (ISO 8601)
+      example: "2025-06-01"
+    endDate:
+      type: string
+      format: date
+      description: Job end date (ISO 8601)
+      example: "2025-09-30"
+    positions:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Number of positions available
+      example: 3
+    category:
+      type: string
+      description: Job category
+      example: "Food & Beverage"
+      enum:
+        - Food & Beverage
+        - Hospitality
+        - Agriculture
+        - Retail
+        - Tourism
+        - Events
+        - Other
+    status:
+      type: string
+      enum: [draft, published]
+      default: draft
+      description: Initial status (draft or published)
+      example: "published"
+    salary:
+      type: object
+      required:
+        - currency
+      properties:
+        min:
+          type: number
+          minimum: 0
+          example: 15
+        max:
+          type: number
+          minimum: 0
+          example: 25
+        currency:
+          type: string
+          default: EUR
+          example: "EUR"
+        period:
+          type: string
+          enum: [hour, day, week, month]
+          default: hour
+          example: "hour"
+    schedule:
+      type: object
+      properties:
+        hoursPerWeek:
+          type: integer
+          minimum: 1
+          maximum: 60
+          example: 20
+        flexibility:
+          type: string
+          enum: [immediate, flexible, fixed]
+          default: flexible
+          example: "immediate"
+        shiftType:
+          type: string
+          enum: [day, night, rotating, flexible]
+          default: day
+          example: "day"
+    employment:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [full-time, part-time, temporary, seasonal]
+          default: seasonal
+          example: "part-time"
+        contractType:
+          type: string
+          enum: [seasonal, temporary, fixed-term, permanent]
+          default: seasonal
+          example: "seasonal"
+    responsibilities:
+      type: string
+      description: Job responsibilities (markdown supported)
+      maxLength: 2000
+    benefits:
+      type: string
+      description: Job benefits (markdown supported)
+      maxLength: 2000
+    isHousingIncluded:
+      type: boolean
+      description: Indicates if housing/accommodation is provided by the employer
+      default: false
+      example: true
+    
+    # Booking/Accommodation Requirements (Optional)
+    vitto:
+      type: boolean
+      description: Meals provided by employer
+      default: false
+    alloggio:
+      type: boolean
+      description: Accommodation available
+      default: false
+    alloggioPricePerDay:
+      type: number
+      description: Daily accommodation price (if alloggio=true)
+      example: 15.00
+    alloggioDescription:
+      type: string
+      description: Description of accommodation facilities
+      maxLength: 500
+    minConsecutiveDays:
+      type: integer
+      description: Minimum consecutive booking days required
+      minimum: 1
+      example: 7
+    minNoticeDays:
+      type: integer
+      description: Minimum advance notice days for booking
+      minimum: 0
+      example: 3
+    
+    requirements:
+      type: string
+      description: Job requirements (markdown supported)
+      maxLength: 2000
+    tags:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+      example: ["cameriere", "stagionale", "part-time", "milano"]
+    features:
+      type: array
+      description: Feature flags
+      items:
+        type: string
+        enum:
+          - immediate-start
+          - part-time
+          - full-time
+          - flexible-schedule
+          - meals-included
+          - accommodation
+          - transportation
+          - no-experience
+      example: ["immediate-start", "part-time", "flexible-schedule"]
+    expiresAt:
+      type: string
+      format: date-time
+      description: Optional custom expiration date
+
+UpdateJobListingRequest:
+  type: object
+  description: All fields are optional - provide only what you want to update
+  properties:
+    title:
+      type: string
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 5000
+    location:
+      type: object
+      properties:
+        address:
+          type: string
+        city:
+          type: string
+        province:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+            lon:
+              type: number
+    startDate:
+      type: string
+      format: date
+      description: Cannot update if listing is published and date passed
+    endDate:
+      type: string
+      format: date
+    positions:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Cannot decrease below positionsFilled
+    category:
+      type: string
+    salary:
+      type: object
+      properties:
+        min:
+          type: number
+        max:
+          type: number
+        currency:
+          type: string
+        period:
+          type: string
+    schedule:
+      type: object
+      properties:
+        hoursPerWeek:
+          type: integer
+        flexibility:
+          type: string
+        shiftType:
+          type: string
+    employment:
+      type: object
+      properties:
+        type:
+          type: string
+        contractType:
+          type: string
+    responsibilities:
+      type: string
+      maxLength: 2000
+    benefits:
+      type: string
+      maxLength: 2000
+    isHousingIncluded:
+      type: boolean
+      description: Indicates if housing/accommodation is provided
+      default: false
+    
+    # Booking/Accommodation Requirements (Optional)
+    vitto:
+      type: boolean
+      description: Meals provided by employer
+    alloggio:
+      type: boolean
+      description: Accommodation available
+    alloggioPricePerDay:
+      type: number
+      description: Daily accommodation price
+    alloggioDescription:
+      type: string
+      description: Accommodation description
+      maxLength: 500
+    minConsecutiveDays:
+      type: integer
+      description: Minimum consecutive booking days
+    minNoticeDays:
+      type: integer
+      description: Minimum advance notice days
+    
+    requirements:
+      type: string
+      maxLength: 2000
+    tags:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+    features:
+      type: array
+      items:
+        type: string
+
+CreateManualJobListingRequest:
+  type: object
+  description: "Create job listing with manual entry (ccnlType='manuale'). Used by non-FIPE companies."
+  required:
+    - title
+    - description
+    - startDate
+    - endDate
+    - ccnlType
+    - contractId
+    - employmentType
+    - location
+    - salary
+    - hoursPerWeek
+  properties:
+    title:
+      type: string
+      minLength: 3
+      maxLength: 200
+      description: Job title
+      example: "Software Developer"
+    description:
+      type: string
+      minLength: 10
+      maxLength: 5000
+      description: Detailed job description
+      example: "Looking for a senior software developer with Python experience"
+    startDate:
+      type: string
+      format: date
+      description: Job start date (ISO 8601)
+      example: "2026-03-01"
+    endDate:
+      type: string
+      format: date
+      description: Job end date (ISO 8601)
+      example: "2026-12-31"
+    ccnlType:
+      type: string
+      enum: ['manuale']
+      description: "Must be 'manuale' for manual entry"
+      example: "manuale"
+    contractId:
+      type: string
+      description: "Custom contract identifier (not from CCNL reference)"
+      example: "custom_software_dev_001"
+    employmentType:
+      type: string
+      description: "Employment type"
+      example: "full-time"
+    location:
+      type: object
+      required:
+        - city
+        - country
+      properties:
+        city:
+          type: string
+          example: "Milano"
+        province:
+          type: string
+          example: "MI"
+        country:
+          type: string
+          example: "IT"
+        address:
+          type: string
+          example: "Via Roma 123"
+        coordinates:
+          type: object
+          properties:
+            lat:
+              type: number
+              example: 45.4642
+            lon:
+              type: number
+              example: 9.1900
+    salary:
+      type: number
+      minimum: 0
+      description: "Annual gross salary or fixed amount for the position"
+      example: 35000
+    hoursPerWeek:
+      type: integer
+      minimum: 1
+      maximum: 168
+      description: "Hours per week"
+      example: 40
+    requirements:
+      type: array
+      items:
+        type: string
+      description: "Job requirements as array of strings"
+      example: ["Esperienza con Python", "Conoscenza AWS", "Problem solving"]
+    responsibilities:
+      type: array
+      items:
+        type: string
+      description: "Job responsibilities as array of strings"
+      example: ["Sviluppo backend", "Deployment cloud", "Code review"]
+    isHousingIncluded:
+      type: boolean
+      description: Indicates if housing/accommodation is provided
+      default: false
+    
+    # Booking/Accommodation Requirements (Optional)
+    vitto:
+      type: boolean
+      description: Meals provided by employer
+    alloggio:
+      type: boolean
+      description: Accommodation available
+    alloggioPricePerDay:
+      type: number
+      description: Daily accommodation price
+    alloggioDescription:
+      type: string
+      description: Accommodation description
+      maxLength: 500
+    minConsecutiveDays:
+      type: integer
+      description: Minimum consecutive booking days
+    minNoticeDays:
+      type: integer
+      description: Minimum advance notice days
+    status:
+      type: string
+      enum: [draft, published]
+      default: draft
+      example: "draft"

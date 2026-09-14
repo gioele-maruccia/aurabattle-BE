@@ -1,0 +1,68 @@
+version = 0.1
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "support-chat-service-dev"
+template_file = "infra/services/support-chat/template.yaml"
+resolve_s3 = false
+s3_prefix = "support-chat"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd"
+]
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "support-chat-service-dev"
+template_file = "infra/services/support-chat/template.yaml"
+resolve_s3 = false
+s3_prefix = "support-chat"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "support-chat-service-prod"
+template_file = "infra/services/support-chat/template.yaml"
+resolve_s3 = false
+s3_prefix = "support-chat"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=prod",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_iCBtUlJO6",
+    "CognitoUserPoolId=eu-south-1_iCBtUlJO6"
+]

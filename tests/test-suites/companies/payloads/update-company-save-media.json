@@ -1,0 +1,10 @@
+{
+  "media": {
+    "profileImageUrl": "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/test-uuid/profile.jpg",
+    "galleryImages": [
+      "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/test-uuid/gallery/1.jpg",
+      "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/test-uuid/gallery/2.jpg",
+      "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/test-uuid/gallery/3.jpg"
+    ]
+  }
+}

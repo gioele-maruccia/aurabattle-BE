@@ -1,0 +1,26 @@
+    get:
+      tags:
+        - Backoffice
+      summary: Get statistics
+      description: Get document statistics and analytics (backoffice-api-sam project)
+      operationId: getStatistics
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: details
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Statistics data
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/backoffice.yml#/Statistics'

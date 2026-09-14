@@ -1,0 +1,49 @@
+get:
+  tags:
+    - User Profile & Settings
+  summary: Get verification status
+  description: Retrieve user verification statuses (email, phone, identity, payment)
+  operationId: getUserVerifications
+  security:
+    - CognitoAuth: []
+  
+  responses:
+    '200':
+      description: Verification status retrieved
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/user-api/Verifications.yml'
+          examples:
+            emailOnly:
+              summary: Only email verified
+              value:
+                email_verified: true
+                phone_verified: false
+                identity_verified: false
+                payment_verified: false
+            
+            fullyVerified:
+              summary: Fully verified user
+              value:
+                email_verified: true
+                phone_verified: true
+                identity_verified: true
+                payment_verified: true
+    
+    '404':
+      description: Profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Profile not found"
+    
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

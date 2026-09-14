@@ -1,0 +1,49 @@
+description: Bad Request - Invalid input data
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Specific error code (e.g., 4001 for missing fields, 4002 for invalid dates)
+          example: 4001
+        error:
+          type: string
+          example: "Bad Request"
+        message:
+          type: string
+          example: "Invalid input data"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+          example:
+            - field: "email"
+              message: "Invalid email format"
+            - field: "phone_number"
+              message: "Phone number must start with +"
+    examples:
+      validationError:
+        summary: Validation errors
+        value:
+          code: 4001
+          error: "Validation Error"
+          message: "Invalid input data"
+          details:
+            - field: "given_name"
+              message: "Field is required"
+            - field: "birthdate"
+              message: "Invalid date format"
+      
+      missingFields:
+        summary: Missing required fields
+        value:
+          code: 4001
+          error: "Bad Request"
+          message: "No fields to update"

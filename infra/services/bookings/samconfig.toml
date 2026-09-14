@@ -1,0 +1,53 @@
+version = 0.1
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = true
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "bookings-service-dev"
+template_file = "infra/services/bookings/template.yaml"
+resolve_s3 = false
+s3_prefix = "bookings"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=dev",
+	"CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = true
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "bookings-service-prod"
+template_file = "infra/services/bookings/template.yaml"
+resolve_s3 = false
+s3_prefix = "bookings"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=prod",
+	"CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_iCBtUlJO6"
+]

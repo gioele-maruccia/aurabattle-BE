@@ -1,0 +1,37 @@
+description: Unauthorized - Invalid or missing authentication token
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Specific error code for authentication errors
+          example: 401
+        error:
+          type: string
+          example: "Unauthorized"
+        message:
+          type: string
+          example: "Invalid or missing authentication token"
+    examples:
+      missingToken:
+        summary: Missing token
+        value:
+          code: 401
+          error: "Unauthorized"
+          message: "Authorization header is missing"
+      
+      invalidToken:
+        summary: Invalid token
+        value:
+          code: 401
+          error: "Unauthorized"
+          message: "Invalid authentication token"
+      
+      expiredToken:
+        summary: Expired token
+        value:
+          code: 401
+          error: "Unauthorized"
+          message: "Token has expired"

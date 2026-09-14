@@ -1,0 +1,41 @@
+{
+  "title": "Staff completo per apertura nuovo hotel",
+  "description": "Ricerca massiva per apertura nuova struttura",
+  "startDate": "2025-05-01",
+  "endDate": "2025-10-31",
+  "positions": 50,
+  "category": "Hospitality",
+  "status": "published",
+  "location": {
+    "city": "Venezia",
+    "province": "VE",
+    "country": "Italy",
+    "coordinates": {
+      "lat": 45.4408,
+      "lon": 12.3155
+    }
+  },
+  "salary": {
+    "min": 12,
+    "max": 30,
+    "currency": "EUR",
+    "period": "hour"
+  },
+  "schedule": {
+    "hoursPerWeek": 40,
+    "flexibility": "immediate",
+    "shiftType": "rotating"
+  },
+  "employment": {
+    "type": "full-time",
+    "contractType": "seasonal"
+  },
+  "responsibilities": [
+    "Varie mansioni hotel (reception, pulizie, ristorazione)"
+  ],
+  "requirements": [
+    "Flessibilità e disponibilità immediata"
+  ],
+  "tags": ["hotel", "venezia", "stagionale", "staff"],
+  "features": ["immediate-start", "full-time", "housing-provided", "meals-included"]
+}

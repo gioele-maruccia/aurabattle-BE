@@ -1,0 +1,205 @@
+import json
+import os
+import sys
+from decimal import Decimal
+
+import boto3
+from botocore.exceptions import ClientError
+from botocore.config import Config
+
+# Add shared layer to path
+sys.path.append('/opt/python')
+
+from db_manager import ChatDBManager
+
+# Initialize S3 client at module level for better performance and signature compatibility
+REGION = os.environ.get('AWS_REGION', 'eu-south-1')
+s3_client = boto3.client(
+    's3',
+    region_name=REGION,
+    endpoint_url=f"https://s3.{REGION}.amazonaws.com",
+    config=Config(
+        signature_version='s3v4',
+        s3={'addressing_style': 'virtual'}
+    )
+)
+
+
+def decimal_default(obj):
+    """JSON encoder for Decimal objects"""
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    raise TypeError
+
+
+def lambda_handler(event, context):
+    """
+    Generate presigned download URLs for chat attachments
+    
+    Path parameters:
+    - chat_id: The chat ID
+    
+    Query parameters:
+    - messageId: The message ID containing the attachment
+    
+    Returns:
+    {
+        "downloadUrl": "https://s3.../file.pdf?X-Amz-Algorithm=...",
+        "fileName": "file.pdf",
+        "expiresIn": 3600
+    }
+    
+    Authorization header contains JWT with user info
+    """
+    try:
+        # Get chat_id from path parameters
+        chat_id = event['pathParameters']['chat_id']
+        
+        # Get user info from authorizer context
+        user_id = event['requestContext']['authorizer']['claims']['sub']
+        
+        # Get query parameters
+        query_params = event.get('queryStringParameters', {}) or {}
+        message_id = query_params.get('messageId')
+        
+        # Validate required fields
+        if not message_id:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Bad Request', 'message': 'Missing required parameter: messageId', 'code': 4308})
+            }
+        
+        db_manager = ChatDBManager()
+        
+        # Verify chat exists and user has access
+        chat = db_manager.get_chat(chat_id)
+        if not chat:
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Not Found', 'message': 'Chat not found', 'code': 4309})
+            }
+        
+        # Verify user is participant in this chat
+        if user_id not in [chat.worker_id, chat.company_representative_id]:
+            return {
+                'statusCode': 403,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Forbidden', 'message': 'You are not authorized to access this chat', 'code': 4310})
+            }
+        
+        # Get the message to find the attachment
+        # Query by messageId using GSI
+        messages_table = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'eu-south-1')).Table(
+            os.environ['MESSAGES_TABLE_NAME']
+        )
+        
+        response = messages_table.query(
+            IndexName='messageId-timestamp-index',
+            KeyConditionExpression='messageId = :messageId',
+            ExpressionAttributeValues={':messageId': message_id}
+        )
+        
+        if not response['Items']:
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Not Found', 'message': 'Message not found', 'code': 4311})
+            }
+        
+        message_item = response['Items'][0]
+        
+        # Verify this message belongs to the requested chat
+        if message_item.get('chatId') != chat_id:
+            return {
+                'statusCode': 403,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Forbidden', 'message': 'Message does not belong to this chat', 'code': 4312})
+            }
+        
+        # Check if message has attachments
+        attachments = message_item.get('attachments', [])
+        if not attachments:
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Not Found', 'message': 'Message has no attachments', 'code': 4313})
+            }
+        
+        # If multiple attachments, return presigned URLs for all
+        bucket_name = os.environ['CHAT_ATTACHMENTS_BUCKET']
+        
+        # Use module-level S3 client with proper signature configuration
+        # Generate presigned URLs for each attachment
+        presigned_urls = []
+        for att in attachments:
+            # Extract the file key from the s3_url
+            # Format: https://bucket.s3.region.amazonaws.com/chat_id/filename
+            s3_url = att.get('s3Url', '')
+            if not s3_url:
+                continue
+            
+            # Extract the key part (everything after the domain)
+            # e.g., "chat_123/20251212_163901_xxx_file.pdf"
+            try:
+                key = s3_url.split('.amazonaws.com/')[-1]
+            except:
+                continue
+            
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': bucket_name,
+                    'Key': key
+                },
+                ExpiresIn=3600  # 1 hour
+            )
+            
+            presigned_urls.append({
+                'fileName': att.get('fileName', 'attachment'),
+                'fileType': att.get('fileType', 'application/octet-stream'),
+                'fileSize': att.get('fileSize', 0),
+                'downloadUrl': presigned_url
+            })
+        
+        if not presigned_urls:
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Not Found', 'message': 'Could not generate download URLs', 'code': 4314})
+            }
+        
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({
+                'attachments': presigned_urls,
+                'expiresIn': 3600,
+                'code': 3086
+            }, default=decimal_default)
+        }
+        
+    except ClientError as e:
+        print(f"AWS error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Internal Server Error', 'message': 'Failed to generate download URL', 'code': 5086})
+        }
+    
+    except KeyError as e:
+        print(f"Missing required parameter: {str(e)}")
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Bad Request', 'message': f'Missing required parameter: {str(e)}', 'code': 4315})
+        }
+    
+    except Exception as e:
+        print(f"Error generating download URL: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Internal Server Error', 'message': 'Internal server error', 'code': 5087})
+        }

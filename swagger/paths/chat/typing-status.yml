@@ -1,0 +1,139 @@
+post:
+  tags:
+    - Chat
+  summary: "[WebSocket] Send typing status"
+  description: |
+    **⚡ WebSocket action — not an HTTP endpoint.**
+
+    This is a WebSocket message action handled by the `typingStatus` Lambda.
+    It is invoked by sending a JSON payload over the existing WebSocket connection
+    (established via `wss://<WEBSOCKET_API>/$connect`).
+
+    **How to send:**
+    ```json
+    {
+      "action": "typingStatus",
+      "chatId": "CHAT#2025-06-15T10:00:00Z#abc123",
+      "isTyping": true
+    }
+    ```
+
+    Optionally include `"version": "1"` for the v1 routing path (currently identical to legacy).
+
+    **Broadcast:**
+    The server broadcasts the following event to the *other* chat participant's WebSocket connection:
+    ```json
+    {
+      "action": "typing_status",
+      "version": "legacy",
+      "chatId": "CHAT#2025-06-15T10:00:00Z#abc123",
+      "userId": "<sender-userId>",
+      "isTyping": true
+    }
+    ```
+
+    **Authorization:**
+    The user identity is resolved from the WebSocket authorizer context (JWT sub injected at `$connect`).
+    No additional token is needed in the message body.
+
+    **Error handling (returned on the sender's connection):**
+    - `{"statusCode": 400, "body": {"error": "chatId is required"}}` — missing chatId
+    - `{"statusCode": 403, "body": {"error": "Not authorized for this chat"}}` — user not a participant
+    - `{"statusCode": 404, "body": {"error": "Chat not found"}}` — chat does not exist
+
+    > **Frontend usage:** Debounce sends. Recommended: send `isTyping: true` on keydown (debounced
+    > ~500ms), and `isTyping: false` after ~2s of inactivity or on blur.
+  operationId: sendTypingStatus
+  security:
+    - CognitoAuth: []
+  requestBody:
+    description: WebSocket message payload (sent over the WebSocket connection, not HTTP body)
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - action
+            - chatId
+            - isTyping
+          properties:
+            action:
+              type: string
+              enum: [typingStatus]
+              description: WebSocket action identifier
+              example: typingStatus
+            chatId:
+              type: string
+              description: ID of the chat where the user is typing
+              example: "CHAT#2025-06-15T10:00:00Z#abc123"
+            isTyping:
+              type: boolean
+              description: Whether the user is currently typing
+              example: true
+            version:
+              type: string
+              enum: ["1"]
+              description: Optional. Omit for legacy, set to "1" for v1 routing.
+              example: "1"
+  responses:
+    '200':
+      description: Typing status broadcast successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Typing status sent"
+    '400':
+      description: Missing required field
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "chatId is required"
+    '401':
+      description: Unauthorized — user identity could not be resolved
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+    '403':
+      description: Forbidden — user is not a participant of the specified chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Not authorized for this chat"
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Chat not found"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

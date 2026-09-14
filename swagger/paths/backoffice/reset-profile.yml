@@ -1,0 +1,134 @@
+post:
+  tags:
+    - Backoffice
+  summary: Reset User Profile to Basic
+  description: |
+    Reset a user's profile from specialized (worker/company) to "basic" status.
+    
+    **Blocking Conditions:**
+    - Worker: Cannot reset if has active bookings (status: pending, accepted)
+    - Company: Cannot reset if has active job listings (status: published, paused) OR active bookings (status: pending, accepted)
+    
+    **Data Deleted on Success:**
+    - **Worker**: 
+      - Inactive bookings (status: rejected, cancelled, completed, blocked)
+      - All user documents
+    - **Company**: 
+      - Inactive job listings (status: draft, deleted, closed, cancelled) and their associated bookings
+      - Company record from Companies table
+      - All user documents
+    
+    **Cognito Changes:**
+    - profile_type: changed to "basic"
+    - verification_status: removed
+    - Moved to "basic_users" group (removed from worker/company groups)
+  operationId: resetProfile
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            body:
+              type: string
+              description: JSON stringified request body
+              example: '{"userSub":"765e62b0-10b1-7066-02eb-bc9384e17d08"}'
+          required:
+            - body
+  responses:
+    '200':
+      description: Profile reset successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Profile reset to basic successfully
+              summary:
+                type: object
+                properties:
+                  userSub:
+                    type: string
+                  previousProfileType:
+                    type: string
+                    enum: [worker, company, company_representative]
+                  resetTimestamp:
+                    type: string
+                    format: date-time
+                  deletedItems:
+                    type: object
+                    properties:
+                      bookings:
+                        type: integer
+                        description: Number of deleted inactive bookings
+                      documents:
+                        type: integer
+                        description: Number of deleted user documents
+                      jobListings:
+                        type: integer
+                        description: Number of deleted inactive job listings (company only)
+                      companyRecord:
+                        type: boolean
+                        description: Whether company record was deleted from Companies table (company only)
+    '409':
+      description: Cannot reset profile - active bookings or job listings exist
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Cannot reset profile: company has active job listings or active bookings"
+              message:
+                type: string
+                example: "Please close or delete all active job listings (published/paused) and cancel all active bookings (pending/accepted) before resetting the profile."
+              activeBookings:
+                type: array
+                description: List of active bookings blocking the reset
+                items:
+                  type: object
+                  properties:
+                    bookingId:
+                      type: string
+                    listingId:
+                      type: string
+                    jobTitle:
+                      type: string
+                      nullable: true
+                    workerName:
+                      type: string
+                      nullable: true
+                    status:
+                      type: string
+                      enum: [pending, accepted]
+                    startDate:
+                      type: string
+                      format: date
+                    endDate:
+                      type: string
+                      format: date
+              activeListings:
+                type: array
+                description: List of active job listings blocking the reset (company only)
+                items:
+                  type: object
+                  properties:
+                    listingId:
+                      type: string
+                    jobTitle:
+                      type: string
+                    status:
+                      type: string
+                      enum: [published, paused]
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    '403':
+      $ref: '../../components/responses/Forbidden.yml'
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

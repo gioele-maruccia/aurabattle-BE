@@ -1,0 +1,34 @@
+type: object
+description: User localization and language preferences
+properties:
+  preferred_language:
+    type: string
+    enum:
+      - it
+      - en
+      - es
+      - fr
+      - de
+    description: Preferred interface language
+    example: "it"
+  timezone:
+    type: string
+    description: User timezone (IANA format)
+    example: "Europe/Rome"
+  currency:
+    type: string
+    enum:
+      - EUR
+      - USD
+      - GBP
+    description: Preferred currency
+    example: "EUR"
+  auto_translation_enabled:
+    type: boolean
+    description: Enable automatic translation of job listings and chat messages
+    example: false
+required:
+  - preferred_language
+  - timezone
+  - currency
+  - auto_translation_enabled

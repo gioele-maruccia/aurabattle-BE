@@ -1,0 +1,176 @@
+    patch:
+      tags:
+        - Bookings
+      summary: Update booking status
+      description: |
+        Update the status of a booking (accept, reject, mark as no-show, etc).
+        
+        **Access Control:**
+        - Company: Can accept/reject/mark no-show for their listings
+        - Backoffice: Can change any status
+        - Workers: Cannot change status (must use /cancel endpoint)
+        
+        **Status Transitions:**
+        
+        From **pending**:
+        - → confirmed (company accepts)
+        - → rejected (company rejects)
+        - → cancelled (see /cancel endpoint)
+        
+        From **confirmed**:
+        - → completed (automatic after end date or manual)
+        - → no_show (company marks worker didn't show up)
+        - → cancelled (see /cancel endpoint)
+        
+        **Business Rules:**
+        - Can only accept if positions available
+        - Cannot change status of completed bookings
+        - Accepting a booking updates listing positionsFilled count
+        - Rejecting/cancelling frees up the position
+        
+        **Side Effects:**
+        - Updates booking status and timestamps
+        - Updates listing positions count
+        - Sends notification to worker
+        - May trigger contract details form (on accept)
+        - ⚡ **NEW:** Automatically sends system message to associated chat when status changes
+          to confirmed, rejected, cancelled, or completed. Message includes booking details
+          and reason (if provided). Chat message failures do not block booking update.
+      operationId: updateBookingStatus
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Booking ID
+          example: "booking_2025_abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [confirmed, rejected, no_show, completed]
+                  description: New booking status
+                message:
+                  type: string
+                  maxLength: 500
+                  description: Optional message to worker (especially for rejections)
+                  example: "Thank you for applying. Unfortunately, we've selected other candidates."
+                contract:
+                  type: object
+                  description: Contract details (required when confirming)
+                  properties:
+                    hourlyRate:
+                      type: number
+                      format: float
+                      minimum: 0
+                    hoursPerWeek:
+                      type: integer
+                      minimum: 1
+                    startTime:
+                      type: string
+                      example: "08:00"
+                    endTime:
+                      type: string
+                      example: "16:00"
+                    benefits:
+                      type: array
+                      items:
+                        type: string
+            examples:
+              accept_application:
+                summary: Accept application with contract
+                value:
+                  status: "confirmed"
+                  message: "Welcome to our team! We look forward to working with you."
+                  contract:
+                    hourlyRate: 12.50
+                    hoursPerWeek: 40
+                    startTime: "08:00"
+                    endTime: "16:00"
+                    benefits: ["Meals included", "Accommodation provided"]
+              reject_application:
+                summary: Reject application
+                value:
+                  status: "rejected"
+                  message: "Thank you for your interest. We've selected other candidates with more experience."
+              mark_no_show:
+                summary: Mark worker as no-show
+                value:
+                  status: "no_show"
+                  message: "Worker did not show up on the agreed start date."
+      responses:
+        '200':
+          description: Booking status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "Booking status updated to confirmed"
+                  booking:
+                    $ref: '../../components/schemas/booking.yml#/Booking'
+        '400':
+          description: Invalid request or status transition
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+              examples:
+                invalid_transition:
+                  summary: Invalid status transition
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Cannot change status from completed to confirmed"
+                no_positions:
+                  summary: No positions available
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Cannot confirm booking: no positions remaining"
+                missing_contract:
+                  summary: Contract details required
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Contract details are required when confirming a booking"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to update this booking
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

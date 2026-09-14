@@ -1,0 +1,152 @@
+# Create Review for a Booking
+post:
+  summary: Create a review for a completed booking
+  operationId: createReview
+  description: |
+    Create a new review for a completed booking.
+    
+    **Review Type Determination:**
+    - The `reviewType` is automatically determined by the backend based on the JWT token
+    - Workers automatically review companies (worker-to-company)
+    - Companies automatically review workers (company-to-worker)
+    - Do NOT send reviewType in the request - it's calculated server-side
+    
+    **Workers review companies on:**
+    - Rating 1: Flessibilità Oraria (Schedule Flexibility)
+    - Rating 2: Clima Aziendale e Condizioni Lavorative (Work Climate & Conditions)
+    
+    **Companies review workers on:**
+    - Rating 1: Affidabilità (Reliability)
+    - Rating 2: Team Working (Team Working)
+    
+    Both include optional text description (max 500 chars).
+    
+    **Automatic Review Reminder:**
+    When a booking status becomes 'completed', a single message is automatically sent
+    to the shared chat with message_type='ask_review'. Both worker and company see the
+    same message. The frontend shows the appropriate form based on who is logged in.
+  tags:
+    - Bookings - Reviews
+  parameters:
+    - name: bookingId
+      in: path
+      required: true
+      description: The booking ID to review
+      schema:
+        type: string
+        format: uuid
+  security:
+    - CognitoAuthorizer: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - rating1
+            - rating2
+          properties:
+            rating1:
+              type: integer
+              minimum: 1
+              maximum: 5
+              description: First rating (flexibility for workers, reliability for companies)
+              example: 5
+            rating2:
+              type: integer
+              minimum: 1
+              maximum: 5
+              description: Second rating (climate for workers, team working for companies)
+              example: 4
+            description:
+              type: string
+              description: Optional text description of the review
+              example: "Great experience working with this company!"
+              maxLength: 1000
+  responses:
+    201:
+      description: Review created successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reviewId:
+                type: string
+                format: uuid
+              bookingId:
+                type: string
+                format: uuid
+              targetId:
+                type: string
+                format: uuid
+                description: Company ID (if worker reviewing) or Worker ID (if company reviewing)
+              reviewType:
+                type: string
+                enum:
+                  - worker-to-company
+                  - company-to-worker
+              rating1:
+                type: integer
+                minimum: 1
+                maximum: 5
+              rating2:
+                type: integer
+                minimum: 1
+                maximum: 5
+              averageRating:
+                type: number
+                format: float
+                description: Average of rating1 and rating2
+              description:
+                type: string
+              reviewerFirstName:
+                type: string
+              reviewerPhotoUrl:
+                type: string
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+            example:
+              reviewId: "550e8400-e29b-41d4-a716-446655440000"
+              bookingId: "550e8400-e29b-41d4-a716-446655440001"
+              targetId: "company-123"
+              reviewType: "worker-to-company"
+              rating1: 5
+              rating2: 4
+              averageRating: 4.5
+              description: "Great company!"
+              reviewerFirstName: "John"
+              reviewerPhotoUrl: "https://..."
+              createdAt: "2026-01-28T10:30:00Z"
+    400:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+            example:
+              error: "Bad Request"
+              message: "Can only review completed bookings"
+    403:
+      description: Forbidden - User can only review their own bookings
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+    404:
+      description: Booking not found
+    500:
+      description: Internal server error

@@ -1,0 +1,78 @@
+    delete:
+      tags:
+        - Bookings
+      summary: Delete blackout period
+      description: |
+        Delete a blackout period.
+        
+        **Access Control:**
+        - Company: Can delete blackouts for their own listings
+        - Backoffice: Can delete any blackout
+        
+        **Business Rules:**
+        - Can delete any blackout (past or future)
+        - Does not automatically restore rejected bookings
+        - Workers who were rejected due to this blackout must reapply
+        
+        **Use Cases:**
+        - Plans changed, reopening the dates
+        - Blackout was created by mistake
+        - Maintenance completed earlier than expected
+      operationId: deleteBlackout
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Blackout booking ID
+          example: "blackout_2025_xyz789"
+      responses:
+        '200':
+          description: Blackout deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "Blackout period deleted successfully"
+                  bookingId:
+                    type: string
+        '400':
+          description: Not a blackout booking
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to delete this blackout
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Blackout not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

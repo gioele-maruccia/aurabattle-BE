@@ -1,0 +1,130 @@
+# List Reviews
+get:
+  summary: List all reviews for a target (company or worker)
+  operationId: listReviews
+  description: |
+    Get all reviews for a specific target with full details.
+    Includes reviewer information, individual ratings, descriptions, and overall average.
+    Results are sorted by creation date (most recent first).
+    Supports pagination via limit and nextPageToken parameters.
+  tags:
+    - Bookings - Reviews
+  parameters:
+    - name: targetId
+      in: path
+      required: true
+      description: The company ID or worker ID to get reviews for
+      schema:
+        type: string
+        format: uuid
+    - name: limit
+      in: query
+      required: false
+      description: Maximum number of reviews to return (default 50, max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    - name: lastKey
+      in: query
+      required: false
+      description: Pagination token from previous request (nextPageToken) for fetching next page
+      schema:
+        type: string
+  responses:
+    200:
+      description: Reviews retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              targetId:
+                type: string
+                format: uuid
+              reviewCount:
+                type: integer
+                description: Number of reviews in this response
+              averageRating:
+                type: number
+                format: float
+                nullable: true
+                description: Average rating across all reviews for this target
+              reviews:
+                type: array
+                description: Array of review objects
+                items:
+                  type: object
+                  properties:
+                    reviewId:
+                      type: string
+                      format: uuid
+                    bookingId:
+                      type: string
+                      format: uuid
+                    reviewType:
+                      type: string
+                      enum:
+                        - worker-to-company
+                        - company-to-worker
+                    rating1:
+                      type: integer
+                      minimum: 1
+                      maximum: 5
+                      description: First rating (flexibility/reliability)
+                    rating2:
+                      type: integer
+                      minimum: 1
+                      maximum: 5
+                      description: Second rating (climate/team working)
+                    averageRating:
+                      type: number
+                      format: float
+                    description:
+                      type: string
+                      description: Reviewer's text description
+                    reviewerFirstName:
+                      type: string
+                      description: First name or company name of the reviewer
+                    reviewerPhotoUrl:
+                      type: string
+                      nullable: true
+                      description: Profile photo or company logo URL
+                    createdAt:
+                      type: string
+                      format: date-time
+              nextPageToken:
+                type: string
+                nullable: true
+                description: Token to fetch next page (if more results exist)
+            example:
+              targetId: "company-123"
+              reviewCount: 2
+              averageRating: 4.5
+              reviews:
+                - reviewId: "550e8400-e29b-41d4-a716-446655440000"
+                  bookingId: "550e8400-e29b-41d4-a716-446655440001"
+                  reviewType: "worker-to-company"
+                  rating1: 5
+                  rating2: 4
+                  averageRating: 4.5
+                  description: "Great company! Very flexible with hours."
+                  reviewerFirstName: "John"
+                  reviewerPhotoUrl: "https://..."
+                  createdAt: "2026-01-28T10:30:00Z"
+                - reviewId: "550e8400-e29b-41d4-a716-446655440002"
+                  bookingId: "550e8400-e29b-41d4-a716-446655440003"
+                  reviewType: "worker-to-company"
+                  rating1: 4
+                  rating2: 5
+                  averageRating: 4.5
+                  description: "Good work environment."
+                  reviewerFirstName: "Jane"
+                  reviewerPhotoUrl: "https://..."
+                  createdAt: "2026-01-25T14:20:00Z"
+    400:
+      description: Bad request
+    500:
+      description: Internal server error
+  security: []

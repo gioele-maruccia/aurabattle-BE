@@ -1,0 +1,133 @@
+patch:
+  tags:
+    - Chat
+  summary: Update chat status
+  description: |
+    Update the status of a chat.
+    
+    **Requirements:**
+    - Only chat participants (worker or company representative) can update status
+    - Valid status values: active, archived, closed, deleted
+    
+    **Use Cases:**
+    - Archive a chat when booking is completed
+    - Close a chat when booking is cancelled
+    - Delete a chat (soft delete)
+    - Reactivate an archived chat
+    
+    **Side Effects:**
+    - Updates chat status in DynamoDB
+  operationId: updateChatStatus
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              enum: [active, archived, closed, deleted]
+              description: New chat status
+              example: "archived"
+        examples:
+          archive_chat:
+            summary: Archive completed chat
+            value:
+              status: "archived"
+          close_chat:
+            summary: Close cancelled chat
+            value:
+              status: "closed"
+          delete_chat:
+            summary: Delete chat (soft delete)
+            value:
+              status: "deleted"
+          reactivate_chat:
+            summary: Reactivate archived chat
+            value:
+              status: "active"
+  responses:
+    '200':
+      description: Chat status updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Chat status updated successfully"
+              chatId:
+                type: string
+                example: "chat_40f1671d354346a0"
+              status:
+                type: string
+                enum: [active, archived, closed, deleted]
+                example: "archived"
+              previousStatus:
+                type: string
+                enum: [active, archived, closed, deleted]
+                example: "active"
+    '400':
+      description: Bad request (invalid status, chat already has that status, etc.)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid status. Must be one of: active, archived, closed, deleted"
+    '401':
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized - Invalid token"
+    '403':
+      description: Forbidden - User is not a participant of this chat
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden - You are not a participant of this chat"
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Chat not found"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

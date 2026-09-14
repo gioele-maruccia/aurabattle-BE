@@ -1,0 +1,24 @@
+type: object
+description: User verification statuses
+properties:
+  email_verified:
+    type: boolean
+    description: Email verified via Cognito
+    example: true
+  phone_verified:
+    type: boolean
+    description: Phone number verified via SMS
+    example: false
+  identity_verified:
+    type: boolean
+    description: Identity document verified
+    example: false
+  payment_verified:
+    type: boolean
+    description: Payment method verified
+    example: false
+required:
+  - email_verified
+  - phone_verified
+  - identity_verified
+  - payment_verified

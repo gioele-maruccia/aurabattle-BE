@@ -1,0 +1,23 @@
+description: Too Many Requests - Rate limit exceeded
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Too Many Requests"
+        message:
+          type: string
+          example: "Rate limit exceeded"
+        retry_after:
+          type: integer
+          description: Seconds to wait before retrying
+          example: 60
+    examples:
+      rateLimitExceeded:
+        summary: Rate limit exceeded
+        value:
+          error: "Too Many Requests"
+          message: "You have exceeded the rate limit. Please try again later."
+          retry_after: 60

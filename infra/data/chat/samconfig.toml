@@ -1,0 +1,48 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "seasonal-jobs-chat-data-dev"
+region = "eu-south-1"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "seasonal-jobs-chat-data-dev"
+region = "eu-south-1"
+parameter_overrides = "Environment=\"dev\" BillingMode=\"PAY_PER_REQUEST\""
+image_repositories = []
+
+[prod]
+[prod.global.parameters]
+stack_name = "seasonal-jobs-chat-data-prod"
+
+[prod.build.parameters]
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "seasonal-jobs-chat-data-prod"
+region = "eu-south-1"
+parameter_overrides = "Environment=\"prod\""
+
+[dev.deploy.parameters]
+stack_name = "seasonal-jobs-chat-data-dev"
+resolve_s3 = true
+s3_prefix = "seasonal-jobs-chat-data-dev"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"dev\" BillingMode=\"PAY_PER_REQUEST\""
+image_repositories = []
+
+[dev.global.parameters]
+region = "eu-south-1"

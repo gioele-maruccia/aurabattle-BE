@@ -1,0 +1,653 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: JobListings API service for Beezey seasonal job platform
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - dev-be
+    - prod
+    Description: Environment name
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        JOB_LISTINGS_TABLE_NAME:
+          Fn::Sub: ${Environment}-JobListings
+        COMPANIES_TABLE_NAME:
+          Fn::Sub: ${Environment}-Companies
+        BOOKINGS_TABLE_NAME:
+          Fn::Sub: ${Environment}-Bookings
+        CHATS_TABLE_NAME:
+          Fn::Sub: ${Environment}-Chats
+        COGNITO_USER_POOL_ARN:
+          Ref: CognitoUserPoolArn
+        COMPANIES_BUCKET_NAME:
+          Fn::Sub: beezey-${Environment}-companies-assets
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: job-listings
+        POWERTOOLS_METRICS_NAMESPACE: Beezey
+Resources:
+  JobListingsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: ${Environment}-job-listings-api
+      StageName:
+        Ref: Environment
+      Cors:
+        AllowMethods: '''GET,POST,PUT,DELETE,PATCH,OPTIONS'''
+        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+        AllowOrigin: '''*'''
+        MaxAge: '''600'''
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn:
+              Ref: CognitoUserPoolArn
+      TracingEnabled: true
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: JobListingsApi
+  CreateJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-create
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/f11a714cd76efc411100ab9a556193b7
+      Handler: app.lambda_handler
+      Description: Create a new job listing with validation against reference tables
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobRoles
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Contracts
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-EmploymentTypes
+      Events:
+        CreateListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings
+            Method: POST
+        CreateListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings
+            Method: POST
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: CreateJobListingFunction
+  GetJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-get
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/6e11210c95712c7e9ac8c97eab49db36
+      Handler: app.lambda_handler
+      Description: Get job listing details by ID with recruiter info and company logo
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - S3ReadPolicy:
+          BucketName:
+            Fn::Sub: beezey-${Environment}-companies-assets
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+            Ref: CognitoUserPoolArn
+      Events:
+        GetListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        GetListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: GetJobListingFunction
+  ListJobListingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-list
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/9badcb432eb846b5aa652c4082673e96
+      Handler: app.lambda_handler
+      Description: List and search job listings with filters and company data
+      Timeout: 60
+      MemorySize: 1024
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - S3ReadPolicy:
+          BucketName:
+            Fn::Sub: beezey-${Environment}-companies-assets
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/companyId-index
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings/index/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+            Ref: CognitoUserPoolArn
+      Events:
+        ListListingsV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        ListListingsV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: ListJobListingsFunction
+  GetMyListingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-get-my
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/ad5dd4fdac53c52ab7b6be588920fccb
+      Handler: app.lambda_handler
+      Description: Get all listings for authenticated company (all statuses - uses
+        companyId-createdAt-index)
+      Timeout: 30
+      MemorySize: 512
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings/index/companyId-createdAt-index
+      Events:
+        GetMyListingsV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/my
+            Method: GET
+        GetMyListingsV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/my
+            Method: GET
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: GetMyListingsFunction
+  PublishJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-publish
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/dde9561d75fa0820e60030b89549277c
+      Handler: app.lambda_handler
+      Description: Publish a job listing from draft status
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      Events:
+        PublishListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/{listingId}/publish
+            Method: PATCH
+        PublishListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/{listingId}/publish
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: PublishJobListingFunction
+  PauseJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-pause
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/1e55e779fd600644f48ad1f7630b5887
+      Handler: app.lambda_handler
+      Description: Pause a published job listing
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      Events:
+        PauseListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/{listingId}/pause
+            Method: PATCH
+        PauseListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/{listingId}/pause
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: PauseJobListingFunction
+  DeleteJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-delete
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/d9bb335f43454e2e4586737ca752d958
+      Handler: app.lambda_handler
+      Description: Delete a job listing (soft delete - sets status to deleted)
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Chats
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        DeleteListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/{listingId}
+            Method: DELETE
+        DeleteListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/{listingId}
+            Method: DELETE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: DeleteJobListingFunction
+  UpdateJobListingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-update
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/a9446e58fee47ba2ff783112518d6ac0
+      Handler: app.lambda_handler
+      Description: Update an existing job listing (company owner only) with validation
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Chats
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobRoles
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Contracts
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-EmploymentTypes
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        UpdateListingV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/{listingId}
+            Method: PUT
+        UpdateListingV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/{listingId}
+            Method: PUT
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: UpdateJobListingFunction
+  GetCompanyListingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-get-company
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/06cba50a697ac9a25f87bd54398e0460
+      Handler: app.lambda_handler
+      Description: Get all job listings for a company (public endpoint - published
+        only, owner sees all)
+      Timeout: 30
+      MemorySize: 512
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings/index/companyId-createdAt-index
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/companyId-index
+      Events:
+        GetCompanyListingsV0:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /listings/company/{companyId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        GetCompanyListingsV1:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: JobListingsApi
+            Path: /v1/listings/company/{companyId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: GetCompanyListingsFunction
+  ExpireJobListingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-job-listings-expire
+      CodeUri: s3://beezey-prod/job-listings/20260420-112602/441ce39819b12e8af09162b50fa59c76
+      Handler: app.lambda_handler
+      Description: Daily job to expire job listings that have reached their end date
+        and complete associated bookings
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          BOOKINGS_TABLE_NAME:
+            Fn::Sub: ${Environment}-Bookings
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 2 * * ? *)
+            Name:
+              Fn::Sub: ${Environment}-expire-job-listings-daily
+            Description: Daily schedule to expire job listings that have reached their
+              end date
+            Enabled: true
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: JobListings
+    Metadata:
+      SamResourceId: ExpireJobListingsFunction
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId:
+        Ref: JobListingsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault4XX
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId:
+        Ref: JobListingsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault5XX
+Outputs:
+  JobListingsApiUrl:
+    Description: API Gateway endpoint URL for JobListings API
+    Value:
+      Fn::Sub: https://${JobListingsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  JobListingsApiId:
+    Description: API Gateway ID
+    Value:
+      Ref: JobListingsApi
+  CreateJobListingFunctionArn:
+    Description: ARN of CreateJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - CreateJobListingFunction
+      - Arn
+  CreateJobListingFunctionName:
+    Description: Name of CreateJobListing Lambda function
+    Value:
+      Ref: CreateJobListingFunction
+  GetJobListingFunctionArn:
+    Description: ARN of GetJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - GetJobListingFunction
+      - Arn
+  GetMyListingsFunctionArn:
+    Description: ARN of GetMyListings Lambda function
+    Value:
+      Fn::GetAtt:
+      - GetMyListingsFunction
+      - Arn
+  PublishJobListingFunctionArn:
+    Description: ARN of PublishJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - PublishJobListingFunction
+      - Arn
+  PauseJobListingFunctionArn:
+    Description: ARN of PauseJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - PauseJobListingFunction
+      - Arn
+  DeleteJobListingFunctionArn:
+    Description: ARN of DeleteJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - DeleteJobListingFunction
+      - Arn
+  UpdateJobListingFunctionArn:
+    Description: ARN of UpdateJobListing Lambda function
+    Value:
+      Fn::GetAtt:
+      - UpdateJobListingFunction
+      - Arn
+  ListJobListingsFunctionArn:
+    Description: ARN of ListJobListings Lambda function
+    Value:
+      Fn::GetAtt:
+      - ListJobListingsFunction
+      - Arn
+  GetCompanyListingsFunctionArn:
+    Description: ARN of GetCompanyListings Lambda function
+    Value:
+      Fn::GetAtt:
+      - GetCompanyListingsFunction
+      - Arn
+  GetCompanyListingsFunctionName:
+    Description: Name of GetCompanyListings Lambda function
+    Value:
+      Ref: GetCompanyListingsFunction
+  ExpireJobListingsFunctionArn:
+    Description: ARN of ExpireJobListings Lambda function
+    Value:
+      Fn::GetAtt:
+      - ExpireJobListingsFunction
+      - Arn
+  ExpireJobListingsFunctionName:
+    Description: Name of ExpireJobListings Lambda function
+    Value:
+      Ref: ExpireJobListingsFunction

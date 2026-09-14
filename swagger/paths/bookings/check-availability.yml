@@ -1,0 +1,167 @@
+    get:
+      tags:
+        - Bookings
+      summary: Check availability for a date range
+      description: |
+        Check if a job listing is available for booking during a specific date range.
+        This endpoint considers:
+        - Listing status (must be published)
+        - Available positions
+        - Blackout periods
+        - Worker's existing bookings (if authenticated)
+        
+        **Public Access:**
+        - Unauthenticated: Shows listing availability (positions, blackouts)
+        - Authenticated worker: Also checks for worker's date conflicts
+        
+        **Use Cases:**
+        - Pre-validate before showing "Apply" button
+        - Show availability calendar to workers
+        - Display why dates are unavailable
+        - Prevent unnecessary failed applications
+        
+        **Returns:**
+        - available: boolean (can book or not)
+        - reasons: why not available (if applicable)
+        - conflicts: worker's overlapping bookings (if authenticated)
+        - blackouts: unavailable periods from company
+        - warnings: non-blocking warnings (e.g., job starts soon)
+      operationId: checkAvailability
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job listing ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Desired booking start date
+          example: "2025-06-15"
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Desired booking end date
+          example: "2025-08-31"
+      responses:
+        '200':
+          description: Availability check completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      statusCode:
+                        type: integer
+                        example: 200
+                  - $ref: '../../components/schemas/AvailabilityCheckResult.yml#/AvailabilityResult'
+              examples:
+                available:
+                  summary: Dates are available
+                  value:
+                    statusCode: 200
+                    available: true
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Summer waiter needed"
+                      status: "published"
+                      positions: 5
+                      positionsFilled: 2
+                      positionsRemaining: 3
+                    conflicts: []
+                    blackouts: []
+                    warnings: []
+                    reasons: []
+                not_available_conflict:
+                  summary: Worker has date conflict
+                  value:
+                    statusCode: 200
+                    available: false
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Summer waiter needed"
+                      status: "published"
+                      positions: 5
+                      positionsFilled: 2
+                      positionsRemaining: 3
+                    conflicts:
+                      - bookingId: "booking_xyz"
+                        bookingType: "application"
+                        listingTitle: "Beach bar attendant"
+                        startDate: "2025-07-01"
+                        endDate: "2025-07-31"
+                        status: "confirmed"
+                        reason: "Overlaps with confirmed booking"
+                    blackouts: []
+                    reasons:
+                      - code: "DATE_CONFLICT"
+                        message: "You have another confirmed booking that overlaps with these dates"
+                not_available_blackout:
+                  summary: Blackout period exists
+                  value:
+                    statusCode: 200
+                    available: false
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Summer waiter needed"
+                      status: "published"
+                      positions: 5
+                      positionsFilled: 2
+                      positionsRemaining: 3
+                    conflicts: []
+                    blackouts:
+                      - startDate: "2025-07-15"
+                        endDate: "2025-07-22"
+                        reason: "Restaurant closed for maintenance"
+                    reasons:
+                      - code: "BLACKOUT_PERIOD"
+                        message: "This listing has a blackout period during your selected dates: Restaurant closed for maintenance"
+                not_available_full:
+                  summary: No positions remaining
+                  value:
+                    statusCode: 200
+                    available: false
+                    listingId: "550e8400-e29b-41d4-a716-446655440000"
+                    listing:
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Summer waiter needed"
+                      status: "published"
+                      positions: 5
+                      positionsFilled: 5
+                      positionsRemaining: 0
+                    conflicts: []
+                    blackouts: []
+                    reasons:
+                      - code: "NO_POSITIONS"
+                        message: "All positions for this job have been filled"
+        '400':
+          description: Invalid request (e.g., invalid date range)
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Listing not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

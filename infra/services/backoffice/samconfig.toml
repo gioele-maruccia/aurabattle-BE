@@ -1,0 +1,88 @@
+version = 0.1
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "backoffice-service-dev"
+resolve_s3 = false
+s3_prefix = "backoffice"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+	"Environment=dev",
+	"ExistingBucketName=beezey-dev-user-documents",
+	"ExistingTableName=dev-UserDocuments",
+	"CognitoUserPoolId=eu-south-1_0oK9agPYd",
+	"KMSKeyId=dba20d4f-3d24-4f4d-a476-4e5a42a7533b"
+]
+
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = true
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "backoffice-service-dev"
+template_file = "infra/services/backoffice/template.yaml"
+resolve_s3 = false
+s3_prefix = "backoffice"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+	"Environment=dev",
+	"ExistingBucketName=beezey-dev-user-documents",
+	"ExistingTableName=dev-UserDocuments",
+	"CognitoUserPoolId=eu-south-1_0oK9agPYd",
+	"KMSKeyId=dba20d4f-3d24-4f4d-a476-4e5a42a7533b"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = true
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "backoffice-service-prod"
+template_file = "infra/services/backoffice/template.yaml"
+resolve_s3 = false
+s3_prefix = "backoffice"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+	"Environment=prod",
+	"ExistingBucketName=beezey-prod-user-documents",
+	"ExistingTableName=prod-UserDocuments",
+	"CognitoUserPoolId=eu-south-1_iCBtUlJO6",
+	"KMSKeyId=aa45aed4-3d74-476e-a67e-b9616eb4235c"
+]

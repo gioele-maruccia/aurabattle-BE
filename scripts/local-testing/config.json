@@ -1,0 +1,31 @@
+{
+  "aws_region": "eu-south-1",
+  "dev_environment": {
+    "profile": "default",
+    "tables_to_export": {
+      "UserProfiles": "dev-UserProfiles",
+      "UserDocuments": "dev-ProfileUpgradeDocuments",
+      "JobListings": "dev-JobListings",
+      "Companies": "dev-Companies",
+      "Bookings": "dev-Bookings",
+      "ChatMessages": "dev-ChatMessages"
+    },
+    "export_limit": 100
+  },
+  "local_mock": {
+    "dynamodb_port": 5000,
+    "s3_port": 5001,
+    "tables": [
+      "UserProfiles",
+      "UserDocuments",
+      "JobListings",
+      "Companies",
+      "Bookings",
+      "ChatMessages"
+    ],
+    "buckets": [
+      "test-beebusy-documents",
+      "test-beebusy-images"
+    ]
+  }
+}

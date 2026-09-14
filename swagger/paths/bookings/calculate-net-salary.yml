@@ -1,0 +1,448 @@
+post:
+  tags:
+    - Bookings
+  summary: Calculate net salary for booking
+  description: |
+    Calculate the **total net salary** (after Italian taxes) for a worker based on
+    the entire booking duration. Works for any period length (days, weeks, months).
+
+    **Preferred usage:** pass `jobListingId` — the backend fetches `grossBasePay`,
+    `indennità di contingenza` and `superminimo` directly from the job listing record
+    in DynamoDB (no need for the client to compute or forward salary values).
+
+    **Fallback (legacy):** omit `jobListingId` and pass `monthlyGrossSalary` +
+    optional `superminimo` explicitly (kept for backward compatibility).
+
+    **Requirements:**
+    - Valid worker `userId`
+    - Either `jobListingId` **or** `monthlyGrossSalary > 0`
+    - Either `daysWorked` or `startDate`/`endDate`
+
+    **Gross base used in all calculations:**
+    `totalMonthlyGross = grossBasePay (from listing) + superminimo (from listing)`
+
+    **Tax Components (on ordinary pay):**
+    - IRPEF: 23% nominal, effective rate after detrazione lavoro dipendente (€1.880)
+    - INPS (worker contribution): 9.19%
+    - Addizionale regionale (from `italian_tax_data.json`, based on worker residency)
+    - Addizionale comunale (from `italian_tax_data.json`, based on worker residency)
+
+    **TFR (Trattamento di Fine Rapporto):**
+    - Monthly accrual = monthlyGross / 13.5 (art. 2120 c.c.)
+    - Tax: IRPEF effective rate only (no INPS at liquidation)
+    - Prorated to the booking period
+
+    **Tredicesima mensilità:**
+    - 1 full monthly salary per year, prorated to booking period
+    - Subject to both IRPEF (effective rate) and INPS (9.19%)
+
+    **Response includes:**
+    - `monthlyGross` / `monthsWorked`: Reference values used in calculation
+    - `grossSalaryForPeriod`: Gross pay for the period
+    - `netSalaryForPeriod`: Net pay after all deductions
+    - `tfrForPeriod`: TFR accrued (gross + net)
+    - `tredicesima`: 13th month accrued (gross + net)
+    - `deductions`: Full tax breakdown
+
+  operationId: calculateNetSalary
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - userId
+          properties:
+            userId:
+              type: string
+              description: Worker user ID (Cognito sub)
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            jobListingId:
+              type: string
+              description: |
+                **Preferred.** UUID of the job listing. The backend fetches
+                grossBasePay + superminimo directly from DynamoDB.
+              example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            monthlyGrossSalary:
+              type: number
+              format: float
+              description: |
+                **Fallback only** (used when `jobListingId` is not provided).
+                Paga base + indennità di contingenza (grossBasePay) in EUR.
+              minimum: 0.01
+              example: 1400
+            superminimo:
+              type: number
+              format: float
+              description: |
+                **Fallback only.** Superminimo individuale in EUR (default 0).
+                Ignored when `jobListingId` is provided (fetched from listing).
+              minimum: 0
+              example: 100
+            daysWorked:
+              type: integer
+              description: Total days worked in the period (can be > 30, any duration)
+              example: 182
+            daysInMonth:
+              type: integer
+              description: DEPRECATED - No longer used. Kept for backward compatibility. Calculation uses 30 days/month convention.
+              example: 30
+            startDate:
+              type: string
+              format: date
+              description: Start date (ISO 8601) to derive daysWorked
+              example: "2025-06-01"
+            endDate:
+              type: string
+              format: date
+              description: End date (ISO 8601) to derive daysWorked
+              example: "2025-12-31"
+              
+  responses:
+    '200':
+      description: Net salary calculation successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              monthlyGross:
+                type: number
+                format: float
+                description: Monthly gross salary used as reference
+                example: 1864.53
+              monthsWorked:
+                type: number
+                format: float
+                description: Equivalent months worked (days / 30)
+                example: 2.0
+              grossSalaryForPeriod:
+                type: number
+                format: float
+                description: Total gross salary for the entire period
+                example: 3729.06
+              netSalaryForPeriod:
+                type: number
+                format: float
+                description: Total net salary after all tax deductions for the entire period
+                example: 2752.71
+              daysWorked:
+                type: integer
+                description: Total days worked used in calculation
+                example: 60
+              daysInMonth:
+                type: integer
+                description: DEPRECATED - Always 30 by convention
+                example: 30
+              annualGrossEstimate:
+                type: number
+                format: float
+                description: Estimated annual gross (monthlyGross × 12)
+                example: 22374.36
+              tfrForPeriod:
+                type: object
+                description: TFR (Trattamento di Fine Rapporto) accrued in the booking period
+                properties:
+                  grossAmount:
+                    type: number
+                    format: float
+                    description: Gross TFR accrued (monthlyGross / 13.5 × months)
+                    example: 276.23
+                  netAmount:
+                    type: number
+                    format: float
+                    description: Net TFR after IRPEF (no INPS at liquidation)
+                    example: 236.83
+                  monthlyAccrual:
+                    type: number
+                    format: float
+                    description: Monthly TFR accrual (monthlyGross / 13.5)
+                    example: 138.11
+                  irpefAmount:
+                    type: number
+                    format: float
+                    description: IRPEF deducted from TFR (tassazione separata)
+                    example: 39.40
+                  effectiveIrpefRatePct:
+                    type: number
+                    format: float
+                    description: Effective IRPEF rate used (%) after detrazione lavoro dipendente
+                    example: 14.26
+                  description:
+                    type: string
+                    example: "TFR maturato nel periodo (tassazione separata, no INPS alla liquidazione)"
+                  note:
+                    type: string
+                    example: "Stima con aliquota IRPEF effettiva. Il TFR reale dipende da rivalutazione annua e anticipi."
+              tredicesima:
+                type: object
+                description: 13th month salary (tredicesima) accrued in the booking period
+                properties:
+                  grossAmount:
+                    type: number
+                    format: float
+                    description: Gross tredicesima accrued (monthlyGross × months / 12)
+                    example: 310.75
+                  netAmount:
+                    type: number
+                    format: float
+                    description: Net tredicesima after INPS and IRPEF
+                    example: 237.88
+                  inpsAmount:
+                    type: number
+                    format: float
+                    description: INPS contribution deducted
+                    example: 28.56
+                  irpefAmount:
+                    type: number
+                    format: float
+                    description: IRPEF deducted (effective rate)
+                    example: 44.32
+                  effectiveIrpefRatePct:
+                    type: number
+                    format: float
+                    description: Effective IRPEF rate used (%)
+                    example: 14.26
+                  description:
+                    type: string
+                    example: "Tredicesima mensilità maturata nel periodo (soggetta a IRPEF e INPS)"
+              deductions:
+                type: object
+                description: Detailed tax breakdown on ordinary pay
+                properties:
+                  irpef:
+                    type: object
+                    properties:
+                      amount:
+                        type: number
+                        format: float
+                        description: IRPEF withheld on ordinary pay
+                        example: 531.85
+                      rate:
+                        type: number
+                        format: float
+                        description: Nominal IRPEF rate (e.g. 0.23)
+                        example: 0.23
+                      effectiveRatePct:
+                        type: number
+                        format: float
+                        description: Effective IRPEF rate after detrazioni (%)
+                        example: 14.26
+                      description:
+                        type: string
+                        example: "IRPEF (23% con detrazione lavoro dipendente)"
+                  inps:
+                    type: object
+                    properties:
+                      amount:
+                        type: number
+                        format: float
+                        example: 342.70
+                      rate:
+                        type: number
+                        format: float
+                        example: 0.0919
+                      description:
+                        type: string
+                        example: "Contributi previdenziali INPS"
+                  total:
+                    type: number
+                    format: float
+                    description: Total deductions on ordinary pay (IRPEF + INPS only)
+                    example: 976.35
+              deductionPercentage:
+                type: number
+                format: float
+                description: Percentage of total deductions over gross salary for period
+                example: 26.18
+              location:
+                type: object
+                properties:
+                  province:
+                    type: string
+                    example: "LE"
+                  city:
+                    type: string
+                    example: "ARADEO"
+              disclaimer:
+                type: string
+                example: "Calcolo totale stimato per l'intera esperienza lavorativa (RAL < 15.000€, 1 mese = 30 giorni). TFR e tredicesima sono calcolati proporzionalmente al periodo."
+          examples:
+            successAradeoLE:
+              summary: Worker da Aradeo (LE) - 60 giorni
+              value:
+                monthlyGross: 1864.53
+                monthsWorked: 2.0
+                grossSalaryForPeriod: 3729.06
+                netSalaryForPeriod: 2970.45
+                daysWorked: 60
+                daysInMonth: 30
+                annualGrossEstimate: 22374.36
+                tfrForPeriod:
+                  grossAmount: 276.23
+                  netAmount: 236.83
+                  monthlyAccrual: 138.11
+                  irpefAmount: 39.40
+                  effectiveIrpefRatePct: 14.26
+                  description: "TFR maturato nel periodo (tassazione separata, no INPS alla liquidazione)"
+                  note: "Stima con aliquota IRPEF effettiva. Il TFR reale dipende da rivalutazione annua e anticipi."
+                tredicesima:
+                  grossAmount: 310.75
+                  netAmount: 237.88
+                  inpsAmount: 28.56
+                  irpefAmount: 44.32
+                  effectiveIrpefRatePct: 14.26
+                  description: "Tredicesima mensilità maturata nel periodo (soggetta a IRPEF e INPS)"
+                deductions:
+                  irpef:
+                    amount: 531.85
+                    rate: 0.23
+                    effectiveRatePct: 14.26
+                    description: "IRPEF (23% con detrazione lavoro dipendente)"
+                  inps:
+                    amount: 342.70
+                    rate: 0.0919
+                    description: "Contributi previdenziali INPS"
+                  total: 874.55
+                deductionPercentage: 23.45
+                disclaimer: "Calcolo stimato per il periodo selezionato (1 mese = 30 giorni). Include IRPEF e INPS. Addizionali regionali e comunali non incluse (implementazione in corso)."
+            successMilano:
+              summary: Worker da Milano (MI) - 182 giorni
+              value:
+                monthlyGross: 1500.00
+                monthsWorked: 6.0667
+                grossSalaryForPeriod: 9100.00
+                netSalaryForPeriod: 7288.56
+                daysWorked: 182
+                daysInMonth: 30
+                annualGrossEstimate: 18000.00
+                tfrForPeriod:
+                  grossAmount: 673.33
+                  netAmount: 577.10
+                  monthlyAccrual: 111.11
+                  irpefAmount: 96.23
+                  effectiveIrpefRatePct: 14.29
+                  description: "TFR maturato nel periodo (tassazione separata, no INPS alla liquidazione)"
+                  note: "Stima con aliquota IRPEF effettiva. Il TFR reale dipende da rivalutazione annua e anticipi."
+                tredicesima:
+                  grossAmount: 758.33
+                  netAmount: 581.66
+                  inpsAmount: 69.71
+                  irpefAmount: 108.41
+                  effectiveIrpefRatePct: 14.29
+                  description: "Tredicesima mensilità maturata nel periodo (soggetta a IRPEF e INPS)"
+                deductions:
+                  irpef:
+                    amount: 1299.81
+                    rate: 0.23
+                    effectiveRatePct: 14.29
+                    description: "IRPEF (23% con detrazione lavoro dipendente)"
+                  inps:
+                    amount: 836.29
+                    rate: 0.0919
+                    description: "Contributi previdenziali INPS"
+                  total: 2136.10
+                deductionPercentage: 23.47
+                disclaimer: "Calcolo stimato per il periodo selezionato (1 mese = 30 giorni). Include IRPEF e INPS. Addizionali regionali e comunali non incluse (implementazione in corso)."
+                  
+    '400':
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 400
+              error:
+                type: string
+                example: "InvalidInput"
+              message:
+                type: string
+          examples:
+            missingFields:
+              summary: Missing required fields
+              value:
+                statusCode: 400
+                error: "InvalidInput"
+                message: "Missing required fields: user_id, start_date, end_date"
+            invalidDates:
+              summary: Invalid date format
+              value:
+                statusCode: 400
+                error: "InvalidInput"
+                message: "Invalid date format. Use ISO 8601 format (YYYY-MM-DD)"
+            endBeforeStart:
+              summary: End date before start date
+              value:
+                statusCode: 400
+                error: "InvalidInput"
+                message: "end_date must be after start_date"
+            ralTooHigh:
+              summary: RAL exceeds limit
+              value:
+                statusCode: 400
+                error: "InvalidInput"
+                message: "RAL must be less than €15,000 for this calculation"
+                
+    '404':
+      description: User not found or missing location data
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 404
+              error:
+                type: string
+                example: "NotFound"
+              message:
+                type: string
+          examples:
+            userNotFound:
+              summary: User profile not found
+              value:
+                statusCode: 404
+                error: "NotFound"
+                message: "User profile not found"
+            missingLocation:
+              summary: Missing location data
+              value:
+                statusCode: 404
+                error: "NotFound"
+                message: "User address data missing (provincia or city not found)"
+                
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 500
+              error:
+                type: string
+                example: "InternalServerError"
+              message:
+                type: string
+          examples:
+            genericError:
+              summary: Generic server error
+              value:
+                statusCode: 500
+                error: "InternalServerError"
+                message: "An error occurred while calculating net salary"
+            databaseError:
+              summary: Database connection error
+              value:
+                statusCode: 500
+                error: "InternalServerError"
+                message: "Failed to fetch user profile from database"

@@ -1,0 +1,19 @@
+{
+  "title": "Barista per bar sulla spiaggia",
+  "startDate": "2025-06-15",
+  "endDate": "2025-09-15",
+  "positions": 1,
+  "category": "Food & Beverage",
+  "location": {
+    "city": "Viareggio",
+    "country": "Italy",
+    "coordinates": {
+      "lat": 43.8662,
+      "lon": 10.2513
+    }
+  },
+  "salary": {
+    "currency": "EUR",
+    "period": "hour"
+  }
+}

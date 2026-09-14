@@ -1,0 +1,609 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Chat System DynamoDB tables for Beezey
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - staging
+      - prod
+    Description: Environment name
+
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Description: DynamoDB billing mode
+
+Resources:
+  # ============================================
+  # CHATS TABLE
+  # ============================================
+  ChatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Chats'
+      BillingMode: !Ref BillingMode
+      
+      # Backup automatico abilitato in produzione
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If
+          - IsProduction
+          - true
+          - false
+      
+      # Stream per trigger (es: notifiche push quando nuova chat)
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      # Definizione attributi
+      AttributeDefinitions:
+        # Primary Key
+        - AttributeName: chatId
+          AttributeType: S
+        
+        # Attributi per GSI
+        - AttributeName: bookingId
+          AttributeType: S
+        - AttributeName: workerId
+          AttributeType: S
+        - AttributeName: companyRepresentativeId
+          AttributeType: S
+        - AttributeName: lastMessageAt
+          AttributeType: S
+      
+      # Primary Key
+      KeySchema:
+        - AttributeName: chatId
+          KeyType: HASH
+      
+      # Global Secondary Indexes
+      GlobalSecondaryIndexes:
+        # Per trovare chat da bookingId (1:1 relationship)
+        - IndexName: bookingId-index
+          KeySchema:
+            - AttributeName: bookingId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        
+        # Per listare chat di un worker ordinate per ultimo messaggio
+        - IndexName: workerId-lastMessageAt-index
+          KeySchema:
+            - AttributeName: workerId
+              KeyType: HASH
+            - AttributeName: lastMessageAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        
+        # Per listare chat di un rappresentante aziendale ordinate per ultimo messaggio
+        - IndexName: companyRepresentativeId-lastMessageAt-index
+          KeySchema:
+            - AttributeName: companyRepresentativeId
+              KeyType: HASH
+            - AttributeName: lastMessageAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      
+      # Protezione cancellazione accidentale
+      DeletionProtectionEnabled: !If
+        - IsProduction
+        - true
+        - false
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Chat
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # CONNECTION MANAGER TABLE (WebSocket)
+  # ============================================
+  ConnectionManagerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-ConnectionManager'
+      BillingMode: !Ref BillingMode
+      
+      # Definizione attributi
+      AttributeDefinitions:
+        # Primary Key
+        - AttributeName: connectionId
+          AttributeType: S
+        
+        # Attributi per GSI (trovare tutte le connessioni di un userId)
+        - AttributeName: userId
+          AttributeType: S
+      
+      # Primary Key
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      
+      # Global Secondary Index per query by userId
+      GlobalSecondaryIndexes:
+        - IndexName: userId-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      
+      # TTL per cleanup automatico connessioni stale (24h)
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Chat
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # MESSAGES TABLE
+  # ============================================
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Messages'
+      BillingMode: !Ref BillingMode
+      
+      # Backup automatico abilitato in produzione
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If
+          - IsProduction
+          - true
+          - false
+      
+      # Stream per trigger (es: notifiche push, Firebase)
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      # TTL per cleanup automatico di messaggi vecchi (opzionale, disabilitato per ora)
+      # TimeToLiveSpecification:
+      #   AttributeName: ttl
+      #   Enabled: true
+      
+      # Definizione attributi
+      AttributeDefinitions:
+        # Primary Key (chatId + timestamp per ordinamento)
+        - AttributeName: chatId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        
+        # Attributi per GSI
+        - AttributeName: messageId
+          AttributeType: S
+      
+      # Primary Key (composite)
+      KeySchema:
+        - AttributeName: chatId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      
+      # Global Secondary Indexes
+      GlobalSecondaryIndexes:
+        # Per recuperare un messaggio specifico da messageId
+        # Utile per operazioni di update (state, sticker)
+        - IndexName: messageId-timestamp-index
+          KeySchema:
+            - AttributeName: messageId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        
+        # Per recuperare un messaggio solo da messageId (senza timestamp)
+        # Più efficiente per update quando non si conosce il timestamp
+        - IndexName: messageId-index
+          KeySchema:
+            - AttributeName: messageId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      
+      # Protezione cancellazione accidentale
+      DeletionProtectionEnabled: !If
+        - IsProduction
+        - true
+        - false
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Chat
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # S3 BUCKET PER ALLEGATI CHAT
+  # ============================================
+  ChatAttachmentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-beezey-chat-attachments'
+      
+      # Blocca accesso pubblico (sicurezza)
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      
+      # Encryption at rest
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      
+      # Versioning (opzionale, utile per recovery)
+      VersioningConfiguration:
+        Status: !If
+          - IsProduction
+          - Enabled
+          - Suspended
+      
+      # Lifecycle rules per pulizia automatica
+      LifecycleConfiguration:
+        Rules:
+          # Cancella allegati dopo 90 giorni in dev
+          - Id: DeleteOldAttachments
+            Status: !If
+              - IsProduction
+              - Disabled
+              - Enabled
+            ExpirationInDays: 90
+          
+          # Transizione a storage più economico dopo 30 giorni
+          - Id: TransitionToInfrequentAccess
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+      
+      # CORS per upload da frontend
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - HEAD
+            AllowedOrigins:
+              - '*'  # Restringe in produzione
+            MaxAge: 3600
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Chat
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # SUPPORT CHATS TABLE (Customer Support)
+  # ============================================
+  SupportChatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-SupportChats'
+      BillingMode: !Ref BillingMode
+      
+      # Backup automatico abilitato in produzione
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If
+          - IsProduction
+          - true
+          - false
+      
+      # Stream per trigger (es: notifiche quando nuovo supporto aperto)
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      # Definizione attributi
+      AttributeDefinitions:
+        # Primary Key
+        - AttributeName: supportChatId
+          AttributeType: S
+        
+        # Attributi per GSI
+        - AttributeName: requesterId
+          AttributeType: S
+        - AttributeName: lastMessageAt
+          AttributeType: S
+      
+      # Primary Key
+      KeySchema:
+        - AttributeName: supportChatId
+          KeyType: HASH
+      
+      # Global Secondary Indexes
+      GlobalSecondaryIndexes:
+        # Per listare chat di supporto di un richiedente (worker o company rep)
+        - IndexName: requesterId-lastMessageAt-index
+          KeySchema:
+            - AttributeName: requesterId
+              KeyType: HASH
+            - AttributeName: lastMessageAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      
+      # Protezione cancellazione accidentale
+      DeletionProtectionEnabled: !If
+        - IsProduction
+        - true
+        - false
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Support
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # SUPPORT MESSAGES TABLE
+  # ============================================
+  SupportMessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-SupportMessages'
+      BillingMode: !Ref BillingMode
+      
+      # Backup automatico abilitato in produzione
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If
+          - IsProduction
+          - true
+          - false
+      
+      # Stream per trigger (es: notifiche push)
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      
+      # Definizione attributi
+      AttributeDefinitions:
+        # Primary Key (supportChatId + timestamp)
+        - AttributeName: supportChatId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        
+        # Attributi per GSI
+        - AttributeName: messageId
+          AttributeType: S
+      
+      # Primary Key (composite)
+      KeySchema:
+        - AttributeName: supportChatId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      
+      # Global Secondary Indexes
+      GlobalSecondaryIndexes:
+        # Per recuperare un messaggio specifico da messageId
+        - IndexName: messageId-timestamp-index
+          KeySchema:
+            - AttributeName: messageId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        
+        # Per recuperare un messaggio solo da messageId (senza timestamp)
+        # Più efficiente per update quando non si conosce il timestamp
+        - IndexName: messageId-index
+          KeySchema:
+            - AttributeName: messageId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        
+        # Per recuperare un messaggio solo da messageId (senza timestamp)
+        # Più efficiente per update quando non si conosce il timestamp
+        - IndexName: messageId-index
+          KeySchema:
+            - AttributeName: messageId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      
+      # Protezione cancellazione accidentale
+      DeletionProtectionEnabled: !If
+        - IsProduction
+        - true
+        - false
+      
+      # Tags
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Beezey
+        - Key: Domain
+          Value: Support
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================
+  # BUCKET POLICY
+  # ============================================
+  ChatAttachmentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ChatAttachmentsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Nega accesso non crittografato
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${ChatAttachmentsBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: AES256
+          
+          # Nega accesso HTTP (solo HTTPS)
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt ChatAttachmentsBucket.Arn
+              - !Sub '${ChatAttachmentsBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod]
+
+Outputs:
+  # Chats Table Outputs
+  ChatsTableName:
+    Description: Nome della tabella Chats
+    Value: !Ref ChatsTable
+    Export:
+      Name: !Sub '${Environment}-ChatsTableName'
+
+  ChatsTableArn:
+    Description: ARN della tabella Chats
+    Value: !GetAtt ChatsTable.Arn
+    Export:
+      Name: !Sub '${Environment}-ChatsTableArn'
+
+  ChatsTableStreamArn:
+    Description: ARN dello stream della tabella Chats
+    Value: !GetAtt ChatsTable.StreamArn
+    Export:
+      Name: !Sub '${Environment}-ChatsTableStreamArn'
+
+  # ConnectionManager Table Outputs
+  ConnectionManagerTableName:
+    Description: Nome della tabella ConnectionManager (WebSocket)
+    Value: !Ref ConnectionManagerTable
+    Export:
+      Name: !Sub '${Environment}-ConnectionManagerTableName'
+
+  ConnectionManagerTableArn:
+    Description: ARN della tabella ConnectionManager
+    Value: !GetAtt ConnectionManagerTable.Arn
+    Export:
+      Name: !Sub '${Environment}-ConnectionManagerTableArn'
+
+  # Messages Table Outputs
+  MessagesTableName:
+    Description: Nome della tabella Messages
+    Value: !Ref MessagesTable
+    Export:
+      Name: !Sub '${Environment}-MessagesTableName'
+
+  MessagesTableArn:
+    Description: ARN della tabella Messages
+    Value: !GetAtt MessagesTable.Arn
+    Export:
+      Name: !Sub '${Environment}-MessagesTableArn'
+
+  MessagesTableStreamArn:
+    Description: ARN dello stream della tabella Messages (per notifiche push)
+    Value: !GetAtt MessagesTable.StreamArn
+    Export:
+      Name: !Sub '${Environment}-MessagesTableStreamArn'
+
+  # S3 Bucket Outputs
+  ChatAttachmentsBucketName:
+    Description: Nome del bucket per allegati chat
+    Value: !Ref ChatAttachmentsBucket
+    Export:
+      Name: !Sub '${Environment}-ChatAttachmentsBucketName'
+
+  ChatAttachmentsBucketArn:
+    Description: ARN del bucket
+    Value: !GetAtt ChatAttachmentsBucket.Arn
+    Export:
+      Name: !Sub '${Environment}-ChatAttachmentsBucketArn'
+
+  ChatAttachmentsBucketDomainName:
+    Description: Domain name del bucket
+    Value: !GetAtt ChatAttachmentsBucket.RegionalDomainName
+    Export:
+      Name: !Sub '${Environment}-ChatAttachmentsBucketDomainName'
+  # Support Chats Table Outputs
+  SupportChatsTableName:
+    Description: Nome della tabella SupportChats
+    Value: !Ref SupportChatsTable
+    Export:
+      Name: !Sub '${Environment}-SupportChatsTableName'
+
+  SupportChatsTableArn:
+    Description: ARN della tabella SupportChats
+    Value: !GetAtt SupportChatsTable.Arn
+    Export:
+      Name: !Sub '${Environment}-SupportChatsTableArn'
+
+  SupportChatsTableStreamArn:
+    Description: ARN dello stream della tabella SupportChats
+    Value: !GetAtt SupportChatsTable.StreamArn
+    Export:
+      Name: !Sub '${Environment}-SupportChatsTableStreamArn'
+
+  # Support Messages Table Outputs
+  SupportMessagesTableName:
+    Description: Nome della tabella SupportMessages
+    Value: !Ref SupportMessagesTable
+    Export:
+      Name: !Sub '${Environment}-SupportMessagesTableName'
+
+  SupportMessagesTableArn:
+    Description: ARN della tabella SupportMessages
+    Value: !GetAtt SupportMessagesTable.Arn
+    Export:
+      Name: !Sub '${Environment}-SupportMessagesTableArn'
+
+  SupportMessagesTableStreamArn:
+    Description: ARN dello stream della tabella SupportMessages
+    Value: !GetAtt SupportMessagesTable.StreamArn
+    Export:
+      Name: !Sub '${Environment}-SupportMessagesTableStreamArn'

@@ -1,0 +1,26 @@
+{
+  "httpMethod": "GET",
+  "path": "/documents",
+  "pathParameters": null,
+  "queryStringParameters": null,
+  "headers": {
+    "Authorization": "Bearer eyJraWQiOiJ1SUY5M2x6dUdySGtOOWpUNHhzZlRKdmptQ1I2UFwvVWlFWk1vdjZLUk9MOD0iLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI4NjVlYjJiMC1kMGIxLTcwODEtMGFlNi0wZjM2ZTA1ODRjMmUiLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuZXUtc291dGgtMS5hbWF6b25hd3MuY29tXC9ldS1zb3V0aC0xX1ZmcjBGS1lmTyIsImNvZ25pdG86dXNlcm5hbWUiOiI4NjVlYjJiMC1kMGIxLTcwODEtMGFlNi0wZjM2ZTA1ODRjMmUiLCJvcmlnaW5fanRpIjoiZTQwZmM2YTktYmVkNS00MjJkLWI1ZGEtNzExMGQxNjk0YjcxIiwiYXVkIjoiNmMzamd2Z2trMjh1dXJ0MnF2cWY2OTd2NWsiLCJldmVudF9pZCI6ImRkNzJkNjg0LWVmYTMtNGYyOC04NjAzLWQwM2Y4YTI3YmIwYSIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzU4MTA3NjUyLCJleHAiOjE3NTgxMTEyNTIsImlhdCI6MTc1ODEwNzY1MiwianRpIjoiOTU2ZTZmNGMtZGNhMy00MDdlLTljZDEtMmJkODUwYzc5ZmI4IiwiZW1haWwiOiJpcGhvbmUuYWxlOTNAZ21haWwuY29tIn0.KkWuxScMB-oCQTfZ_1fznlgMS_Xm-qioj2K6TfUa5igVsM3mPVy1p8tEBt4zJ51P7kT-6DaT0Rn3Om-H9BBVi3ahiEZ1j1FEMupdNf6bL1rF-IYjLWy1bkYiWXBUVg0gG4qmQ4TyPI4ZDC9onVGDq7AwLiOIR9CcsWRViqK-fUBE7Pi9rTckDtOpEZ9n6dlGNCV0LTtvEhhBcZLwfYrVnb1grMu4YrqT1-UzJtcKhPewFB3zXJ2I1R9iDcR0U6isvpcV4nNsAAQrQv6nXKUcffXzJr1T_pzJicpBtxx66pmTKcv4kSFHcg2XXxV2Kb-Qgfqc0fvHBfxQN0WlD3mnTg",
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "admin123",
+          "email": "admin@example.com",
+          "name": "Admin User",
+          "cognito:username": "admin123"
+        }
+      }
+    },
+    "httpMethod": "GET",
+    "path": "/documents"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

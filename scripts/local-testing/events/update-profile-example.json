@@ -1,0 +1,12 @@
+{
+  "requestContext": {
+    "authorizer": {
+      "claims": {
+        "sub": "user-123",
+        "email": "mario.rossi@example.com"
+      }
+    }
+  },
+  "httpMethod": "PUT",
+  "body": "{\"firstName\":\"Mario\",\"lastName\":\"Rossi\",\"phoneNumber\":\"+393331234567\",\"dateOfBirth\":\"1990-01-15\"}"
+}

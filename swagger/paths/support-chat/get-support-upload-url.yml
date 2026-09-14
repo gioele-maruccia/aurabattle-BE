@@ -1,0 +1,94 @@
+post:
+  tags:
+    - Support Chat
+  summary: Get upload URL for support chat attachment
+  description: |
+    Generates presigned S3 upload URL for file upload in support chat.
+    
+    **Important Differences from Chat Upload:**
+    - Uses POST method with JSON body (not GET with query params)
+    - Includes file size validation (max 10MB)
+    - Returns both upload and download URLs
+    
+    **Workflow:**
+    1. Call this endpoint to get presigned upload URL
+    2. Upload file directly to S3 using returned uploadUrl
+    3. Include returned s3Key/downloadUrl in message attachments
+    
+  operationId: getSupportUploadUrl
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support chat ID
+      schema:
+        type: string
+        example: "support_abc123def456"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - fileName
+            - fileType
+            - fileSize
+          properties:
+            fileName:
+              type: string
+              description: Original filename with extension
+              example: "screenshot.png"
+            fileType:
+              type: string
+              description: File MIME type
+              example: "image/png"
+            fileSize:
+              type: integer
+              description: File size in bytes (max 10MB = 10485760)
+              maximum: 10485760
+              example: 125000
+  responses:
+    '200':
+      description: Upload URL generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              uploadUrl:
+                type: string
+                format: uri
+                description: Presigned S3 URL for file upload (valid 1 hour)
+                example: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support-chat/..."
+              downloadUrl:
+                type: string
+                format: uri
+                description: URL to use in message attachment (valid 7 days)
+                example: "https://dev-beezey-chat-attachments.s3.amazonaws.com/support-chat/..."
+              fileName:
+                type: string
+                description: Original filename
+                example: "screenshot.png"
+              s3Key:
+                type: string
+                description: S3 object key
+                example: "support-chat/support_abc/2025-12-17T15:30:00_uuid_screenshot.png"
+    '400':
+      description: Bad request - File too large or invalid parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                examples:
+                  - "File size exceeds maximum allowed size of 10MB"
+                  - "fileName, fileType, and fileSize are required"
+    '403':
+      description: Forbidden - User not authorized
+    '404':
+      description: Support chat not found

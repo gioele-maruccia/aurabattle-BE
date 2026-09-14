@@ -1,0 +1,120 @@
+get:
+  tags:
+    - Backoffice
+  summary: Get chats with Beezey help requests
+  description: |
+    Lista le chat dove gli utenti hanno richiesto l'aiuto di Beezey.
+    
+    **Solo staff Beezey può accedere a questo endpoint.**
+    
+    Ritorna le chat che contengono messaggi con `@Beezey` nel testo.
+  operationId: getChatsWithHelpRequests
+  parameters:
+    - name: limit
+      in: query
+      description: Numero massimo di chat da ritornare
+      required: false
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 100
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Lista chat con richieste Beezey
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              chats:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    chat_id:
+                      type: string
+                      description: ID della chat
+                      example: "chat_40f1671d354346a0"
+                    worker_id:
+                      type: string
+                      description: ID del worker
+                      example: "550e8400-e29b-41d4-a716-446655440000"
+                    company_representative_id:
+                      type: string
+                      description: ID del rappresentante aziendale
+                      example: "660e8400-e29b-41d4-a716-446655440000"
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: Timestamp creazione chat
+                      example: "2024-01-15T10:30:00Z"
+                    last_beezey_request:
+                      type: object
+                      description: Ultimo messaggio con richiesta Beezey
+                      properties:
+                        message_id:
+                          type: string
+                        message_text:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+                        user_id:
+                          type: string
+                    message_count:
+                      type: integer
+                      description: Numero totale di messaggi nella chat
+                      example: 15
+              count:
+                type: integer
+                description: Numero di chat ritornate
+                example: 5
+          example:
+            chats:
+              - chat_id: "chat_40f1671d354346a0"
+                worker_id: "550e8400-e29b-41d4-a716-446655440000"
+                company_representative_id: "660e8400-e29b-41d4-a716-446655440000"
+                created_at: "2024-01-15T10:30:00Z"
+                last_beezey_request:
+                  message_id: "msg_123456"
+                  sender_id: "550e8400-e29b-41d4-a716-446655440000"
+                  sender_type: "worker"
+                  message_text: "@Beezey come funzionano le ferie?"
+                  timestamp: "2024-01-15T14:25:00Z"
+                  state: "sent"
+                  attachments: []
+                message_count: 15
+            count: 1
+    '401':
+      description: Non autenticato
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+    '403':
+      description: Non autorizzato - solo staff Beezey
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Only Beezey staff can access this endpoint"
+    '500':
+      description: Errore server
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

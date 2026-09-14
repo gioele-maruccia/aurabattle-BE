@@ -1,0 +1,35 @@
+description: Conflict - Resource already exists or state conflict
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Specific error code (e.g., 4012 for pending booking conflict, 4013 for confirmed booking conflict)
+          example: 4012
+        error:
+          type: string
+          example: "Conflict"
+        message:
+          type: string
+          example: "Resource already exists"
+        conflicting_field:
+          type: string
+          nullable: true
+          example: "email"
+    examples:
+      duplicateEmail:
+        summary: Email already exists
+        value:
+          code: 4090
+          error: "Conflict"
+          message: "A user with this email already exists"
+          conflicting_field: "email"
+      
+      stateConflict:
+        summary: Invalid state transition
+        value:
+          code: 4012
+          error: "Conflict"
+          message: "Cannot update profile while verification is pending"

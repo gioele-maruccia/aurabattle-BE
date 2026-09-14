@@ -1,0 +1,44 @@
+type: object
+description: User payment preferences and Stripe integration
+properties:
+  stripe_customer_id:
+    type: string
+    description: Stripe customer ID
+    example: "cus_Qh3K7L8M9N0P1Q"
+    nullable: true
+  default_payment_method:
+    type: string
+    description: Stripe payment method ID
+    example: "pm_1QrS2tUvWxYz012"
+    nullable: true
+  billing_address:
+    type: object
+    description: Billing address for payments
+    nullable: true
+    properties:
+      line1:
+        type: string
+        example: "Via Roma 123"
+      line2:
+        type: string
+        nullable: true
+        example: "Interno 5"
+      city:
+        type: string
+        example: "Roma"
+      state:
+        type: string
+        nullable: true
+        example: "RM"
+      postal_code:
+        type: string
+        example: "00100"
+      country:
+        type: string
+        maxLength: 2
+        example: "IT"
+  auto_renew:
+    type: boolean
+    description: Automatically renew premium subscription
+    default: true
+    example: true

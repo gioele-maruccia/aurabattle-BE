@@ -1,0 +1,57 @@
+get:
+  tags:
+    - User Profile & Settings
+  summary: Get user ratings
+  description: Retrieve user ratings and reviews statistics (as worker and employer)
+  operationId: getUserRatings
+  security:
+    - CognitoAuth: []
+  
+  responses:
+    '200':
+      description: Ratings retrieved successfully
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/user-api/Ratings.yml'
+          examples:
+            newUser:
+              summary: New user with no ratings
+              value:
+                average: 0
+                count: 0
+                as_worker:
+                  average: 0
+                  count: 0
+                as_employer:
+                  average: 0
+                  count: 0
+            
+            experiencedUser:
+              summary: User with ratings
+              value:
+                average: 4.5
+                count: 23
+                as_worker:
+                  average: 4.7
+                  count: 15
+                as_employer:
+                  average: 4.2
+                  count: 8
+    
+    '404':
+      description: Profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Profile not found"
+    
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

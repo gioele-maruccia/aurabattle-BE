@@ -1,0 +1,24 @@
+{
+  "requestContext": {
+    "authorizer": {
+      "claims": {
+        "sub": "test-user-id-123",
+        "email": "test@example.com",
+        "cognito:username": "testuser"
+      }
+    },
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1"
+    }
+  },
+  "httpMethod": "POST",
+  "path": "/api/resource",
+  "headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "body": "{\"exampleField\":\"exampleValue\"}"
+}

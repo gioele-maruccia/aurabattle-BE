@@ -1,0 +1,466 @@
+  tags:
+    - Companies
+  summary: Update company profile (complete with image management)
+  description: |
+    Update company profile with description, location, and comprehensive image management.
+    
+    **Company users only** - user can only update their own profile.
+    
+    This endpoint supports multiple use cases:
+    1. **Add/Update description and location**
+    2. **Request presigned URLs** for new image uploads
+    3. **Save image URLs** after uploading to S3 (MERGE with existing images)
+    4. **Delete existing images** (profile and/or gallery)
+    5. **Combined operations** (e.g., delete old images + request new upload URLs)
+    
+    **Image Gallery Behavior (NEW)**:
+    - Gallery images are **merged**, not replaced
+    - New images are added to existing ones (up to max 5)
+    - Duplicates are automatically removed
+    - Profile image is only updated if explicitly provided
+    
+    All fields are optional - provide only what you want to update.
+  operationId: updateCompany
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: userId
+      in: path
+      required: true
+      description: User's Cognito sub (must match authenticated user)
+      schema:
+        type: string
+        format: uuid
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            description:
+              type: string
+              maxLength: 2000
+              description: Company description
+            location:
+              type: object
+              properties:
+                city:
+                  type: string
+                  description: City name
+                country:
+                  type: string
+                  description: Country name
+                coordinates:
+                  type: object
+                  properties:
+                    lat:
+                      type: number
+                      minimum: -90
+                      maximum: 90
+                      description: Latitude
+                    lon:
+                      type: number
+                      minimum: -180
+                      maximum: 180
+                      description: Longitude
+            requestProfileImage:
+              type: boolean
+              description: Request presigned URL for profile image upload (existing profile image is preserved)
+            requestGalleryImages:
+              type: integer
+              minimum: 0
+              maximum: 5
+              description: Number of presigned URLs to request for gallery images (max 5 total including existing)
+            removeProfileImage:
+              type: boolean
+              description: Delete current profile image from S3 and remove URL from profile
+            removeGalleryImages:
+              type: array
+              items:
+                type: integer
+                minimum: 1
+                maximum: 5
+              description: List of gallery image indices to delete (1-based, e.g., [1, 3])
+            media:
+              type: object
+              description: Save uploaded image URLs after successful S3 upload (MERGES with existing images)
+              properties:
+                profileImageUrl:
+                  type: string
+                  format: uri
+                  description: Public URL of uploaded profile image (only updates if provided)
+                galleryImages:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: uri
+                  description: List of public URLs for NEW gallery images (merged with existing, max 5 total)
+        examples:
+          add_description:
+            summary: Add description and location
+            value:
+              description: "Fast food chain dedicated to quality meals"
+              location:
+                city: "Mechelen"
+                country: "Belgium"
+                coordinates:
+                  lat: 51.0259
+                  lon: 4.4773
+          
+          request_image_urls:
+            summary: Request presigned URLs for new images
+            description: "Existing images are preserved. You can upload new ones."
+            value:
+              requestProfileImage: true
+              requestGalleryImages: 3
+          
+          save_new_gallery_images:
+            summary: Save 2 new gallery images (merge with existing 3)
+            description: "If you have 3 existing gallery images, these 2 will be added (total: 5)"
+            value:
+              media:
+                galleryImages:
+                  - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/4.jpg"
+                  - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/5.jpg"
+          
+          save_profile_only:
+            summary: Save new profile image (gallery is preserved)
+            description: "Existing gallery images remain untouched"
+            value:
+              media:
+                profileImageUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/profile.jpg"
+          
+          delete_profile_image:
+            summary: Delete profile image only (gallery preserved)
+            value:
+              removeProfileImage: true
+          
+          delete_gallery_images:
+            summary: Delete specific gallery images
+            description: "Delete images at index 1 and 3. Remaining images stay."
+            value:
+              removeGalleryImages: [1, 3]
+          
+          delete_and_add_new:
+            summary: Delete old gallery image and add 2 new ones
+            description: "Delete index 2, then add 2 new images"
+            value:
+              removeGalleryImages: [2]
+              media:
+                galleryImages:
+                  - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/new-1.jpg"
+                  - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid/gallery/new-2.jpg"
+          
+          delete_and_request_new:
+            summary: Delete old images and request URLs for new ones
+            value:
+              removeGalleryImages: [2]
+              requestProfileImage: true
+              requestGalleryImages: 2
+          
+          complete_update:
+            summary: Update description and request images
+            value:
+              description: "Updated description"
+              location:
+                city: "Brussels"
+                country: "Belgium"
+              requestProfileImage: true
+              requestGalleryImages: 2
+  
+  responses:
+    '200':
+      description: Company updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              company:
+                type: object
+                description: Updated company profile with current media URLs (includes merged gallery)
+              deletedImages:
+                type: array
+                items:
+                  type: string
+                description: List of deleted image identifiers (present only if images were deleted)
+                example: ["profile", "gallery-1", "gallery-3"]
+              uploadUrls:
+                type: object
+                description: Presigned URLs for uploads (present only if requested)
+                properties:
+                  profileImage:
+                    type: object
+                    properties:
+                      uploadUrl:
+                        type: string
+                        description: Presigned URL for PUT request
+                      key:
+                        type: string
+                        description: S3 object key
+                      publicUrl:
+                        type: string
+                        description: Public URL after successful upload
+                  galleryImages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uploadUrl:
+                          type: string
+                        key:
+                          type: string
+                        publicUrl:
+                          type: string
+                        index:
+                          type: integer
+              uploadInstructions:
+                type: object
+                description: Instructions for using presigned URLs
+                properties:
+                  expiresIn:
+                    type: integer
+                    example: 3600
+                  method:
+                    type: string
+                    example: "PUT"
+                  contentType:
+                    type: string
+                    example: "image/jpeg"
+                  note:
+                    type: string
+          examples:
+            simple_update:
+              summary: Simple update without images
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                  description: "Updated description"
+                  location:
+                    city: "Brussels"
+                    country: "Belgium"
+                  media:
+                    profileImageUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/profile.jpg"
+                    galleryImages:
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/1.jpg"
+                  updatedAt: "2024-03-20T11:00:00Z"
+            
+            merge_gallery_images:
+              summary: Add 2 new gallery images to existing 3 (total 5)
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                  media:
+                    profileImageUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/profile.jpg"
+                    galleryImages:
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/1.jpg"
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/2.jpg"
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/3.jpg"
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/4.jpg"
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/5.jpg"
+                  updatedAt: "2024-03-20T11:00:00Z"
+            
+            with_deletion:
+              summary: Update with image deletion (profile removed, gallery preserved)
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                  media:
+                    profileImageUrl: ""
+                    galleryImages:
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/2.jpg"
+                  updatedAt: "2024-03-20T11:05:00Z"
+                deletedImages: ["profile", "gallery-1", "gallery-3"]
+            
+            request_gallery_preserve_profile:
+              summary: Request gallery URLs while preserving existing profile
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                  media:
+                    profileImageUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/profile.jpg"
+                    galleryImages:
+                      - "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/1.jpg"
+                uploadUrls:
+                  galleryImages:
+                    - uploadUrl: "https://s3.amazonaws.com/presigned-url-2..."
+                      key: "companies/uuid-456/gallery/2.jpg"
+                      publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/2.jpg"
+                      index: 2
+                    - uploadUrl: "https://s3.amazonaws.com/presigned-url-3..."
+                      key: "companies/uuid-456/gallery/3.jpg"
+                      publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/3.jpg"
+                      index: 3
+                uploadInstructions:
+                  expiresIn: 3600
+                  method: "PUT"
+                  contentType: "image/jpeg"
+                  note: "Use the uploadUrl to PUT your image. After successful upload, call PUT /companies/{userId} again with the media URLs to save them. Existing images are preserved."
+            
+            with_presigned_urls:
+              summary: Update with presigned URLs for new uploads
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                uploadUrls:
+                  profileImage:
+                    uploadUrl: "https://s3.amazonaws.com/presigned-url..."
+                    key: "companies/uuid-456/profile.jpg"
+                    publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/profile.jpg"
+                  galleryImages:
+                    - uploadUrl: "https://s3.amazonaws.com/presigned-url-1..."
+                      key: "companies/uuid-456/gallery/1.jpg"
+                      publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/1.jpg"
+                      index: 1
+                    - uploadUrl: "https://s3.amazonaws.com/presigned-url-2..."
+                      key: "companies/uuid-456/gallery/2.jpg"
+                      publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/2.jpg"
+                      index: 2
+                uploadInstructions:
+                  expiresIn: 3600
+                  method: "PUT"
+                  contentType: "image/jpeg"
+                  note: "Use the uploadUrl to PUT your image. After successful upload, call PUT /companies/{userId} again with the media URLs to save them."
+            
+            delete_and_upload_new:
+              summary: Delete old images and request new upload URLs
+              value:
+                message: "Company updated successfully"
+                company:
+                  userId: "cognito-sub-123"
+                  companyId: "uuid-456"
+                  businessName: "KFC Belgium"
+                  media:
+                    profileImageUrl: ""
+                    galleryImages: []
+                  updatedAt: "2024-03-20T11:10:00Z"
+                deletedImages: ["profile", "gallery-1", "gallery-2"]
+                uploadUrls:
+                  profileImage:
+                    uploadUrl: "https://s3.amazonaws.com/presigned-url..."
+                    key: "companies/uuid-456/profile.jpg"
+                    publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/profile.jpg"
+                  galleryImages:
+                    - uploadUrl: "https://s3.amazonaws.com/presigned-url-1..."
+                      key: "companies/uuid-456/gallery/1.jpg"
+                      publicUrl: "https://dev-beezey-companies-assets.s3.eu-south-1.amazonaws.com/companies/uuid-456/gallery/1.jpg"
+                      index: 1
+                uploadInstructions:
+                  expiresIn: 3600
+                  method: "PUT"
+                  contentType: "image/jpeg"
+                  note: "Use the uploadUrl to PUT your image. After successful upload, call PUT /companies/{userId} again with the media URLs to save them."
+    
+    '400':
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+              error:
+                type: string
+              message:
+                type: string
+          examples:
+            invalid_coordinates:
+              summary: Invalid coordinates
+              value:
+                statusCode: 400
+                error: "ValidationError"
+                message: "latitude must be between -90 and 90"
+            
+            missing_city:
+              summary: Missing required location field
+              value:
+                statusCode: 400
+                error: "ValidationError"
+                message: "location.city is required when location is provided"
+            
+            invalid_gallery_index:
+              summary: Invalid gallery image index
+              value:
+                statusCode: 400
+                error: "ValidationError"
+                message: "removeGalleryImages indices must be integers between 1 and 5"
+            
+            too_many_gallery_images:
+              summary: Exceeded max gallery images
+              value:
+                statusCode: 400
+                error: "ValidationError"
+                message: "Maximum 5 gallery images allowed (you have 3 existing + trying to add 3 new)"
+    
+    '401':
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+              error:
+                type: string
+              message:
+                type: string
+    
+    '403':
+      description: Forbidden - trying to update another user's company
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            statusCode: 403
+            error: "Forbidden"
+            message: "You can only update your own company profile"
+    
+    '404':
+      description: Company not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            statusCode: 404
+            error: "CompanyNotFound"
+            message: "Company profile not found. Please create one first."
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

@@ -1,0 +1,96 @@
+post:
+  tags:
+    - Chat
+  summary: Request Beezey support
+  description: |
+    Request assistance from Beezey support team for a booking/chat.
+    
+    **Use Cases:**
+    - Worker needs help with contract or booking issue
+    - Company requests intervention for dispute
+    - Technical problems with platform
+    
+    **Side Effects:**
+    - Sends notification to Beezey support team
+    - Creates support ticket (if integrated)
+    - Optionally adds Beezey support as participant in chat
+    - **WebSocket broadcast:** user message sent to the other participant only (`new_message`); Beezey system response sent to **both** participants (`new_message` + `chat_updated`)
+    
+    **Business Rules:**
+    - Can be called by either worker or company
+    - Creates audit trail in DynamoDB
+    - Support team receives context (booking ID, participants, issue)
+  operationId: requestBeezeyHelp
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - reason
+          properties:
+            reason:
+              type: string
+              maxLength: 1000
+              description: Reason for requesting help
+              example: "There is a dispute about the work hours"
+            category:
+              type: string
+              enum: [contract_issue, payment_dispute, technical_problem, other]
+              description: Issue category
+              example: "payment_dispute"
+        examples:
+          payment_dispute:
+            summary: Payment dispute
+            value:
+              reason: "Worker claims different hours than agreed"
+              category: "payment_dispute"
+          contract_issue:
+            summary: Contract clarification
+            value:
+              reason: "Need clarification on overtime policy"
+              category: "contract_issue"
+  responses:
+    '200':
+      description: Support request submitted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Support request submitted successfully"
+              ticketId:
+                type: string
+                description: Support ticket ID
+                example: "SUP-2025-001234"
+    '400':
+      description: Bad request (missing or invalid reason)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (not authorized for this chat)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

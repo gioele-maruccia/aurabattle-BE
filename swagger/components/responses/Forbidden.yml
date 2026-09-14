@@ -1,0 +1,30 @@
+description: Forbidden - Insufficient permissions
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Specific error code (e.g., 4009 for workers-only, 4035 for company-only)
+          example: 4009
+        error:
+          type: string
+          example: "Forbidden"
+        message:
+          type: string
+          example: "You don't have permission to access this resource"
+    examples:
+      insufficientPermissions:
+        summary: Insufficient permissions
+        value:
+          code: 4009
+          error: "Forbidden"
+          message: "You don't have permission to perform this action"
+      
+      resourceOwnership:
+        summary: Not resource owner
+        value:
+          code: 4024
+          error: "Forbidden"
+          message: "You can only modify your own profile"

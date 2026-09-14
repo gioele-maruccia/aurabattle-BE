@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Calculate Net Salary Lambda for Bookings
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  
+  UserProfilesTable:
+    Type: String
+    Description: DynamoDB UserProfiles table name
+  
+  TaxCacheTable:
+    Type: String
+    Description: DynamoDB TaxCache table name
+    Default: dev-TaxCache
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.13
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        USER_PROFILES_TABLE: !Ref UserProfilesTable
+        TAX_CACHE_TABLE: !Ref TaxCacheTable
+
+Resources:
+  CalculateNetSalaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-calculate-net-salary'
+      CodeUri: ./
+      Handler: app.lambda_handler
+      
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaxCacheTable
+*** End Patch
+
+Outputs:
+  CalculateNetSalaryFunctionArn:
+    Description: ARN of the Calculate Net Salary Lambda function
+    Value: !GetAtt CalculateNetSalaryFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-CalculateNetSalaryFunctionArn'
+  
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/bookings/calculate-net-salary'

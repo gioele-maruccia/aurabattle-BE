@@ -1,0 +1,85 @@
+version = 0.1
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[default.deploy.parameters]
+stack_name = "dev-companies-services"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "companies"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=dev",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "CompaniesAssetsBucketName=beezey-dev-companies-assets"
+]
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[dev.deploy.parameters]
+stack_name = "dev-companies-services"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "companies"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=dev",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "CompaniesAssetsBucketName=beezey-dev-companies-assets"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+[prod.deploy.parameters]
+stack_name = "prod-companies-services"
+template_file = "template.yaml"
+resolve_s3 = false
+s3_prefix = "companies"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+image_repositories = []
+parameter_overrides = [
+    "Environment=prod",
+    "CognitoUserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_iCBtUlJO6",
+    "CompaniesAssetsBucketName=beezey-prod-companies-assets"
+]

@@ -1,0 +1,139 @@
+    get:
+      tags:
+        - Bookings
+      summary: Get bookings for a job listing
+      description: |
+        Retrieve all bookings/applications for a specific job listing.
+        
+        **Access Control:**
+        - Company: Can view bookings for their own listings
+        - Backoffice: Can view all bookings
+        - Workers: Cannot access
+        
+        **Returns:**
+        - All applications for the listing
+        - Worker profile summaries
+        - Status breakdown
+        - Position availability calculation
+        
+        **Use Cases:**
+        - Review applications for a job
+        - Check how many positions are filled
+        - Manage applicants
+        - See application timeline
+        - Sort by worker rating to find best candidates
+      operationId: getListingBookings
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job listing ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, rejected, cancelled, all]
+            default: all
+          description: Filter by booking status
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, workerRating]
+            default: createdAt
+          description: |
+            Sort by:
+            - createdAt: Application date (newest first)
+            - workerRating: Worker rating (highest first)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Items per page
+      responses:
+        '200':
+          description: Listing bookings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  listingId:
+                    type: string
+                  listing:
+                    $ref: '../../components/schemas/ListingSummary.yml#/ListingSummary'
+                  bookings:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '../../components/schemas/booking.yml#/Booking'
+                        - type: object
+                          properties:
+                            worker:
+                              $ref: '../../components/schemas/workerProfile.yml#/WorkerProfile'
+                  stats:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      pending:
+                        type: integer
+                      confirmed:
+                        type: integer
+                      rejected:
+                        type: integer
+                      cancelled:
+                        type: integer
+                      byDate:
+                        type: object
+                        description: Applications per day (last 30 days)
+                        additionalProperties:
+                          type: integer
+                  availability:
+                    type: object
+                    properties:
+                      hasAvailability:
+                        type: boolean
+                      positionsRemaining:
+                        type: integer
+                      acceptingApplications:
+                        type: boolean
+                      message:
+                        type: string
+                        example: "3 positions remaining. Accepting applications."
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to view this listing's bookings
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Job listing not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

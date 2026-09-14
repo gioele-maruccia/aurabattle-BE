@@ -1,0 +1,564 @@
+      tags:
+        - Companies
+      summary: Create complete company profile
+      description: |
+        Create a complete company profile with multiple ATECO codes and automatic FIPE classification.
+        
+        **MODIFICATO**: Ora supporta aziende di QUALSIASI settore, non solo turismo/ristorazione.
+        
+        **Key features:**
+        - Multiple ATECO codes support (primary + secondary)
+        - Automatic aggregation of applicable job roles from all ATECO codes
+        - FIPE category determination based on primary ATECO (solo per settore turismo/ristorazione)
+        - Automatic compensation table assignment (solo per ATECO 55.xx.xx e 56.xx.xx)
+        - Per aziende di altri settori: fipeCategory e fipeArticle saranno null
+        
+        **Settori supportati:**
+        - Turismo/Alloggio (ATECO 55.xx.xx): FIPE category = 'turismo'
+        - Ristorazione (ATECO 56.xx.xx): FIPE category = 'pubblici_esercizi' o 'ristorazione_collettiva'
+        - Altri settori: Tutti gli altri codici ATECO sono ora accettati senza validazione FIPE
+        
+        **Company users only** - requires authentication token.
+      operationId: createCompany
+      security:
+        - CognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - businessName
+                - vatNumber
+                - address
+                - atecoCodes
+                - isSmallBusiness
+              properties:
+                businessName:
+                  type: string
+                  minLength: 2
+                  maxLength: 200
+                  description: Company legal name
+                  example: "Ristorante Pizzeria Da Mario"
+                vatNumber:
+                  type: string
+                  pattern: '^IT[0-9]{11}$'
+                  description: Italian VAT number (IT + 11 digits)
+                  example: "IT12345678901"
+                address:
+                  type: object
+                  required:
+                    - street
+                    - city
+                    - postalCode
+                    - country
+                  properties:
+                    street:
+                      type: string
+                      example: "Via Roma 123"
+                    city:
+                      type: string
+                      example: "Milano"
+                    province:
+                      type: string
+                      example: "MI"
+                    postalCode:
+                      type: string
+                      example: "20100"
+                    country:
+                      type: string
+                      example: "IT"
+                pec:
+                  type: string
+                  format: email
+                  description: Certified email address (optional)
+                  example: "info@pec.ristorantedamario.it"
+                atecoCodes:
+                  type: array
+                  items:
+                    type: string
+                    pattern: '^[0-9]{2}\.[0-9]{2}\.[0-9]{2}$'
+                  minItems: 1
+                  description: |
+                    List of ATECO codes for the business activities.
+                    First code is considered the primary activity.
+                    All applicable job roles will be aggregated from all codes.
+                  example: ["56.10.11", "56.30.00"]
+                businessType:
+                  type: string
+                  enum:
+                    - pubblici_esercizi
+                    - ristorazione_collettiva
+                  description: |
+                    Optional - Only relevant for ATECO 56.xx.xx (food service) in tourism/hospitality sector.
+                    - pubblici_esercizi: Restaurants, bars, pizzerias
+                    - ristorazione_collettiva: Canteens, collective catering
+                    
+                    **MODIFICATO**: Ora opzionale per permettere registrazione di aziende di qualsiasi settore.
+                    Per aziende NON del settore turismo/ristorazione (ATECO diversi da 55.xx.xx e 56.xx.xx),
+                    questo campo non è necessario.
+                  example: "pubblici_esercizi"
+                isSmallBusiness:
+                  type: boolean
+                  description: |
+                    True if company has less than 15 employees (Art. 162 CCNL).
+                    Determines compensation table (Aziende Minori vs Standard).
+                  example: false
+                numberOfEmployees:
+                  type: integer
+                  minimum: 0
+                  description: Number of employees (optional)
+                  example: 12
+                annualRevenue:
+                  type: number
+                  minimum: 0
+                  description: Annual revenue in EUR (optional)
+                  example: 450000
+                description:
+                  type: string
+                  description: Company description (optional)
+                  example: "Traditional Italian restaurant and pizzeria in Milan city center"
+            examples:
+              restaurant_with_bar:
+                summary: Restaurant with bar service (multi-ATECO)
+                value:
+                  businessName: "Ristorante Pizzeria Da Mario"
+                  vatNumber: "IT12345678901"
+                  address:
+                    street: "Via Roma 123"
+                    city: "Milano"
+                    province: "MI"
+                    postalCode: "20100"
+                    country: "IT"
+                  pec: "info@pec.ristorantedamario.it"
+                  atecoCodes: ["56.10.11", "56.30.00"]
+                  businessType: "pubblici_esercizi"
+                  isSmallBusiness: false
+                  numberOfEmployees: 12
+                  annualRevenue: 450000
+                  description: "Traditional Italian restaurant and pizzeria with bar service"
+              
+              gelateria_small:
+                summary: Ice cream shop (Small business - single ATECO)
+                value:
+                  businessName: "Gelateria Artigianale Dolce Vita"
+                  vatNumber: "IT98765432109"
+                  address:
+                    street: "Corso Garibaldi 45"
+                    city: "Roma"
+                    province: "RM"
+                    postalCode: "00100"
+                    country: "IT"
+                  atecoCodes: ["56.10.30"]
+                  businessType: "pubblici_esercizi"
+                  isSmallBusiness: true
+                  numberOfEmployees: 5
+              
+              catering_collective:
+                summary: Collective catering service
+                value:
+                  businessName: "Catering Service S.r.l."
+                  vatNumber: "IT11223344556"
+                  address:
+                    street: "Via Industriale 78"
+                    city: "Torino"
+                    province: "TO"
+                    postalCode: "10100"
+                    country: "IT"
+                  pec: "amministrazione@pec.cateringservice.it"
+                  atecoCodes: ["56.29.10", "56.29.20"]
+                  businessType: "ristorazione_collettiva"
+                  isSmallBusiness: false
+                  numberOfEmployees: 45
+                  annualRevenue: 2500000
+              
+              hotel_complete:
+                summary: Hotel with restaurant (Tourism sector - multiple ATECO)
+                value:
+                  businessName: "Grand Hotel Milano"
+                  vatNumber: "IT55667788990"
+                  address:
+                    street: "Piazza Duomo 1"
+                    city: "Milano"
+                    province: "MI"
+                    postalCode: "20100"
+                    country: "IT"
+                  pec: "info@pec.grandhotelmilano.it"
+                  atecoCodes: ["55.10.00", "56.10.11"]
+                  businessType: "pubblici_esercizi"
+                  isSmallBusiness: false
+                  numberOfEmployees: 35
+                  annualRevenue: 1500000
+      
+      responses:
+        '201':
+          description: Company created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Company profile created successfully"
+                  company:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                        example: "cognito-sub-123"
+                      companyId:
+                        type: string
+                        format: uuid
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      businessName:
+                        type: string
+                        example: "Ristorante Pizzeria Da Mario"
+                      vatNumber:
+                        type: string
+                        example: "IT12345678901"
+                      pec:
+                        type: string
+                        example: "info@pec.ristorantedamario.it"
+                      address:
+                        type: object
+                      atecoCodes:
+                        type: array
+                        items:
+                          type: string
+                        description: All ATECO codes for this company
+                        example: ["56.10.11", "56.30.00"]
+                      primaryAtecoCode:
+                        type: string
+                        description: Primary ATECO code (first in list)
+                        example: "56.10.11"
+                      atecoName:
+                        type: string
+                        example: "Ristoranti e attività di ristorazione mobile"
+                      applicableRoles:
+                        type: array
+                        items:
+                          type: string
+                        description: Aggregated list of all applicable FIPE job role IDs from all ATECO codes
+                        example: ["FIPE_L2_009", "FIPE_L4_002", "FIPE_L4_009", "FIPE_L5_022", "FIPE_L2_012"]
+                      atecoDetails:
+                        type: object
+                        description: Detailed information for each ATECO code
+                        example:
+                          "56.10.11":
+                            atecoDescription: "Ristoranti e attività di ristorazione mobile"
+                            sector: "ristorazione"
+                            fipeCategory: "pubblici_esercizi"
+                          "56.30.00":
+                            atecoDescription: "Bar e altri esercizi simili senza cucina"
+                            sector: "ristorazione"
+                            fipeCategory: "pubblici_esercizi"
+                      fipeCategory:
+                        type: string
+                        example: "pubblici_esercizi"
+                      fipeArticle:
+                        type: string
+                        example: "Art. 1, I"
+                      compensationTable:
+                        type: string
+                        example: "standard"
+                      tableName:
+                        type: string
+                        example: "Tabella Standard"
+                      incrementSchedule:
+                        type: string
+                        example: "giugno"
+                      isSmallBusiness:
+                        type: boolean
+                        example: false
+                      numberOfEmployees:
+                        type: integer
+                        example: 12
+                      status:
+                        type: string
+                        example: "active"
+                      verificationStatus:
+                        type: string
+                        example: "pending"
+                      createdAt:
+                        type: string
+                        format: date-time
+                        example: "2024-03-20T10:30:00Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        example: "2024-03-20T10:30:00Z"
+                  fipeClassification:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                        example: "pubblici_esercizi"
+                      article:
+                        type: string
+                        example: "Art. 1, I"
+                      table:
+                        type: string
+                        example: "Tabella Standard"
+                      incrementSchedule:
+                        type: string
+                        example: "giugno"
+                  rolesInfo:
+                    type: object
+                    description: Information about aggregated job roles
+                    properties:
+                      totalApplicableRoles:
+                        type: integer
+                        description: Total number of unique job roles available
+                        example: 45
+                      atecoCodesProcessed:
+                        type: integer
+                        description: Number of ATECO codes successfully processed
+                        example: 2
+                      missingAtecoCodes:
+                        type: array
+                        items:
+                          type: string
+                        description: ATECO codes that were not found in database
+                        example: []
+                  nextSteps:
+                    type: object
+                    properties:
+                      description:
+                        type: string
+                        example: "Your company profile is complete. You can now create job listings."
+                      verificationNote:
+                        type: string
+                        example: "Your profile is pending verification. You will be notified when approved."
+                      availableRoles:
+                        type: string
+                        example: "45 job roles available for your business"
+              examples:
+                restaurant_with_bar_created:
+                  summary: Restaurant with bar (multi-ATECO)
+                  value:
+                    message: "Company profile created successfully"
+                    company:
+                      userId: "cognito-sub-123"
+                      companyId: "550e8400-e29b-41d4-a716-446655440000"
+                      businessName: "Ristorante Pizzeria Da Mario"
+                      vatNumber: "IT12345678901"
+                      pec: "info@pec.ristorantedamario.it"
+                      address:
+                        street: "Via Roma 123"
+                        city: "Milano"
+                        province: "MI"
+                        postalCode: "20100"
+                        country: "IT"
+                      atecoCodes: ["56.10.11", "56.30.00"]
+                      primaryAtecoCode: "56.10.11"
+                      atecoName: "Ristoranti e attività di ristorazione mobile"
+                      applicableRoles: ["FIPE_L2_009", "FIPE_L4_002", "FIPE_L4_009", "FIPE_L5_022", "FIPE_L2_012", "FIPE_L3_002", "FIPE_L6_003"]
+                      atecoDetails:
+                        "56.10.11":
+                          atecoDescription: "Ristoranti e attività di ristorazione mobile"
+                          sector: "ristorazione"
+                          fipeCategory: "pubblici_esercizi"
+                        "56.30.00":
+                          atecoDescription: "Bar e altri esercizi simili senza cucina"
+                          sector: "ristorazione"
+                          fipeCategory: "pubblici_esercizi"
+                      fipeCategory: "pubblici_esercizi"
+                      fipeArticle: "Art. 1, I"
+                      compensationTable: "standard"
+                      tableName: "Tabella Standard"
+                      incrementSchedule: "giugno"
+                      isSmallBusiness: false
+                      numberOfEmployees: 12
+                      status: "active"
+                      verificationStatus: "pending"
+                      createdAt: "2024-03-20T10:30:00Z"
+                      updatedAt: "2024-03-20T10:30:00Z"
+                    fipeClassification:
+                      category: "pubblici_esercizi"
+                      article: "Art. 1, I"
+                      table: "Tabella Standard"
+                      incrementSchedule: "giugno"
+                    rolesInfo:
+                      totalApplicableRoles: 45
+                      atecoCodesProcessed: 2
+                      missingAtecoCodes: []
+                    nextSteps:
+                      description: "Your company profile is complete. You can now create job listings."
+                      verificationNote: "Your profile is pending verification. You will be notified when approved."
+                      availableRoles: "45 job roles available for your business"
+                
+                small_business_created:
+                  summary: Small business (single ATECO)
+                  value:
+                    message: "Company profile created successfully"
+                    company:
+                      userId: "cognito-sub-789"
+                      companyId: "660f9511-f30c-52e5-b827-557766551111"
+                      businessName: "Gelateria Artigianale Dolce Vita"
+                      vatNumber: "IT98765432109"
+                      address:
+                        street: "Corso Garibaldi 45"
+                        city: "Roma"
+                        province: "RM"
+                        postalCode: "00100"
+                        country: "IT"
+                      atecoCodes: ["56.10.30"]
+                      primaryAtecoCode: "56.10.30"
+                      atecoName: "Gelaterie e pasticcerie"
+                      applicableRoles: ["FIPE_L2_002", "FIPE_L2_003", "FIPE_L4_012", "FIPE_L5_013"]
+                      atecoDetails:
+                        "56.10.30":
+                          atecoDescription: "Gelaterie e pasticcerie"
+                          sector: "ristorazione"
+                          fipeCategory: "pubblici_esercizi"
+                      fipeCategory: "pubblici_esercizi"
+                      fipeArticle: "Art. 1, I + Art. 162"
+                      compensationTable: "aziende_minori"
+                      tableName: "Tabella Aziende Minori - pubblici_esercizi"
+                      incrementSchedule: "giugno"
+                      isSmallBusiness: true
+                      numberOfEmployees: 5
+                      status: "active"
+                      verificationStatus: "pending"
+                      createdAt: "2024-03-20T10:35:00Z"
+                      updatedAt: "2024-03-20T10:35:00Z"
+                    fipeClassification:
+                      category: "pubblici_esercizi"
+                      article: "Art. 1, I + Art. 162"
+                      table: "Tabella Aziende Minori - pubblici_esercizi"
+                      incrementSchedule: "giugno"
+                    rolesInfo:
+                      totalApplicableRoles: 12
+                      atecoCodesProcessed: 1
+                      missingAtecoCodes: []
+                    nextSteps:
+                      description: "Your company profile is complete. You can now create job listings."
+                      verificationNote: "Your profile is pending verification. You will be notified when approved."
+                      availableRoles: "12 job roles available for your business"
+        
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                invalid_vat_format:
+                  summary: Invalid VAT number format
+                  value:
+                    statusCode: 400
+                    error: "ValidationError"
+                    message: "vatNumber must follow format: IT + 11 digits (e.g., IT12345678901)"
+                
+                business_name_too_short:
+                  summary: Business name too short
+                  value:
+                    statusCode: 400
+                    error: "ValidationError"
+                    message: "businessName must be between 2 and 200 characters"
+                
+                invalid_ateco_format:
+                  summary: Invalid ATECO code format
+                  value:
+                    statusCode: 400
+                    error: "ValidationError"
+                    message: "Invalid ATECO code format: 56.1.11. Must be XX.XX.XX (e.g., 56.11.11)"
+                
+                ateco_not_list:
+                  summary: atecoCodes must be a list
+                  value:
+                    statusCode: 400
+                    error: "ValidationError"
+                    message: "atecoCodes must be a non-empty list"
+                
+                missing_business_type:
+                  summary: Missing businessType for food service
+                  value:
+                    statusCode: 400
+                    error: "ValidationError"
+                    message: "businessType is required for restaurant/food service activities (ATECO 56.xx.xx)"
+        
+        '401':
+          description: Unauthorized - Missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 401
+                  error:
+                    type: string
+                    example: "Unauthorized"
+                  message:
+                    type: string
+                    example: "Missing or invalid authentication token"
+        
+        '404':
+          description: Primary ATECO code not found in database
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                  error:
+                    type: string
+                  message:
+                    type: string
+                  suggestion:
+                    type: string
+              example:
+                statusCode: 404
+                error: "AtecoCodeNotFound"
+                message: "Primary ATECO code 56.99.99 not found in our database. Please verify the code."
+                suggestion: "Visit https://www.istat.it/it/archivio/17888 to find your correct ATECO code"
+        
+        '409':
+          description: Company already exists for this user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                  error:
+                    type: string
+                  message:
+                    type: string
+                  companyId:
+                    type: string
+              example:
+                statusCode: 409
+                error: "CompanyAlreadyExists"
+                message: "A company profile already exists for this user"
+                companyId: "existing-company-uuid-123"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 500
+                  error:
+                    type: string
+                    example: "InternalServerError"
+                  message:
+                    type: string
+                    example: "An unexpected error occurred while creating the company profile"

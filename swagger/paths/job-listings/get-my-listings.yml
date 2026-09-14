@@ -1,0 +1,822 @@
+get:
+  tags:
+    - Job listings
+  summary: Get my company's listings (Company owner only)
+  description: |
+    Retrieve all job listings created by the authenticated company with updated CCNL schema.
+    
+    **Access Control:**
+    - Only authenticated company users (Cognito JWT required)
+    - Returns only listings owned by the authenticated company
+    - Shows ALL statuses: draft, published, paused, closed, archived
+    
+    **Manual vs CCNL Listings:**
+    - **CCNL listings** (FIPE companies): Have `contract` object with calculation, level, paragraph
+    - **Manual listings** (non-FIPE companies): Have `contract: null` and use `salary` field directly
+    - Compensation is calculated differently based on listing type (see response schema)
+    
+    **New CCNL Schema Features:**
+    - Complete contract details with calculation and superminimo
+    - Job role information from JobRoles table
+    - Detailed schedule with workTimeSlots
+    - Calculated compensation (basePay + superminimo for CCNL, salary for manual)
+    - Enhanced statistics by level and paragraph
+    
+    **Enhanced Filters:**
+    - level: Filter by CCNL level (Qa, Qb, 1-7, 6S)
+    - paragraph: Filter by paragraph (I or II)
+    - minHoursPerWeek/maxHoursPerWeek: Filter by hours range
+    - roleId: Filter by specific job role
+    - status: Filter by listing status
+    - category: Filter by job category
+    - search: Search in title, description, and role name
+    
+    **Enhanced Sorting:**
+    - Sort by: createdAt, publishedAt, startDate, updatedAt, level, compensation, hoursPerWeek
+    - Sort order: asc or desc
+    
+    **Enhanced Statistics:**
+    - Total listings and breakdown by status
+    - Statistics by CCNL level (how many jobs per level)
+    - Statistics by paragraph (I vs II)
+    - Average compensation across all listings
+    - Total positions offered
+    - Views and applications metrics
+    
+    **Use Cases:**
+    - Company dashboard: "Manage My Job Listings"
+    - View drafts that are not yet published
+    - Check statistics (views, applications, compensation)
+    - Filter by CCNL level or paragraph for reporting
+    - Analyze hiring patterns and compensation ranges
+    
+    **Differences from public GET /listings:**
+    - Requires authentication (company users only)
+    - Shows draft/paused/closed/archived listings
+    - Shows own listings only
+    - Includes full statistics with CCNL breakdowns
+    - No company data needed (you are the company)
+  
+  operationId: getMyListings
+  security:
+    - CognitoAuth: []
+  
+  parameters:
+    # Pagination
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+      description: Number of items per page (max 100)
+      example: 50
+    
+    - name: lastKey
+      in: query
+      schema:
+        type: string
+      description: Pagination token (listingId from previous response)
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    # Status filter
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [draft, published, paused, closed, archived, all]
+        default: all
+      description: |
+        Filter by listing status:
+        - draft: Not yet published
+        - published: Live and accepting applications
+        - paused: Temporarily paused
+        - closed: Manually closed
+        - archived: Archived listings
+        - all: Show all statuses (default)
+      example: "published"
+    
+    # NEW: CCNL filters
+    - name: level
+      in: query
+      schema:
+        type: string
+        enum: [Qa, Qb, "1", "2", "3", "4", "5", "6S", "6", "7"]
+      description: |
+        **NEW:** Filter by CCNL contract level.
+        - Qa, Qb: Quadri (management)
+        - 1-7: Standard levels
+        - 6S: Transitional level 6 Super
+      example: "4"
+    
+    - name: paragraph
+      in: query
+      schema:
+        type: string
+        enum: ["I", "II"]
+      description: |
+        **NEW:** Filter by CCNL paragraph.
+        - I: Standard companies (June increments)
+        - II: Hotels/accommodation (September increments)
+      example: "II"
+    
+    - name: minHoursPerWeek
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 168
+      description: |
+        **NEW:** Filter by minimum hours per week.
+        Returns listings with at least this many weekly hours.
+      example: 30
+    
+    - name: maxHoursPerWeek
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 168
+      description: |
+        **NEW:** Filter by maximum hours per week.
+        Returns listings with at most this many weekly hours.
+      example: 40
+    
+    - name: roleId
+      in: query
+      schema:
+        type: string
+      description: |
+        **NEW:** Filter by job role ID from JobRoles table.
+        Example: FIPE_L4_016 (Cameriere di ristorante)
+      example: "FIPE_L4_016"
+    
+    # Date filters (logica overlap)
+    - name: startDateFrom
+      in: query
+      schema:
+        type: string
+        format: date
+      description: |
+        Inizio del range di date cercato (**logica overlap**).
+        Restituisce listing il cui periodo si sovrappone al range:
+        `listing.startDate <= startDateTo AND listing.endDate >= startDateFrom`.
+      example: "2026-06-01"
+    
+    - name: startDateTo
+      in: query
+      schema:
+        type: string
+        format: date
+      description: |
+        Fine del range di date cercato (**logica overlap**).
+        Usato insieme a `startDateFrom`. Se solo, restituisce listing che iniziano prima di questa data.
+      example: "2026-08-01"
+    
+    - name: alloggio
+      in: query
+      schema:
+        type: string
+        enum: ["true", "false"]
+      description: |
+        Filtra solo i listing con **alloggio disponibile** (`alloggio: true`).
+      example: "true"
+    
+    # Category filter
+    - name: category
+      in: query
+      schema:
+        type: string
+      description: Filter by job category (from JobCategories table)
+      example: "hospitality"
+    
+    # Search filter
+    - name: search
+      in: query
+      schema:
+        type: string
+      description: |
+        Search in title, description, and job role name (case-insensitive).
+        **UPDATED:** Now also searches in jobRole.roleName.
+      example: "cameriere"
+    
+    # Sorting
+    - name: sortBy
+      in: query
+      schema:
+        type: string
+        enum: [createdAt, publishedAt, startDate, updatedAt, level, compensation, hoursPerWeek]
+        default: createdAt
+      description: |
+        Sort field:
+        - createdAt: When created (default)
+        - publishedAt: When published
+        - startDate: Job start date
+        - updatedAt: Last modified
+        - level: CCNL level (NEW)
+        - compensation: Total monthly compensation (NEW)
+        - hoursPerWeek: Weekly hours (NEW)
+      example: "compensation"
+    
+    - name: sortOrder
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: Sort order (desc = newest/highest first)
+      example: "desc"
+  
+  responses:
+    '200':
+      description: Company listings retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              
+              data:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    description: Array of job listings with enriched display fields
+                    items:
+                      type: object
+                      properties:
+                        listingId:
+                          type: string
+                          format: uuid
+                        companyId:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        category:
+                          type: string
+                        
+                        # Job role
+                        jobRole:
+                          type: object
+                          properties:
+                            roleId:
+                              type: string
+                            roleName:
+                              type: string
+                            category:
+                              type: string
+                            roleDescription:
+                              type: string
+                        jobRoleDisplay:
+                          type: string
+                          description: Formatted role name for display
+                          example: "Cameriere di ristorante"
+                        
+                        # Contract with CCNL details
+                        contract:
+                          type: object
+                          properties:
+                            contractId:
+                              type: string
+                            ccnlType:
+                              type: string
+                            level:
+                              type: string
+                            levelName:
+                              type: string
+                            description:
+                              type: string
+                            paragraph:
+                              type: string
+                            coefficient:
+                              type: number
+                            calculation:
+                              type: object
+                              properties:
+                                basePay:
+                                  type: number
+                                contingencyAllowance:
+                                  type: number
+                                article162Reduction:
+                                  type: number
+                                grossBasePay:
+                                  type: number
+                                calculationDate:
+                                  type: string
+                                formula:
+                                  type: string
+                                explanation:
+                                  type: string
+                            superminimo:
+                              type: object
+                              nullable: true
+                              properties:
+                                amount:
+                                  type: number
+                                currency:
+                                  type: string
+                                description:
+                                  type: string
+                        contractDisplay:
+                          type: string
+                          description: Formatted contract display
+                          example: "CCNL Turismo - Livello 4 (Par. II)"
+                        
+                        # Calculated compensation
+                        compensation:
+                          type: object
+                          description: Aggregated compensation breakdown
+                          properties:
+                            base:
+                              type: number
+                              description: CCNL base monthly pay
+                            contingency:
+                              type: number
+                              description: Contingency allowance
+                            superminimo:
+                              type: number
+                              nullable: true
+                              description: Optional additional pay above CCNL minimum
+                            grossPay:
+                              type: number
+                              description: "Total gross pay: base + contingency + superminimo"
+                            estimatedNet:
+                              type: number
+                              description: "Estimated net monthly pay after IRPEF + INPS. Indicative only."
+                            currency:
+                              type: string
+                            displayText:
+                              type: string
+                              example: "€2,157.14/month"
+                            includesSuperminimo:
+                              type: boolean
+                        
+                        # Location
+                        location:
+                          type: object
+                          properties:
+                            city:
+                              type: string
+                            province:
+                              type: string
+                            country:
+                              type: string
+                        
+                        # Schedule
+                        schedule:
+                          type: object
+                          properties:
+                            hoursPerWeek:
+                              type: integer
+                            workTimeSlots:
+                              type: array
+                            workDays:
+                              type: array
+                            notes:
+                              type: string
+                        scheduleDisplay:
+                          type: string
+                          description: Formatted schedule
+                          example: "40 hrs/week • Split shift"
+                        
+                        # Employment
+                        employment:
+                          type: object
+                          properties:
+                            typeId:
+                              type: string
+                            typeName:
+                              type: string
+                            contractDuration:
+                              type: string
+                            benefits:
+                              type: array
+                        employmentDisplay:
+                          type: string
+                          example: "Stagionale"
+                        
+                        # Dates and status
+                        startDate:
+                          type: string
+                          format: date
+                        endDate:
+                          type: string
+                          format: date
+                        positions:
+                          type: integer
+                        status:
+                          type: string
+                        
+                        # Statistics
+                        viewsCount:
+                          type: integer
+                        applicationsCount:
+                          type: integer
+                        
+                        # Timestamps
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                        publishedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                  
+                  count:
+                    type: integer
+                    description: Number of listings in this response
+                    example: 15
+                  
+                  total:
+                    type: integer
+                    description: Total listings matching filters
+                    example: 42
+              
+              stats:
+                type: object
+                description: Enhanced aggregate statistics with CCNL breakdowns
+                properties:
+                  total:
+                    type: integer
+                    description: Total listings (all statuses)
+                    example: 42
+                  
+                  byStatus:
+                    type: object
+                    description: Breakdown by listing status
+                    properties:
+                      draft:
+                        type: integer
+                        example: 5
+                      published:
+                        type: integer
+                        example: 20
+                      paused:
+                        type: integer
+                        example: 3
+                      closed:
+                        type: integer
+                        example: 10
+                      archived:
+                        type: integer
+                        example: 4
+                  
+                  byLevel:
+                    type: object
+                    description: NEW - Breakdown by CCNL level
+                    additionalProperties:
+                      type: integer
+                    example:
+                      "4": 20
+                      "5": 15
+                      "6": 7
+                  
+                  byParagraph:
+                    type: object
+                    description: NEW - Breakdown by paragraph
+                    properties:
+                      I:
+                        type: integer
+                        description: Standard companies
+                        example: 22
+                      II:
+                        type: integer
+                        description: Hotels/accommodation
+                        example: 20
+                  
+                  totalViews:
+                    type: integer
+                    description: Sum of all views across listings
+                    example: 1523
+                  
+                  totalApplications:
+                    type: integer
+                    description: Sum of all applications across listings
+                    example: 87
+                  
+                  averageViewsPerListing:
+                    type: number
+                    format: float
+                    description: Average views per listing
+                    example: 36.26
+                  
+                  totalPositions:
+                    type: integer
+                    description: NEW - Total open positions across all listings
+                    example: 120
+                  
+                  averageCompensation:
+                    type: number
+                    format: float
+                    description: NEW - Average monthly compensation (basePay + superminimo)
+                    example: 1750.50
+              
+              pagination:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                    example: 50
+                  hasMore:
+                    type: boolean
+                    description: Whether more results are available
+                    example: false
+                  lastKey:
+                    type: string
+                    nullable: true
+                    description: Pagination token for next page (listingId)
+                    example: null
+              
+              filters:
+                type: object
+                description: Applied filters for reference
+                properties:
+                  status:
+                    type: string
+                    example: "all"
+                  level:
+                    type: string
+                    nullable: true
+                    example: "4"
+                  paragraph:
+                    type: string
+                    nullable: true
+                    example: "II"
+                  startDateFrom:
+                    type: string
+                    nullable: true
+                  startDateTo:
+                    type: string
+                    nullable: true
+                  search:
+                    type: string
+                    nullable: true
+                  category:
+                    type: string
+                    nullable: true
+                  roleId:
+                    type: string
+                    nullable: true
+                  minHoursPerWeek:
+                    type: string
+                    nullable: true
+                  maxHoursPerWeek:
+                    type: string
+                    nullable: true
+              
+              sort:
+                type: object
+                description: Applied sort parameters
+                properties:
+                  sortBy:
+                    type: string
+                    example: "createdAt"
+                  sortOrder:
+                    type: string
+                    example: "desc"
+          
+          examples:
+            all_listings:
+              summary: All company listings with CCNL details
+              description: Default view showing all listings with enriched data
+              value:
+                success: true
+                data:
+                  listings:
+                    - listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      companyId: "660e8400-e29b-41d4-a716-446655440001"
+                      title: "Cameriere di sala per stagione estiva"
+                      description: "Cerchiamo cameriere esperto..."
+                      category: "hospitality"
+                      jobRole:
+                        roleId: "FIPE_L4_016"
+                        roleName: "Cameriere di ristorante"
+                        category: "sala"
+                      jobRoleDisplay: "Cameriere di ristorante"
+                      contract:
+                        contractId: "CCNL#turismo#4"
+                        ccnlType: "turismo"
+                        level: "4"
+                        levelName: "Livello 4"
+                        paragraph: "II"
+                        contractDisplay: "CCNL Turismo - Livello 4 (Par. II)"
+                        compensation:
+                          base: 1120.07
+                          contingency: 529.26
+                          superminimo: 200.0
+                          grossPay: 1849.33
+                          estimatedNet: 1405.95
+                          currency: "EUR"
+                          displayText: "€1,849.33/month"
+                        includesSuperminimo: true
+                      location:
+                        city: "Rimini"
+                        province: "RN"
+                        country: "IT"
+                      schedule:
+                        hoursPerWeek: 40
+                      scheduleDisplay: "40 hrs/week • Single shift"
+                      employment:
+                        typeId: "seasonal"
+                        typeName: "Stagionale"
+                      employmentDisplay: "Stagionale"
+                      startDate: "2025-06-01"
+                      endDate: "2025-09-30"
+                      positions: 3
+                      status: "published"
+                      viewsCount: 127
+                      applicationsCount: 8
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:30:00Z"
+                      publishedAt: "2025-01-15T11:00:00Z"
+                  count: 1
+                  total: 15
+                stats:
+                  total: 15
+                  byStatus:
+                    draft: 3
+                    published: 8
+                    paused: 1
+                    closed: 2
+                    archived: 1
+                  byLevel:
+                    "4": 8
+                    "5": 5
+                    "6": 2
+                  byParagraph:
+                    I: 7
+                    II: 8
+                  totalViews: 1523
+                  totalApplications: 87
+                  averageViewsPerListing: 101.53
+                  totalPositions: 45
+                  averageCompensation: 1750.50
+                pagination:
+                  limit: 50
+                  hasMore: false
+                  lastKey: null
+                filters:
+                  status: "all"
+                  level: null
+                  paragraph: null
+                  startDateFrom: null
+                  startDateTo: null
+                  search: null
+                  category: null
+                  roleId: null
+                  minHoursPerWeek: null
+                  maxHoursPerWeek: null
+                sort:
+                  sortBy: "createdAt"
+                  sortOrder: "desc"
+            
+            filtered_by_level:
+              summary: Filter by CCNL level 4
+              description: Show only Level 4 positions
+              value:
+                success: true
+                data:
+                  listings:
+                    - listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Cameriere di sala"
+                      contract:
+                        level: "4"
+                        levelName: "Livello 4"
+                        paragraph: "II"
+                      contractDisplay: "CCNL Turismo - Livello 4 (Par. II)"
+                      compensation:
+                        grossPay: 1849.33
+                        estimatedNet: 1405.95
+                        displayText: "€1,849.33/month"
+                      status: "published"
+                  count: 8
+                  total: 8
+                stats:
+                  total: 15
+                  byLevel:
+                    "4": 8
+                    "5": 5
+                    "6": 2
+                  byParagraph:
+                    I: 7
+                    II: 8
+                  averageCompensation: 1750.50
+                pagination:
+                  limit: 50
+                  hasMore: false
+                  lastKey: null
+                filters:
+                  status: "all"
+                  level: "4"
+                  paragraph: null
+                sort:
+                  sortBy: "createdAt"
+                  sortOrder: "desc"
+            
+            sorted_by_compensation:
+              summary: Sort by compensation (highest first)
+              description: View listings sorted by total monthly compensation
+              value:
+                success: true
+                data:
+                  listings:
+                    - listingId: "770e8400-e29b-41d4-a716-446655440003"
+                      title: "Capo partita cucina"
+                      contract:
+                        level: "5"
+                      compensation:
+                        grossPay: 2150.00
+                        estimatedNet: 1621.77
+                        displayText: "€2,150.00/month"
+                    - listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      title: "Cameriere di sala"
+                      contract:
+                        level: "4"
+                      compensation:
+                        grossPay: 1849.33
+                        estimatedNet: 1405.95
+                        displayText: "€1,849.33/month"
+                  count: 2
+                  total: 15
+                stats:
+                  total: 15
+                  averageCompensation: 1750.50
+                pagination:
+                  limit: 50
+                  hasMore: false
+                  lastKey: null
+                filters:
+                  status: "all"
+                sort:
+                  sortBy: "compensation"
+                  sortOrder: "desc"
+    
+    '401':
+      description: Unauthorized - Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "Unauthorized"
+            message: "Invalid or missing authentication token"
+    
+    '403':
+      description: Forbidden - Not a company user
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "Forbidden"
+            message: "Only company users can access this endpoint"
+    
+    '404':
+      description: Company profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "Not Found"
+            message: "Company profile not found"
+    
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+          example:
+            error: "Internal Server Error"
+            message: "An error occurred while fetching your job listings"

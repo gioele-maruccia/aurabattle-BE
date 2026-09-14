@@ -1,0 +1,118 @@
+    get:
+      tags:
+        - Job listings
+      summary: Get all listings for a company (Public)
+      description: |
+        Retrieve all job listings for a specific company. Public endpoint.
+        
+        **Manual vs CCNL Listings:**
+        - Listings may have `contract: null` (manual) or full contract details (CCNL)
+        - Compensation calculated from contract or salary field accordingly
+        
+        **Returns:**
+        - Published listings (for public)
+        - All listings (if owner authenticated)
+        
+        **Filtro date (logica overlap):**
+        `startDateFrom`/`startDateTo` usano sovrapposizione di intervalli: un listing
+        viene restituito se il suo periodo si sovrappone al range cercato, non solo se inizia in quel range.
+        
+        **Filtro alloggio:**
+        Usa `alloggio=true` per filtrare solo listing con alloggio disponibile.
+        
+        **Multi-filtro:** tutti i parametri sono combinabili (AND logico).
+        
+        **Useful for:**
+        - Company profile page
+        - Viewing company's active positions
+        - Company dashboard (if authenticated)
+      operationId: getCompanyListings
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Company UUID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, published, draft, paused, closed]
+            default: published
+          description: Filter by status (auth required for non-published)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: lastKey
+          in: query
+          schema:
+            type: string
+          description: Pagination token
+        
+        - name: startDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          description: |
+            Inizio del range di date cercato (**logica overlap**).
+            Restituisce listing il cui periodo si sovrappone al range:
+            `listing.startDate <= startDateTo AND listing.endDate >= startDateFrom`.
+          example: "2026-06-01"
+        
+        - name: startDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: |
+            Fine del range di date cercato (**logica overlap**).
+            Se solo, restituisce listing che iniziano prima di questa data.
+          example: "2026-08-01"
+        
+        - name: alloggio
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: |
+            Filtra solo i listing con **alloggio disponibile** (`alloggio: true`).
+          example: "true"
+        
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filtra per categoria del job listing
+          example: "hospitality"
+      responses:
+        '200':
+          description: Company listings retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  companyId:
+                    type: string
+                  listings:
+                    type: array
+                    items:
+                      $ref: '../../components/schemas/jobListing.yml#/JobListing'
+                  count:
+                    type: integer
+                  lastKey:
+                    type: string
+        '404':
+          description: Company not found
+        '500':
+          description: Internal server error

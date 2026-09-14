@@ -1,0 +1,87 @@
+get:
+  tags:
+    - Support Chat
+  summary: Get my support chats
+  description: |
+    Retrieves list of support chats created by current user.
+    
+    **Returns:**
+    - All support chats where user is the requester
+    - Sorted by last message timestamp (newest first)
+    - Includes last message preview and unread count
+    
+  operationId: getMySupportChats
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Support chats retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              chats:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    supportChatId:
+                      type: string
+                      example: "support_abc123def456"
+                    requesterId:
+                      type: string
+                      example: "865e9280-a041-70ad-d67a-212c99479e9c"
+                    requesterType:
+                      type: string
+                      enum: [worker, company]
+                      example: "worker"
+                    createdAt:
+                      type: string
+                      format: date-time
+                      example: "2025-12-17T14:30:00+00:00"
+                    status:
+                      type: string
+                      enum: [open, assigned, resolved, closed]
+                      example: "open"
+                    subject:
+                      type: string
+                      example: "Payment Issue - Missing Invoice"
+                    assignedTo:
+                      type: string
+                      nullable: true
+                      description: Beezey staff member assigned to this chat
+                      example: "staff_user_id_123"
+                    lastMessageAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      example: "2025-12-17T15:45:00+00:00"
+                    lastMessagePreview:
+                      type: string
+                      nullable: true
+                      example: "Thank you for your help!"
+                    lastMessageState:
+                      type: string
+                      enum: [sent, delivered, read]
+                      nullable: true
+                      example: "read"
+          examples:
+            with_chats:
+              summary: User with support chats
+              value:
+                chats:
+                  - supportChatId: "support_abc123"
+                    requesterId: "user_123"
+                    requesterType: "worker"
+                    createdAt: "2025-12-17T14:30:00+00:00"
+                    status: "open"
+                    subject: "Payment Issue"
+                    assignedTo: "staff_user_1"
+                    lastMessageAt: "2025-12-17T15:45:00+00:00"
+                    lastMessagePreview: "We're looking into it"
+                    lastMessageState: "read"
+            empty:
+              summary: No support chats
+              value:
+                chats: []

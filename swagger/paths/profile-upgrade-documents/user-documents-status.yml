@@ -1,0 +1,62 @@
+    get:
+      tags:
+        - Profile upgrade
+      summary: Get user document status
+      description: |
+        Get the status of all documents for the authenticated user (profile-upgrade-documents project).
+        
+        **App users only** - user can only access their own documents.
+        The user_sub in the path must match the authenticated user's sub claim.
+      operationId: getUserDocumentStatus
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: user_sub
+          in: path
+          required: true
+          description: User's Cognito sub (UUID)
+          schema:
+            type: string
+            format: uuid
+          example: "12345678-1234-1234-1234-123456789abc"
+      responses:
+        '200':
+          description: Document status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/profile-upgrade-documents.yml#/DocumentStatus'
+              example:
+                documents:
+                  - document_id: "doc_123"
+                    document_type: "id_card_front"
+                    status: "APPROVED"
+                    uploaded_at: "2024-01-15T10:30:00Z"
+                    reviewed_at: "2024-01-15T14:20:00Z"
+                  - document_id: "doc_124"
+                    document_type: "id_card_back"
+                    status: "AWAITING_REVIEW"
+                    uploaded_at: "2024-01-15T10:32:00Z"
+                summary:
+                  total: 2
+                  approved: 1
+                  rejected: 0
+                  awaiting_review: 1
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'
+        '403':
+          description: Forbidden - trying to access another user's documents
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'
+        '404':
+          description: User not found or no documents
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'

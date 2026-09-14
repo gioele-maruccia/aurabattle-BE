@@ -1,0 +1,40 @@
+description: Resource not found
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Specific error code (e.g., 4011 for listing not found, 4026 for booking not found)
+          example: 4011
+        error:
+          type: string
+          example: "Not Found"
+        message:
+          type: string
+          example: "The requested resource was not found"
+        resource_type:
+          type: string
+          example: "Profile"
+        resource_id:
+          type: string
+          nullable: true
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    examples:
+      profileNotFound:
+        summary: Profile not found
+        value:
+          code: 4042
+          error: "Not Found"
+          message: "Profile not found"
+          resource_type: "Profile"
+      
+      userNotFound:
+        summary: User not found in Cognito
+        value:
+          code: 4026
+          error: "Not Found"
+          message: "User not found in Cognito"
+          resource_type: "User"
+          resource_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"

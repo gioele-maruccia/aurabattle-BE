@@ -1,0 +1,760 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Profile Upgrade Documents Upload Service
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 10
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        REGION: !Ref AWS::Region
+        BUCKET_REGION: !Ref AWS::Region
+        FORCE_UPDATE: "2025-11-22_v3"
+    
+  Api:
+    OpenApiVersion: 3.0.1
+    Cors:
+      AllowMethods: "'OPTIONS,POST,GET'"
+      AllowHeaders: "'authorization,content-type'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+
+  ExistingBucketName:
+    Type: String
+    Default: beezey-dev-user-documents
+    Description: S3 bucket for document storage
+
+  ExistingUserPoolId:
+    Type: String
+    Default: eu-south-1_0oK9agPYd   # DEV pool default - OVERRIDE in deploy scripts for other envs
+    Description: Cognito User Pool ID
+
+  ExistingKMSKeyId:
+    Type: String
+    Default: "7f604da7-7b4a-45ca-9708-630fcee29ecd"
+    Description: KMS Key ID for S3 encryption
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      TableName: dev-UserDocuments
+    dev-be:
+      TableName: dev-be-UserDocuments
+    prod:
+      TableName: prod-UserDocuments
+
+Resources:
+  # ---------------------------
+  # 1) LAMBDA: presign-url
+  # ---------------------------
+  PresignUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-docs-presign-url"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/presign-url/
+      Handler: app.lambda_handler
+      Description: !Sub "Generate presigned URLs for document upload (${Environment})"
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          BUCKET: !Ref ExistingBucketName
+          KMS_KEY_ID: !Ref ExistingKMSKeyId
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+      Events:
+        PresignUrlApiLegacy:
+          Type: Api
+          Properties:
+            Path: /documents/upload-url
+            Method: post
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+        PresignUrlApi:
+          Type: Api
+          Properties:
+            Path: /v1/documents/upload-url
+            Method: post
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: S3PresignedUrl
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:DeleteObject
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}/*
+            - Sid: DdbWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:DeleteItem
+                - dynamodb:DescribeTable
+              Resource: !Sub 
+                - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            # ✅ UPDATED: Allow access to all KMS keys in the account
+            - Sid: KMSEncrypt
+              Effect: Allow
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  # ---------------------------
+  # 2) LAMBDA: cleanup-expired-uploads
+  # ---------------------------
+  CleanupExpiredUploadsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-cleanup-expired-uploads"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/cleanup-expired-uploads/
+      Handler: app.lambda_handler
+      Description: !Sub "Cleanup expired upload records (${Environment})"
+      Timeout: 60
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          BUCKET: !Ref ExistingBucketName
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: S3HeadObject
+              Effect: Allow
+              Action:
+                - s3:HeadObject
+                - s3:ListBucket
+              Resource: 
+                - !Sub arn:aws:s3:::${ExistingBucketName}/*
+                - !Sub arn:aws:s3:::${ExistingBucketName}
+            - Sid: DdbUpdateExpired
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+              Resource: !Sub 
+                - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            - Sid: EventBridgeCleanup
+              Effect: Allow
+              Action:
+                - events:DeleteRule
+                - events:RemoveTargets
+              Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/cleanup-*"
+            # ✅ UPDATED: Allow access to all KMS keys
+            - Sid: KMSDecryptForCleanup
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  CleanupExpiredUploadsEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CleanupExpiredUploadsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/cleanup-*"
+
+  # ---------------------------
+  # NEW) LAMBDA: scan-pending-uploads (scheduled, replaces per-upload EB rules)
+  # ---------------------------
+  ScanPendingUploadsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-scan-pending-uploads"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/scan-pending-uploads/
+      Handler: app.lambda_handler
+      Description: !Sub "Scan DynamoDB for stale PENDING uploads and mark them EXPIRED (${Environment})"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          BUCKET: !Ref ExistingBucketName
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+          STALE_THRESHOLD_SECONDS: "604800"  # 1 week
+      Events:
+        ScanSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub "${Environment}-scan-pending-uploads-schedule"
+            Schedule: cron(0 3 * * ? *)
+            Description: Daily at 3 AM UTC - mark stale PENDING upload records as EXPIRED
+            Enabled: true
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbScanAndUpdate
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:UpdateItem
+              Resource: !Sub
+                - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            - Sid: S3HeadForScan
+              Effect: Allow
+              Action:
+                - s3:HeadObject
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}/*
+            - Sid: KMSDecryptForScan
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  # ---------------------------
+  # 3) LAMBDA: doc-received
+  # ---------------------------
+  DocReceivedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-doc-received"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/doc-received/
+      Handler: app.lambda_handler
+      Description: !Sub "Handle S3 PUT/Complete events (${Environment})"
+      Environment:
+        Variables:
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+          DOC_SCAN_FUNCTION_NAME: !Ref DocScanFunction
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbWriteMinimal
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+                - dynamodb:DescribeTable
+              Resource: !Sub 
+                - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            - Sid: InvokeDocScan
+              Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt DocScanFunction.Arn
+            # ✅ ADDED: KMS permissions for DynamoDB access
+            - Sid: KMSDecryptForDocReceived
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+  
+  DocReceivedS3Permission:              
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DocReceivedFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::${ExistingBucketName}
+  
+  # ---------------------------
+  # Custom Resource: Configure S3 Event Notifications
+  # ---------------------------
+  S3NotificationConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-s3-notification-config"
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 60
+      InlineCode: |
+        import json
+        import boto3
+        import cfnresponse
+
+        s3 = boto3.client('s3')
+
+        def _normalize_config(config):
+          return {
+            'LambdaFunctionConfigurations': config.get('LambdaFunctionConfigurations', []),
+            'QueueConfigurations': config.get('QueueConfigurations', []),
+            'TopicConfigurations': config.get('TopicConfigurations', []),
+          }
+
+        def _build_lambda_config(notification_id, lambda_arn, prefix):
+          return {
+            'Id': notification_id,
+            'LambdaFunctionArn': lambda_arn,
+            'Events': [
+              's3:ObjectCreated:Put',
+              's3:ObjectCreated:Post',
+              's3:ObjectCreated:CompleteMultipartUpload'
+            ],
+            'Filter': {
+              'Key': {
+                'FilterRules': [
+                  {
+                    'Name': 'prefix',
+                    'Value': prefix
+                  }
+                ]
+              }
+            }
+          }
+
+        def handler(event, context):
+          print(f"Event: {json.dumps(event)}")
+          response_data = {}
+
+          try:
+            bucket_name = event['ResourceProperties']['BucketName']
+            lambda_arn = event['ResourceProperties']['LambdaArn']
+            notification_id = event['ResourceProperties']['NotificationId']
+            prefix = event['ResourceProperties'].get('Prefix', 'docs/')
+
+            existing = s3.get_bucket_notification_configuration(Bucket=bucket_name)
+            config = _normalize_config(existing)
+            lambda_configs = config['LambdaFunctionConfigurations']
+
+            if event['RequestType'] == 'Delete':
+              # Remove only this notification, keep any others
+              lambda_configs = [c for c in lambda_configs if c.get('Id') != notification_id]
+              config['LambdaFunctionConfigurations'] = lambda_configs
+              s3.put_bucket_notification_configuration(
+                Bucket=bucket_name,
+                NotificationConfiguration=config
+              )
+              print(f"Removed notification {notification_id} from {bucket_name}")
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              return
+
+            new_lambda_config = _build_lambda_config(notification_id, lambda_arn, prefix)
+            lambda_configs = [c for c in lambda_configs if c.get('Id') != notification_id]
+            lambda_configs.append(new_lambda_config)
+            config['LambdaFunctionConfigurations'] = lambda_configs
+
+            s3.put_bucket_notification_configuration(
+              Bucket=bucket_name,
+              NotificationConfiguration=config
+            )
+
+            print(f"Successfully configured S3 notifications for {bucket_name}")
+            response_data['Message'] = f"S3 notifications configured for {bucket_name}"
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+          except Exception as e:
+            print(f"Error: {str(e)}")
+            response_data['Error'] = str(e)
+            cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetBucketNotification
+                - s3:PutBucketNotification
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+  
+  ConfigureS3Notifications:
+    Type: Custom::S3NotificationConfig
+    DependsOn: DocReceivedS3Permission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationConfigFunction.Arn
+      BucketName: !Ref ExistingBucketName
+      LambdaArn: !GetAtt DocReceivedFunction.Arn
+      NotificationId: !Sub "${Environment}-doc-received-trigger"
+      Prefix: "docs/"
+  
+  # ---------------------------
+  # 4) Lambda: doc-scan
+  # ---------------------------
+  DocScanFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-doc-scan"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/doc-scan/
+      Handler: app.lambda_handler
+      Description: !Sub "AV scan for uploaded docs (${Environment})"
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+          BUCKET_NAME: !Ref ExistingBucketName
+          QUARANTINE_PREFIX: quarantine/
+          CLEAN_PREFIX: clean/
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: S3ReadWriteTags
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:CopyObject
+                - s3:DeleteObject
+                - s3:GetObjectTagging
+                - s3:PutObjectTagging
+                - s3:ListBucket
+              Resource:
+                - !Sub arn:aws:s3:::${ExistingBucketName}
+                - !Sub arn:aws:s3:::${ExistingBucketName}/*
+            - Sid: DdbWrite
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+              Resource: !Sub 
+                - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            # ✅ UPDATED: Allow access to all KMS keys
+            - Sid: KMSDecryptForScanning
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:GenerateDataKey
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+  
+  # ---------------------------
+  # 5) Lambda: get-user-docs-status
+  # ---------------------------
+  GetUserDocsStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-get-user-docs-status"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/get-user-docs-status/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Description: !Sub "Get status of all documents for a user (${Environment})"
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+          BUCKET_NAME: !Ref ExistingBucketName
+          REGION: !Ref AWS::Region
+          BUCKET_REGION: !Ref AWS::Region
+      Events:
+        GetStatusApiLegacy:
+          Type: Api
+          Properties:
+            Path: /user/{userId}/documents/status
+            Method: get
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+        GetStatusApi:
+          Type: Api
+          Properties:
+            Path: /v1/user/{userId}/documents/status
+            Method: get
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DdbRead
+              Effect: Allow
+              Action: 
+                - dynamodb:Query
+                - dynamodb:GetItem
+              Resource: 
+                - !Sub 
+                  - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                  - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+                - !Sub 
+                  - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/index/*
+                  - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            - Sid: S3ReadForPresign
+              Effect: Allow
+              Action: 
+                - s3:HeadObject
+                - s3:GetBucketLocation
+                - s3:ListBucket
+                - s3:GetObject
+              Resource:
+                - !Sub arn:aws:s3:::${ExistingBucketName}
+                - !Sub arn:aws:s3:::${ExistingBucketName}/*
+            # ✅ UPDATED: Allow access to all KMS keys
+            - Sid: KMSForSSE
+              Effect: Allow
+              Action: 
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  # ---------------------------
+  # 6) LAMBDA: verify-face (Face Liveness + Compare)
+  # ---------------------------
+  VerifyFaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-verify-face"
+      CodeUri: ../../../src/lambdas/services/profile-upgrade-documents/verify-face/
+      Handler: app.lambda_handler
+      Description: !Sub "Verify selfie face matches ID document (${Environment})"
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          TABLE_NAME: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+          BUCKET_NAME: !Ref ExistingBucketName
+          REGION: !Ref AWS::Region
+          # Rekognition non è disponibile in eu-south-1, usiamo eu-west-1
+          REKOGNITION_REGION: "eu-west-1"
+          SIMILARITY_THRESHOLD: "80.0"
+      Events:
+        VerifyFaceApiLegacy:
+          Type: Api
+          Properties:
+            Path: /documents/verify-face
+            Method: post
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+        VerifyFaceApi:
+          Type: Api
+          Properties:
+            Path: /v1/documents/verify-face
+            Method: post
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: CognitoAuth
+        VerifyFaceOptionsApiLegacy:
+          Type: Api
+          Properties:
+            Path: /documents/verify-face
+            Method: options
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: NONE
+        VerifyFaceOptionsApi:
+          Type: Api
+          Properties:
+            Path: /v1/documents/verify-face
+            Method: options
+            RestApiId: !Ref DocumentsApi
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            # Rekognition permissions
+            - Sid: RekognitionFaceOperations
+              Effect: Allow
+              Action:
+                - rekognition:DetectFaces
+                - rekognition:CompareFaces
+              Resource: "*"
+            # DynamoDB read for getting document info
+            - Sid: DdbReadDocuments
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:GetItem
+              Resource:
+                - !Sub 
+                  - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                  - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+                - !Sub 
+                  - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/index/*
+                  - TableName: !FindInMap [EnvironmentConfig, !Ref Environment, TableName]
+            # S3 read for getting ID card image
+            - Sid: S3ReadForComparison
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:HeadObject
+              Resource: !Sub arn:aws:s3:::${ExistingBucketName}/*
+            # KMS decrypt for encrypted S3 objects
+            - Sid: KMSDecryptForVerification
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  # ---------------------------
+  # API Gateway
+  # ---------------------------
+  DocumentsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${Environment}-profile-upgrade-documents-api"
+      StageName: !Ref Environment
+      EndpointConfiguration:
+        Type: REGIONAL
+      Cors:
+        AllowMethods: "'OPTIONS,POST,GET'"
+        AllowHeaders: "'authorization,content-type,x-amz-date,x-amz-security-token'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${ExistingUserPoolId}
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: profile-upgrade-documents
+
+  # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref DocumentsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref DocumentsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  ApiGatewayEndpoint:
+    Description: API Gateway Base URL
+    Value: !Sub "https://${DocumentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgradeDocsApiUrl"
+  
+  PresignUrlEndpoint:
+    Description: Presign URL API Endpoint
+    Value: !Sub "https://${DocumentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/documents/upload-url"
+    Export:
+      Name: !Sub "${Environment}-PresignUrlEndpoint"
+  
+  GetUserDocsStatusEndpoint:
+    Description: Get User Documents Status API Endpoint
+    Value: !Sub "https://${DocumentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/user/{userId}/documents/status"
+    Export:
+      Name: !Sub "${Environment}-GetStatusEndpoint"
+  
+  PresignUrlFunctionName:
+    Description: Presign URL Lambda Function Name
+    Value: !Ref PresignUrlFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-PresignUrlFunction"
+  
+  PresignUrlFunctionArn:
+    Description: ARN of PresignUrl Lambda function
+    Value: !GetAtt PresignUrlFunction.Arn
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-PresignUrlFunctionArn"
+  
+  CleanupExpiredUploadsFunctionName:
+    Description: Cleanup Expired Uploads Lambda Function Name
+    Value: !Ref CleanupExpiredUploadsFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-CleanupFunction"
+
+  ScanPendingUploadsFunctionName:
+    Description: Scan Pending Uploads Lambda Function Name (scheduled every 10 min)
+    Value: !Ref ScanPendingUploadsFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-ScanPendingFunction"
+  
+  DocReceivedFunctionName:
+    Description: Document Received Lambda Function Name
+    Value: !Ref DocReceivedFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-DocReceivedFunction"
+  
+  DocReceivedFunctionArn:
+    Description: ARN of DocReceived Lambda function
+    Value: !GetAtt DocReceivedFunction.Arn
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-DocReceivedFunctionArn"
+  
+  DocScanFunctionName:
+    Description: Document Scan Lambda Function Name
+    Value: !Ref DocScanFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-DocScanFunction"
+  
+  GetUserDocsStatusFunctionName:
+    Description: Get User Documents Status Lambda Function Name
+    Value: !Ref GetUserDocsStatusFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-GetStatusFunction"
+  
+  VerifyFaceFunctionName:
+    Description: Verify Face Lambda Function Name
+    Value: !Ref VerifyFaceFunction
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-VerifyFaceFunction"
+  
+  VerifyFaceEndpoint:
+    Description: Verify Face API Endpoint
+    Value: !Sub "https://${DocumentsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/documents/verify-face"
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgrade-VerifyFaceEndpoint"
+  
+  KMSKeyId:
+    Description: KMS Key ID used for S3 encryption
+    Value: !Ref ExistingKMSKeyId
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgradeDocsKMSKeyId"
+
+  BucketName:
+    Description: S3 Bucket name for user documents
+    Value: !Ref ExistingBucketName
+    Export:
+      Name: !Sub "${Environment}-ProfileUpgradeDocsBucketName"

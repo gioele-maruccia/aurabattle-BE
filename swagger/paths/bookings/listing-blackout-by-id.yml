@@ -1,0 +1,97 @@
+    get:
+      tags:
+        - Bookings
+      summary: List blackout periods for a listing
+      description: |
+        Get all blackout periods for a job listing.
+        
+        **Access Control:**
+        - Public endpoint (no authentication required)
+        - Workers need this to see when they cannot apply
+        
+        **Returns:**
+        - All active blackout periods for the listing
+        - Future blackouts only (past blackouts excluded)
+        - Sorted by start date
+        
+        **Use Cases:**
+        - Show unavailable dates on application calendar
+        - Validate booking dates before submission
+        - Display to workers why certain dates are unavailable
+      operationId: listBlackouts
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job listing ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: "Show blackouts from this date (default: today)"
+          example: "2025-06-01"
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: "Show blackouts until this date (default: +6 months)"
+          example: "2025-12-31"
+      responses:
+        '200':
+          description: Blackout periods retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  listingId:
+                    type: string
+                  blackouts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bookingId:
+                          type: string
+                          description: Blackout ID (can be used to delete)
+                        startDate:
+                          type: string
+                          format: date
+                        endDate:
+                          type: string
+                          format: date
+                        reason:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                  dateRange:
+                    type: object
+                    properties:
+                      fromDate:
+                        type: string
+                        format: date
+                      toDate:
+                        type: string
+                        format: date
+        '404':
+          description: Listing not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

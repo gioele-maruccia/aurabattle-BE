@@ -1,0 +1,84 @@
+get:
+  tags:
+    - Chat
+  summary: Get presigned upload URL
+  description: |
+    Get a presigned S3 URL for uploading file attachments.
+    
+    **Upload Flow:**
+    1. Call this endpoint to get uploadUrl and fileUrl
+    2. Upload file to uploadUrl using PUT with proper headers
+    3. Use fileUrl when sending message with attachment
+    
+    **Requirements:**
+    - User must be participant in the chat
+    - Maximum file size: 10MB
+    - Allowed file types: PDF, images, documents
+    
+    **Security:**
+    - URL expires in 15 minutes
+    - Must use HTTPS
+    - Server-side encryption (AES256) required
+    
+    **Upload Headers Required:**
+    ```
+    Content-Type: <file MIME type>
+    x-amz-server-side-encryption: AES256
+    ```
+  operationId: getUploadUrl
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: \"chat_40f1671d354346a0\"
+    - name: fileName
+      in: query
+      required: true
+      description: Original filename with extension
+      schema:
+        type: string
+        example: "contract.pdf"
+    - name: mimeType
+      in: query
+      required: true
+      description: File MIME type
+      schema:
+        type: string
+        example: "application/pdf"
+  responses:
+    '200':
+      description: Upload URL generated successfully
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/chat.yml#/UploadUrlResponse'
+          examples:
+            pdf_upload:
+              summary: Upload PDF file
+              value:
+                uploadUrl: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/contract.pdf?X-Amz-Algorithm=..."
+                fileUrl: "https://dev-beezey-chat-attachments.s3.eu-south-1.amazonaws.com/chat123/contract.pdf"
+                expiresIn: 900
+    '400':
+      description: Bad request (invalid filename or MIME type)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (not authorized for this chat)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Chat not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

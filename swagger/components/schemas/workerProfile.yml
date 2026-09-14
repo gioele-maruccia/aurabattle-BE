@@ -1,0 +1,47 @@
+WorkerProfile:
+  type: object
+  properties:
+    userId:
+      type: string
+      example: "worker_abc123"
+    firstName:
+      type: string
+      example: "Mario"
+    lastName:
+      type: string
+      example: "Rossi"
+    profileImage:
+      type: string
+      format: uri
+      example: "https://s3.amazonaws.com/profiles/worker_abc123.jpg"
+    rating:
+      type: number
+      format: float
+      minimum: 0
+      maximum: 5
+      example: 4.8
+    completedJobs:
+      type: integer
+      description: Number of successfully completed jobs
+      example: 15
+    languages:
+      type: array
+      items:
+        type: string
+      example: ["Italian", "English", "Spanish"]
+    experience:
+      type: object
+      properties:
+        years:
+          type: integer
+          example: 3
+        relevant:
+          type: boolean
+          description: Has relevant experience for this category
+          example: true
+    badges:
+      type: array
+      items:
+        type: string
+      description: Achievement badges
+      example: ["Verified", "Top Rated", "Quick Responder"]

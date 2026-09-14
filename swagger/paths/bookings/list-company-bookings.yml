@@ -1,0 +1,188 @@
+get:
+  tags:
+    - Bookings
+  summary: List company's bookings
+  description: |
+    Retrieve all bookings for a company's job listings.
+    
+    **Worker Name Resolution:**
+    - Primary: Cognito user attributes (given_name, family_name)
+    - Fallback: Booking metadata (workerName field)
+    - If both unavailable: "Unknown Worker"
+    
+    **Returns:**
+    - All bookings/applications for company's listings
+    - Sorted by creation date (newest first)
+    - Includes worker profile information with names from Cognito
+    - Can filter by status, listing, and urgency
+    
+    **Filters:**
+    - status: Filter by booking status
+    - listingId: Show bookings for specific listing
+    - priority: urgent (jobs starting soon), pending (needs review)
+    - dateRange: Filter by start date
+    
+    **Use Cases:**
+    - Company dashboard: "Manage Applications"
+    - Review pending applications
+    - Track confirmed workers
+    - View application history per listing
+  operationId: listCompanyBookings
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: companyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Company ID (must match authenticated company unless backoffice)
+      example: "company_xyz789"
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [pending, confirmed, rejected, cancelled, completed, no_show, all]
+        default: all
+      description: Filter by booking status
+    - name: listingId
+      in: query
+      schema:
+        type: string
+        format: uuid
+      description: Filter by specific job listing
+    - name: startDateFrom
+      in: query
+      schema:
+        type: string
+        format: date
+      description: Filter bookings starting from this date
+    - name: startDateTo
+      in: query
+      schema:
+        type: string
+        format: date
+      description: Filter bookings starting before this date
+    - name: priority
+      in: query
+      schema:
+        type: string
+        enum: [pending, urgent, all]
+        default: all
+      description: |
+        Priority filter:
+        - pending: Only pending applications needing review
+        - urgent: Pending applications for jobs starting soon (<2 weeks)
+        - all: All bookings
+    - name: sortBy
+      in: query
+      schema:
+        type: string
+        enum: [createdAt, startDate, workerRating]
+        default: createdAt
+      description: Sort field
+    - name: sortOrder
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: Sort order
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Items per page
+    - name: lastKey
+      in: query
+      schema:
+        type: string
+      description: Pagination token
+  responses:
+    '200':
+      description: Company bookings retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 200
+              bookings:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '../../components/schemas/booking.yml#/Booking'
+                    - type: object
+                      properties:
+                        worker:
+                          $ref: '../../components/schemas/workerProfile.yml#/WorkerProfile'
+                        listing:
+                          $ref: '../../components/schemas/ListingSummary.yml#/ListingSummary'
+                        urgency:
+                          type: string
+                          enum: [low, medium, high]
+                          description: Urgency based on start date proximity
+              count:
+                type: integer
+              stats:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  pending:
+                    type: integer
+                  confirmed:
+                    type: integer
+                  rejected:
+                    type: integer
+                  cancelled:
+                    type: integer
+                  completed:
+                    type: integer
+                  noShow:
+                    type: integer
+                  byListing:
+                    type: object
+                    description: Breakdown by listing
+                    additionalProperties:
+                      type: object
+                      properties:
+                        total:
+                          type: integer
+                        pending:
+                          type: integer
+                        confirmed:
+                          type: integer
+              lastKey:
+                type: string
+                nullable: true
+    '401':
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+    '403':
+      description: Forbidden - Can only view own company bookings
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+    '404':
+      description: Company not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

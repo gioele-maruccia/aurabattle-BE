@@ -1,0 +1,98 @@
+post:
+  tags:
+    - Support Chat
+  summary: Create support chat
+  description: |
+    Creates a new support chat request. Worker or company can request help from Beezey staff.
+    
+    **Requirements:**
+    - User must be in 'workers' or 'companies' Cognito group
+    - Subject must be at least 5 characters
+    
+    **Workflow:**
+    1. User creates support chat with subject
+    2. Beezey staff receives notification
+    3. Staff member can be assigned to handle the request
+    4. Both parties can exchange messages
+    
+  operationId: createSupportChat
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - requesterType
+            - subject
+          properties:
+            requesterType:
+              type: string
+              enum: [worker, company]
+              description: Type of requester (must match user's Cognito group)
+              example: "worker"
+            subject:
+              type: string
+              minLength: 5
+              description: Support request subject/title
+              example: "Payment Issue - Missing Invoice"
+        examples:
+          worker_support:
+            summary: Worker requesting support
+            value:
+              requesterType: "worker"
+              subject: "Need help with contract documentation"
+          company_support:
+            summary: Company requesting support
+            value:
+              requesterType: "company"
+              subject: "Payment Issue - Missing Invoice"
+  responses:
+    '201':
+      description: Support chat created successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              supportChatId:
+                type: string
+                example: "support_abc123def456"
+              requesterType:
+                type: string
+                example: "worker"
+              subject:
+                type: string
+                example: "Payment Issue - Missing Invoice"
+              status:
+                type: string
+                enum: [open, assigned, resolved, closed]
+                example: "open"
+              createdAt:
+                type: string
+                format: date-time
+                example: "2025-12-17T14:30:00.123456+00:00"
+    '400':
+      description: Bad request - Invalid parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                examples:
+                  - "Invalid requesterType. Must be worker or company"
+                  - "Subject is required and must be at least 5 characters"
+    '403':
+      description: Forbidden - User doesn't have required role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Only workers can create worker support chats"

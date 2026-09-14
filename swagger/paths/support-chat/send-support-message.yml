@@ -1,0 +1,124 @@
+post:
+  tags:
+    - Support Chat
+  summary: Send support message
+  description: |
+    Sends a message in a support chat. Can be from requester or Beezey staff.
+    
+    **Permissions:**
+    - Chat requester can always send messages
+    - Assigned Beezey staff can send messages
+    - Other users get 403 Forbidden
+    
+  operationId: sendSupportMessage
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: supportChatId
+      in: path
+      required: true
+      description: Support chat ID
+      schema:
+        type: string
+        example: "support_abc123def456"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            messageText:
+              type: string
+              minLength: 1
+              maxLength: 5000
+              description: Message text (required if no attachments)
+              example: "Thank you for your help!"
+            attachments:
+              type: array
+              description: Files uploaded via POST /support-chats/{id}/upload-url
+              items:
+                type: object
+                required: [fileName, fileSize, fileType, s3Url]
+                properties:
+                  fileName:
+                    type: string
+                    example: "screenshot.png"
+                  fileSize:
+                    type: integer
+                    example: 125000
+                  fileType:
+                    type: string
+                    example: "image/png"
+                  s3Url:
+                    type: string
+                    example: "https://dev-beezey-chat-attachments.s3.amazonaws.com/..."
+  responses:
+    '201':
+      description: Message sent successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: object
+                properties:
+                  supportChatId:
+                    type: string
+                    example: "support_abc123"
+                  messageId:
+                    type: string
+                    example: "msg_xyz789"
+                  senderId:
+                    type: string
+                    example: "user_123"
+                  senderType:
+                    type: string
+                    enum: [worker, company, beezey]
+                    example: "worker"
+                  messageText:
+                    type: string
+                    example: "Thank you!"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-12-17T15:30:00.123456+00:00"
+                  state:
+                    type: string
+                    enum: [sent, delivered, read]
+                    example: "sent"
+                  attachments:
+                    type: array
+                    items:
+                      type: object
+    '400':
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Message text or attachments are required"
+    '403':
+      description: Forbidden - User not authorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "You are not authorized to send messages in this chat"
+    '404':
+      description: Support chat not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Support chat not found"

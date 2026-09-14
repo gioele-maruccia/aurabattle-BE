@@ -1,0 +1,276 @@
+post:
+  tags:
+    - Contracts
+  summary: Calculate gross base pay for a job level
+  description: |
+    Calculates the gross monthly base pay according to CCNL Turismo contract based on:
+    - Job level (Qa, Qb, 1-7)
+    - Company's paragraph (I or II) automatically derived from fipeArticle
+    - Article 162 reduction for small businesses (≤15 employees)
+    - Reference date for pay scale progression
+    - Optional superminimo for net salary estimation
+
+    The calculation formula is:
+    **Gross Base Pay = Base Pay + Contingency Allowance - Article 162 Reduction (if applicable)**
+
+    **Estimated Net Salary** = (grossBasePay + superminimo) after IRPEF (23% con detrazione €1.880) and INPS (9.19%).
+    Addizionali regionali/comunali not included.
+  operationId: calculateBasePay
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - level
+          properties:
+            level:
+              type: string
+              enum: ['Qa', 'Qb', '1', '2', '3', '4', '5', '6S', '6', '7']
+              description: Job level according to CCNL Turismo
+              example: '4'
+            referenceDate:
+              type: string
+              format: date
+              description: Reference date for calculation (defaults to today)
+              example: '2025-11-20'
+            superminimo:
+              type: number
+              format: float
+              description: Individual superminimo in EUR added on top of gross base pay for net estimation (default 0)
+              minimum: 0
+              example: 200.00
+        examples:
+          level4:
+            summary: Level 4 - Cook
+            value:
+              level: '4'
+              referenceDate: '2025-11-20'
+          level5:
+            summary: Level 5 - Waiter
+            value:
+              level: '5'
+          levelQa:
+            summary: Quadro A - Director
+            value:
+              level: 'Qa'
+              referenceDate: '2025-11-20'
+          level4WithSuperminimo:
+            summary: Level 4 with superminimo
+            value:
+              level: '4'
+              superminimo: 200.00
+  responses:
+    '200':
+      description: Base pay calculated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: 'Base pay calculated successfully'
+              calculation:
+                type: object
+                properties:
+                  basePay:
+                    type: number
+                    format: float
+                    description: Base pay amount according to CCNL level and paragraph
+                    example: 1127.75
+                  contingencyAllowance:
+                    type: number
+                    format: float
+                    description: Contingency allowance (indennità di contingenza)
+                    example: 524.94
+                  article162Reduction:
+                    type: number
+                    format: float
+                    description: Article 162 reduction (only for businesses ≤15 employees)
+                    example: 3.36
+                  grossBasePay:
+                    type: number
+                    format: float
+                    description: Final gross monthly base pay (basePay + contingency - art162 + superminimo if provided)
+                    example: 1649.33
+                  estimatedNetSalary:
+                    type: number
+                    format: float
+                    description: Estimated monthly net salary (IRPEF + INPS applied to grossBasePay + superminimo, no addizionali)
+                    example: 1258.47
+                  formula:
+                    type: string
+                    description: Mathematical formula showing the calculation
+                    example: '1127.75 + 524.94 - 3.36 = 1649.33 €'
+                  explanation:
+                    type: string
+                    description: Detailed explanation of the calculation in Italian
+                    example: |
+                      Calcolo della retribuzione base lorda per il livello 4 (Livello 4):
+                      
+                      1. Paga Base Mensile (Paragrafo I): 1127.75 €
+                         - Questo è l'importo base previsto dal CCNL Turismo per il livello 4
+                         - Importo aggiornato alla data odierna secondo gli scaglionamenti contrattuali
+                      
+                      2. Indennità di Contingenza: +524.94 €
+                         - Integrazione retributiva prevista contrattualmente
+                      
+                      3. Riduzione Art. 162 (Aziende Minori ≤15 dipendenti): -3.36 €
+                         - Riduzione applicabile alle aziende con massimo 15 dipendenti
+                         - Prevista dall'articolo 162 del CCNL Turismo
+                      
+                      RETRIBUZIONE BASE LORDA MENSILE: 1649.33 €
+              companyInfo:
+                type: object
+                properties:
+                  businessName:
+                    type: string
+                    example: 'OPENAPI S.P.A.'
+                  fipeArticle:
+                    type: string
+                    example: 'Art. 1, II + Art. 162'
+                  paragraph:
+                    type: string
+                    enum: ['I', 'II']
+                    example: 'II'
+                  isSmallBusiness:
+                    type: boolean
+                    description: Whether Article 162 reduction applies
+                    example: true
+                  fipeCategory:
+                    type: string
+                    example: 'ristorazione_collettiva'
+              contractInfo:
+                type: object
+                properties:
+                  level:
+                    type: string
+                    example: '4'
+                  levelName:
+                    type: string
+                    example: 'Livello 4'
+                  ccnlType:
+                    type: string
+                    example: 'turismo'
+                  description:
+                    type: string
+                    example: 'Mansioni operative con conoscenze tecniche in autonomia esecutiva'
+              calculationDate:
+                type: string
+                format: date-time
+                example: '2025-11-20T00:00:00Z'
+          examples:
+            smallBusinessLevel4:
+              summary: Level 4 with Article 162 reduction
+              value:
+                message: 'Base pay calculated successfully'
+                calculation:
+                  basePay: 1127.75
+                  contingencyAllowance: 524.94
+                  article162Reduction: 3.36
+                  grossBasePay: 1649.33
+                  estimatedNetSalary: 1258.47
+                  formula: '1127.75 + 524.94 - 3.36 = 1649.33 €'
+                  explanation: 'Calcolo dettagliato...'
+                companyInfo:
+                  businessName: 'Ristorante Da Mario'
+                  fipeArticle: 'Art. 1, I + Art. 162'
+                  paragraph: 'I'
+                  isSmallBusiness: true
+                  fipeCategory: 'pubblici_esercizi'
+                contractInfo:
+                  level: '4'
+                  levelName: 'Livello 4'
+                  ccnlType: 'turismo'
+                  description: 'Mansioni operative con conoscenze tecniche in autonomia esecutiva'
+                calculationDate: '2025-11-20T00:00:00Z'
+            standardBusinessLevel2:
+              summary: Level 2 without Article 162 reduction
+              value:
+                message: 'Base pay calculated successfully'
+                calculation:
+                  basePay: 1337.33
+                  contingencyAllowance: 531.59
+                  article162Reduction: 0
+                  grossBasePay: 1868.92
+                  estimatedNetSalary: 1426.31
+                  formula: '1337.33 + 531.59 = 1868.92 €'
+                  explanation: 'Calcolo dettagliato...'
+                companyInfo:
+                  businessName: 'Hotel Bellavista'
+                  fipeArticle: 'Art. 1, II'
+                  paragraph: 'II'
+                  isSmallBusiness: false
+                  fipeCategory: 'turismo'
+                contractInfo:
+                  level: '2'
+                  levelName: 'Livello 2'
+                  ccnlType: 'turismo'
+                  description: 'Coordinano reparti e personale esecutivo con iniziativa e autonomia operativa'
+                calculationDate: '2025-11-20T00:00:00Z'
+    '400':
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: 'ValidationError'
+              message:
+                type: string
+                example: 'Missing required field: level'
+          examples:
+            missingLevel:
+              summary: Missing level field
+              value:
+                error: 'ValidationError'
+                message: 'Missing required field: level'
+            invalidDate:
+              summary: Invalid date format
+              value:
+                error: 'ValidationError'
+                message: 'Invalid referenceDate format. Use ISO format: YYYY-MM-DD'
+    '404':
+      description: Company or contract not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+              suggestion:
+                type: string
+          examples:
+            companyNotFound:
+              summary: Company profile not found
+              value:
+                error: 'CompanyNotFound'
+                message: 'No company profile found for this user. Please create a company profile first.'
+            contractNotFound:
+              summary: Invalid level
+              value:
+                error: 'ContractNotFound'
+                message: 'Contract data not found for level: XYZ'
+                suggestion: 'Valid levels are: Qa, Qb, 1, 2, 3, 4, 5, 6S, 6, 7'
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: 'InternalServerError'
+              message:
+                type: string
+                example: 'An unexpected error occurred while calculating base pay'

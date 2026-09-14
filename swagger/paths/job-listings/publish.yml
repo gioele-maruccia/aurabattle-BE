@@ -1,0 +1,71 @@
+    patch:
+      tags:
+        - Job listings
+      summary: Publish job listing (Company owner only)
+      description: |
+        Publish a draft or paused listing. Only the company owner can publish.
+        
+        **Status transitions:**
+        - draft → published: Sets publishedAt timestamp
+        - paused → published: Re-activates the listing
+        
+        **Requirements:**
+        - All required fields must be complete
+        - Start date must be in the future (if not started)
+        - End date must be after start date
+        - Company must be approved
+        
+        **Effect:**
+        - Listing becomes visible in public searches
+        - Workers can apply/book
+        - Email notifications sent (if configured)
+      operationId: publishJobListing
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Job listing ID
+      responses:
+        '200':
+          description: Listing published successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                  listing:
+                    $ref: '../../components/schemas/jobListing.yml#/JobListing'
+        '400':
+          description: Cannot publish (invalid status or incomplete data)
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'
+              examples:
+                already_published:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Listing is already published"
+                incomplete_data:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Cannot publish: missing required fields"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not the listing owner
+        '404':
+          description: Listing not found
+        '500':
+          description: Internal server error

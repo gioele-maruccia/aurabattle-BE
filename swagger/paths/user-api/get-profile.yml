@@ -1,0 +1,215 @@
+get:
+  tags:
+    - User Profile & Settings
+  summary: Get user profile
+  description: |
+    Retrieve complete user profile including personal info, address, ratings, verifications, and settings.
+    
+    ### Auto-restore on login
+    If the account was previously marked for deletion (`POST /profile/delete-request`) and the
+    15-day grace period has not yet expired, calling this endpoint **automatically restores** the
+    account:
+    - Deletion flags (`account_status`, `deletion_requested_at`, `deletion_scheduled_at`) are removed
+    - Paused job listings (`suspendedByDeletion=true`) are restored to their previous status
+    - Auto-cancelled pending bookings (`suspendedByDeletion=true`) are restored to `pending`
+    
+    When a restore occurs the response includes an additional `_restore_info` field.
+  operationId: getUserProfile
+  security:
+    - CognitoAuth: []
+  
+  responses:
+    '200':
+      description: User profile retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user_id:
+                type: string
+                format: uuid
+                example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              email:
+                type: string
+                format: email
+                example: "mario.rossi@example.com"
+              profile:
+                $ref: '../../components/schemas/user-api/ProfileInfo.yml'
+              address:
+                $ref: '../../components/schemas/user-api/Address.yml'
+              profile_type:
+                type: string
+                enum: [basic, premium]
+                example: "basic"
+              verifications:
+                $ref: '../../components/schemas/user-api/Verifications.yml'
+              ratings:
+                $ref: '../../components/schemas/user-api/Ratings.yml'
+              notification_preferences:
+                $ref: '../../components/schemas/user-api/NotificationPreferences.yml'
+              localization:
+                $ref: '../../components/schemas/user-api/Localization.yml'
+              payment_preferences:
+                $ref: '../../components/schemas/user-api/PaymentPreferences.yml'
+              bookmarked_job_listings:
+                type: array
+                items:
+                  type: string
+                description: Array of bookmarked job listing IDs
+                example: ["job-123", "job-456"]
+              created_at:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:30:00Z"
+              updated_at:
+                type: string
+                format: date-time
+                example: "2024-12-08T14:20:00Z"
+              _restore_info:
+                type: object
+                description: |
+                  Present only when the account was automatically restored from a pending deletion.
+                  Contains a summary of what was restored.
+                properties:
+                  account_restored:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Il tuo account è stato ripristinato con successo."
+                  listings_restored:
+                    type: integer
+                    description: Number of job listings restored (company only)
+                    example: 2
+                  bookings_restored:
+                    type: integer
+                    description: Number of bookings restored to their previous status
+                    example: 1
+                  bookings_not_restored:
+                    type: integer
+                    description: Number of bookings that could not be restored (positions filled)
+                    example: 0
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+                    description: Non-fatal issues encountered during restore
+                    example: []
+          examples:
+            basicProfile:
+              summary: Basic user profile
+              value:
+                user_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                email: "mario.rossi@example.com"
+                profile:
+                  given_name: "Mario"
+                  family_name: "Rossi"
+                  phone_number: "+393331234567"
+                address:
+                  street: "Via Roma 123"
+                  city: "Milano"
+                  postal_code: "20100"
+                  province: "MI"
+                  country: "IT"
+                profile_type: "basic"
+                verifications:
+                  email_verified: true
+                  phone_verified: false
+                  identity_verified: false
+                  payment_verified: false
+                ratings:
+                  average: 0
+                  count: 0
+                  as_worker:
+                    average: 0
+                    count: 0
+                  as_employer:
+                    average: 0
+                    count: 0
+                notification_preferences:
+                  email_enabled: true
+                  push_enabled: true
+                  sms_enabled: false
+                  channels:
+                    new_jobs: true
+                    applications: true
+                    messages: true
+                    marketing: false
+                localization:
+                  preferred_language: "it"
+                  timezone: "Europe/Rome"
+                  currency: "EUR"
+                  auto_translation_enabled: false
+                payment_preferences: null
+                bookmarked_job_listings: []
+                created_at: "2024-01-15T10:30:00Z"
+                updated_at: "2024-12-08T14:20:00Z"
+            
+            premiumProfile:
+              summary: Premium user with ratings
+              value:
+                user_id: "b2c3d4e5-f6g7-8901-bcde-fg2345678901"
+                email: "laura.bianchi@example.com"
+                profile:
+                  given_name: "Laura"
+                  family_name: "Bianchi"
+                  phone_number: "+393337654321"
+                address:
+                  street: "Corso Italia 45"
+                  city: "Roma"
+                  postal_code: "00100"
+                  province: "RM"
+                  country: "IT"
+                profile_type: "premium"
+                verifications:
+                  email_verified: true
+                  phone_verified: true
+                  identity_verified: true
+                  payment_verified: true
+                ratings:
+                  average: 4.5
+                  count: 23
+                  as_worker:
+                    average: 4.7
+                    count: 15
+                  as_employer:
+                    average: 4.2
+                    count: 8
+                notification_preferences:
+                  email_enabled: true
+                  push_enabled: true
+                  sms_enabled: true
+                  channels:
+                    new_jobs: true
+                    applications: true
+                    messages: true
+                    marketing: true
+                localization:
+                  preferred_language: "en"
+                  timezone: "Europe/Rome"
+                  currency: "EUR"
+                  auto_translation_enabled: true
+                payment_preferences:
+                  stripe_customer_id: "cus_Qh3K7L8M9N0P1Q"
+                  default_payment_method: "pm_1QrS2tUvWxYz012"
+                  billing_address:
+                    line1: "Corso Italia 45"
+                    line2: null
+                    city: "Roma"
+                    state: "RM"
+                    postal_code: "00100"
+                    country: "IT"
+                  auto_renew: true
+                bookmarked_job_listings: ["job-123", "job-456", "job-789"]
+                created_at: "2023-06-10T08:15:00Z"
+                updated_at: "2024-12-08T16:45:00Z"
+    
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

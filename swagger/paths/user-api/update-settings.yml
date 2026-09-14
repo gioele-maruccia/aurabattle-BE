@@ -1,0 +1,101 @@
+patch:
+  tags:
+    - User Profile & Settings
+  summary: Update user settings
+  description: |
+    Update user preferences including notifications, localization, translation, and payment settings.
+    Supports partial updates - only send fields you want to change.
+  operationId: updateUserSettings
+  security:
+    - CognitoAuth: []
+  
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            notification_preferences:
+              $ref: '../../components/schemas/user-api/NotificationPreferences.yml'
+            localization:
+              $ref: '../../components/schemas/user-api/Localization.yml'
+            payment_preferences:
+              $ref: '../../components/schemas/user-api/PaymentPreferences.yml'
+        
+        examples:
+          enableTranslation:
+            summary: Enable auto-translation
+            value:
+              localization:
+                auto_translation_enabled: true
+          
+          updateNotifications:
+            summary: Disable marketing emails
+            value:
+              notification_preferences:
+                channels:
+                  marketing: false
+          
+          updatePayment:
+            summary: Set payment method
+            value:
+              payment_preferences:
+                stripe_customer_id: "cus_Qh3K7L8M9N0P1Q"
+                default_payment_method: "pm_1QrS2tUvWxYz012"
+          
+          fullUpdate:
+            summary: Update all settings
+            value:
+              notification_preferences:
+                email_enabled: true
+                channels:
+                  marketing: false
+              localization:
+                preferred_language: "en"
+                auto_translation_enabled: true
+              payment_preferences:
+                default_payment_method: "pm_1QrS2tUvWxYz012"
+  
+  responses:
+    '200':
+      description: Settings updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              message:
+                type: string
+                example: "Settings updated successfully"
+    
+    '400':
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "No settings to update"
+    
+    '404':
+      description: Profile not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Profile not found"
+    
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'
+    
+    '500':
+      $ref: '../../components/responses/InternalServerError.yml'

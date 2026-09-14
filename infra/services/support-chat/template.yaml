@@ -1,0 +1,646 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Support Chat Service API for Beezey
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+
+  CognitoUserPoolId:
+    Type: String
+    Description: ID of the Cognito User Pool
+    Default: eu-south-1_0oK9agPYd   # DEV pool default - OVERRIDE in deploy scripts for other envs
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        SUPPORT_CHATS_TABLE_NAME: !Sub '${Environment}-SupportChats'
+        SUPPORT_MESSAGES_TABLE_NAME: !Sub '${Environment}-SupportMessages'
+        CONNECTION_MANAGER_TABLE_NAME: !Sub '${Environment}-ConnectionManager'
+        CHAT_ATTACHMENTS_BUCKET_NAME: !Sub '${Environment}-beezey-chat-attachments'
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: support-chat
+        POWERTOOLS_METRICS_NAMESPACE: Beezey
+    Layers:
+      - !Ref ChatSharedLayer
+
+Resources:
+  # ============================================
+  # LAMBDA LAYER (SHARED CODE)
+  # ============================================
+  ChatSharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${Environment}-support-chat-shared-layer'
+      Description: Shared models and DB manager for support chat service
+      ContentUri: ../../../src/lambdas/layers/chat-shared/python/
+      CompatibleRuntimes:
+        - python3.13
+        - python3.12
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+      CompatibleRuntimes:
+        - python3.13
+        - python3.12
+        - python3.11
+      RetentionPolicy: Retain
+
+  # ============================================
+  # REST API GATEWAY FOR SUPPORT CHAT
+  # ============================================
+  SupportChatApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub '${Environment}-support-chat-api'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+      TracingEnabled: true
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # ============================================
+  # WEBSOCKET API GATEWAY FOR SUPPORT CHAT
+  # ============================================
+  SupportChatWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${Environment}-support-chat-websocket-api'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  SupportChatWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref SupportChatWebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # ============================================
+  # LAMBDA FUNCTIONS - SUPPORT CHAT REST ENDPOINTS
+  # ============================================
+
+  # 1. CREATE SUPPORT CHAT
+  CreateSupportChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-chat-create'
+      CodeUri: ../../../src/lambdas/services/support-chat/create-support-chat/
+      Handler: app.handler
+      Description: Create a new support chat ticket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+      Events:
+        CreateSupportChatEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats
+            Method: POST
+        CreateSupportChatEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 1b. INITIATE SUPPORT CHAT (Beezey → User)
+  InitiateSupportChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-chat-initiate'
+      CodeUri: ../../../src/lambdas/services/support-chat/initiate-support-chat/
+      Handler: app.handler
+      Description: Backoffice initiates support chat with a user by email
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+      Events:
+        InitiateSupportChatEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/initiate
+            Method: POST
+        InitiateSupportChatEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/initiate
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 2. GET MY SUPPORT CHATS
+  GetMySupportChatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-chats-list'
+      CodeUri: ../../../src/lambdas/services/support-chat/get-my-support-chats/
+      Handler: app.handler
+      Description: Get support chats for authenticated user
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref CognitoUserPoolId
+          PROFILE_PHOTOS_BUCKET: !Sub '${Environment}-beezey-profiles'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-profiles'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-SupportChats/index/*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource:
+                - !Sub '${CognitoUserPoolArn}'
+      Events:
+        GetMySupportChatsEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats
+            Method: GET
+        GetMySupportChatsEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 3. GET SUPPORT MESSAGES
+  GetSupportMessagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-messages-list'
+      CodeUri: ../../../src/lambdas/services/support-chat/get-support-messages/
+      Handler: app.handler
+      Description: Get messages for a support chat
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-SupportMessages/index/*'
+      Events:
+        GetSupportMessagesEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/messages
+            Method: GET
+        GetSupportMessagesEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/messages
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 4. SEND SUPPORT MESSAGE
+  SendSupportMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-send-message'
+      CodeUri: ../../../src/lambdas/services/support-chat/send-support-message/
+      Handler: app.handler
+      Description: Send a message in support chat with WebSocket broadcast
+      Timeout: 60
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+        # - Statement:
+        #     Effect: Allow
+        #     Action:
+        #       - 'execute-api:ManageConnections'
+        #     Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SupportChatWebSocketApi}/*'
+      Events:
+        SendSupportMessageEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/messages
+            Method: POST
+        SendSupportMessageEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/messages
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 5. UPDATE SUPPORT MESSAGE STATE
+  UpdateSupportMessageStateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-message-state'
+      CodeUri: ../../../src/lambdas/services/support-chat/update-support-message-state/
+      Handler: app.handler
+      Description: Update state of support message (sent/delivered/read)
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-SupportMessages/index/*'
+      Events:
+        UpdateStateEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/messages/{messageId}/state
+            Method: PUT
+        UpdateStateEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/messages/{messageId}/state
+            Method: PUT
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 6. SET SUPPORT MESSAGE STICKER
+  SetSupportStickerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-message-sticker'
+      CodeUri: ../../../src/lambdas/services/support-chat/set-support-sticker/
+      Handler: app.handler
+      Description: Add emoji/sticker to support message
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-SupportMessages/index/*'
+      Events:
+        SetStickerEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/messages/{messageId}/sticker
+            Method: PUT
+        SetStickerEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/messages/{messageId}/sticker
+            Method: PUT
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 7. GET SUPPORT UPLOAD URL
+  GetSupportUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-upload-url'
+      CodeUri: ../../../src/lambdas/services/support-chat/get-support-upload-url/
+      Handler: app.handler
+      Description: Get presigned S3 URL for support chat attachment
+      Timeout: 30
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Sub '${Environment}-beezey-chat-attachments'
+      Events:
+        GetUploadUrlEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/upload-url
+            Method: POST
+        GetUploadUrlEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/upload-url
+            Method: POST
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 7b. GET SUPPORT DOWNLOAD URL
+  GetSupportDownloadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-download-url'
+      CodeUri: ../../../src/lambdas/services/support-chat/get-support-download-url/
+      Handler: app.lambda_handler
+      Description: Get presigned S3 URL for downloading support chat attachment
+      Timeout: 30
+      Environment:
+        Variables:
+          CHAT_ATTACHMENTS_BUCKET: !Sub '${Environment}-beezey-chat-attachments'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportMessages'
+        - S3ReadPolicy:
+            BucketName: !Sub '${Environment}-beezey-chat-attachments'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-SupportMessages/index/*'
+      Events:
+        GetDownloadUrlEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/download-url
+            Method: GET
+        GetDownloadUrlEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/download-url
+            Method: GET
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 8. DELETE SUPPORT CHAT
+  DeleteSupportChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-chat-delete'
+      CodeUri: ../../../src/lambdas/services/support-chat/delete-support-chat/
+      Handler: app.handler
+      Description: Delete (soft-delete) a support chat
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+      Events:
+        DeleteChatEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}
+            Method: DELETE
+        DeleteChatEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}
+            Method: DELETE
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 9. UPDATE SUPPORT CHAT STATUS
+  UpdateSupportChatStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-chat-update-status'
+      CodeUri: ../../../src/lambdas/services/support-chat/update-support-chat-status/
+      Handler: app.handler
+      Description: Update support chat status (open, in_progress, resolved, closed, archived)
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-SupportChats'
+      Events:
+        UpdateStatusEventLegacy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /support-chats/{supportChatId}/status
+            Method: PATCH
+        UpdateStatusEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SupportChatApi
+            Path: /v1/support-chats/{supportChatId}/status
+            Method: PATCH
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # ============================================
+  # LAMBDA FUNCTIONS - WEBSOCKET HANDLERS
+  # ============================================
+
+  # 1. ON CONNECT SUPPORT
+  OnConnectSupportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-on-connect'
+      CodeUri: ../../../src/lambdas/services/support-chat/on-connect-support/
+      Handler: app.handler
+      Description: Handle WebSocket connection for support chat
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # 2. ON DISCONNECT SUPPORT
+  OnDisconnectSupportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-support-on-disconnect'
+      CodeUri: ../../../src/lambdas/services/support-chat/on-disconnect-support/
+      Handler: app.handler
+      Description: Handle WebSocket disconnection for support chat
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-ConnectionManager'
+      Tags:
+        Environment: !Ref Environment
+        Application: Beezey
+        Service: SupportChat
+
+  # ============================================
+  # WEBSOCKET ROUTES & INTEGRATIONS
+  # ============================================
+
+  OnConnectSupportIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SupportChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectSupportFunction.Arn}/invocations'
+
+  OnConnectSupportRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SupportChatWebSocketApi
+      RouteKey: $connect
+      Target: !Sub 'integrations/${OnConnectSupportIntegration}'
+
+  OnConnectSupportPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnConnectSupportFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SupportChatWebSocketApi}/*/*'
+
+  OnDisconnectSupportIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SupportChatWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectSupportFunction.Arn}/invocations'
+
+  OnDisconnectSupportRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SupportChatWebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub 'integrations/${OnDisconnectSupportIntegration}'
+
+  OnDisconnectSupportPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnDisconnectSupportFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SupportChatWebSocketApi}/*/*'
+
+  # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref SupportChatApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref SupportChatApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  # Support Chat REST API Outputs
+  SupportChatApiUrl:
+    Description: URL base dell'API Gateway REST per Support Chat
+    Value: !Sub 'https://${SupportChatApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Export:
+      Name: !Sub '${Environment}-SupportChatApiUrl'
+
+  SupportChatApiId:
+    Description: ID dell'API Gateway REST per Support Chat
+    Value: !Ref SupportChatApi
+    Export:
+      Name: !Sub '${Environment}-SupportChatApiId'
+
+  # Support Chat WebSocket API Outputs
+  SupportChatWebSocketApiUrl:
+    Description: URL WebSocket API Gateway per Support Chat
+    Value: !Sub 'wss://${SupportChatWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${Environment}-SupportChatWebSocketApiUrl'
+
+  SupportChatWebSocketApiId:
+    Description: ID dell'API Gateway WebSocket per Support Chat
+    Value: !Ref SupportChatWebSocketApi
+    Export:
+      Name: !Sub '${Environment}-SupportChatWebSocketApiId'

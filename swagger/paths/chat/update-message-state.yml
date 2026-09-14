@@ -1,0 +1,105 @@
+patch:
+  tags:
+    - Chat
+  summary: Update message state
+  description: |
+    Update the delivery/read state of a message.
+
+    **Standard messages (sender ≠ `beezey_system`):**
+    - Only the recipient can update the state.
+    - State can only advance: `sent` → `delivered` → `read`.
+
+    **System messages (sender = `beezey_system`):**
+    Instead of a direct state transition, each participant sets their own
+    read flag independently:
+    - A **worker** calling this endpoint sets `readWorker = true`.
+    - A **company representative** calling this endpoint sets `readCompany = true`.
+    - When **both** flags are `true` the message `state` is automatically
+      promoted to `read`.
+    - Default value of both flags is `false`.
+
+    **Use Cases:**
+    - Mark as delivered when message appears on screen
+    - Mark as read when user opens/reads the message
+
+    **Side Effects:**
+    - Updates message state / read flags in DynamoDB
+    - Broadcasts `message_state_updated` via WebSocket to all chat participants
+    - May update `lastMessageState` in the chat record
+  operationId: updateMessageState
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+    - name: messageId
+      in: path
+      required: true
+      description: Message ID to update
+      schema:
+        type: string
+        example: "msg_abc123def456"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../../components/schemas/chat.yml#/UpdateMessageStateRequest'
+        examples:
+          mark_delivered:
+            summary: Mark as delivered
+            value:
+              state: "delivered"
+          mark_read:
+            summary: Mark as read
+            value:
+              state: "read"
+  responses:
+    '200':
+      description: State updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Message state updated successfully"
+              message_id:
+                type: string
+                example: "msg_abc123def456"
+              new_state:
+                type: string
+                enum: [sent, delivered, read]
+                example: "read"
+              read_worker:
+                type: boolean
+                description: Present only for beezey_system messages
+                example: true
+              read_company:
+                type: boolean
+                description: Present only for beezey_system messages
+                example: false
+    '400':
+      description: Bad request (invalid state transition)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (only recipient can update state)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Message not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

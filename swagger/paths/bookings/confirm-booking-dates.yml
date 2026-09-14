@@ -1,0 +1,183 @@
+patch:
+  tags:
+    - Bookings
+  summary: Confirm proposed booking dates (Company only)
+  description: |
+    Allows a company representative to confirm date changes proposed by a worker.
+    
+    **NEW WORKFLOW (v2):**
+    - Worker proposes dates via PATCH /bookings/{id}/dates (validates, sends message with payload)
+    - Company confirms dates via THIS endpoint
+    - Only when company confirms are the booking dates actually updated
+    
+    **Access Control:**
+    - Only company representatives can confirm dates
+    - Must belong to the company that owns the job listing
+    - Only bookings in 'pending' status can have dates confirmed
+    
+    **Validations:**
+    - Booking must exist and be in 'pending' status
+    - End date must be after start date
+    - Confirmed dates must be within the job listing period
+    - Position availability is re-checked for the confirmed date range
+    
+    **Side Effects:**
+    - Booking dates are updated in the database
+    - Associated chat dates are updated automatically
+    - Chat booking_state is synchronized with booking status
+    - A confirmation message is sent to the chat
+    - **WebSocket broadcast:** both participants receive `new_message` (the confirmation chat message) and a personalized `chat_updated` event with the new booking dates
+    
+    **Response:**
+    - Updated booking object with confirmed dates
+    - Status remains 'pending' or 'confirmed' depending on booking workflow
+  operationId: confirmBookingDates
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: bookingId
+      in: path
+      required: true
+      description: The ID of the booking to confirm dates for
+      schema:
+        type: string
+        format: uuid
+        example: "d7a87b92-8011-447b-80fe-6e23b0a3d91d"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - startDate
+            - endDate
+          properties:
+            startDate:
+              type: string
+              format: date
+              description: Date to confirm in ISO 8601 format (YYYY-MM-DD)
+              example: "2026-02-15"
+            endDate:
+              type: string
+              format: date
+              description: Date to confirm in ISO 8601 format (YYYY-MM-DD)
+              example: "2026-02-20"
+        examples:
+          confirmRequest:
+            summary: Confirm proposed dates
+            value:
+              startDate: "2026-02-15"
+              endDate: "2026-02-20"
+  responses:
+    '200':
+      description: Booking dates confirmed and updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Booking dates confirmed and updated successfully"
+              booking:
+                type: object
+                properties:
+                  bookingId:
+                    type: string
+                    format: uuid
+                    example: "d7a87b92-8011-447b-80fe-6e23b0a3d91d"
+                  listingId:
+                    type: string
+                    format: uuid
+                  workerId:
+                    type: string
+                    format: uuid
+                  companyId:
+                    type: string
+                    format: uuid
+                  startDate:
+                    type: string
+                    format: date
+                    example: "2026-02-15"
+                  endDate:
+                    type: string
+                    format: date
+                    example: "2026-02-20"
+                  status:
+                    type: string
+                    example: "pending"
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    example: "2026-01-15T14:30:00Z"
+    '400':
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+          examples:
+            invalidDates:
+              summary: Invalid date range
+              value:
+                error: "Bad Request"
+                message: "End date must be after start date"
+            datesOutsideListingPeriod:
+              summary: Dates outside listing period
+              value:
+                error: "Bad Request"
+                message: "Confirmed dates must be within job listing period (2026-02-01 to 2026-02-28)"
+            noAvailability:
+              summary: No positions available
+              value:
+                error: "Bad Request"
+                message: "Dates no longer available: No positions available in the date range (3/3 positions taken)"
+            wrongStatus:
+              summary: Booking not in correct status
+              value:
+                error: "Bad Request"
+                message: "Can only confirm dates of pending bookings. Current status: confirmed"
+    '403':
+      description: Forbidden - not a company representative or wrong company
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+          examples:
+            notCompany:
+              summary: User is not a company representative
+              value:
+                error: "Forbidden"
+                message: "Only company representatives can confirm booking dates"
+            wrongCompany:
+              summary: Company representative from different company
+              value:
+                error: "Forbidden"
+                message: "You can only confirm dates for your company's bookings"
+    '404':
+      description: Booking or job listing not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+          examples:
+            bookingNotFound:
+              summary: Booking does not exist
+              value:
+                error: "Not Found"
+                message: "Booking not found"
+            listingNotFound:
+              summary: Associated listing not found
+              value:
+                error: "Not Found"
+                message: "Job listing not found"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+          example:
+            error: "Internal Server Error"
+            message: "An error occurred while confirming booking dates"

@@ -1,0 +1,16 @@
+CompanySummary:
+  type: object
+  properties:
+    companyId:
+      type: string
+      format: uuid
+    businessName:
+      type: string
+      example: "Beachside Restaurant"
+    logoUrl:
+      type: string
+      format: uri
+    rating:
+      type: number
+      format: float
+      example: 4.7

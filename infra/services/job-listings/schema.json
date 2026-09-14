@@ -1,0 +1,383 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobListing",
+  "description": "Schema for job listings in the seasonal job platform",
+  "type": "object",
+  "required": [
+    "listingId",
+    "companyId",
+    "title",
+    "startDate",
+    "endDate",
+    "positions",
+    "category",
+    "status",
+    "location",
+    "salary",
+    "createdAt"
+  ],
+  "properties": {
+    "listingId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the job listing"
+    },
+    "companyId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the company that created this listing"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 200,
+      "description": "Job title",
+      "example": "Looking for a part-time waiter for a fast food chain"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5000,
+      "description": "Detailed job description",
+      "example": "We are looking for energetic and customer-focused waiters to join our team for the summer season..."
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date",
+      "description": "Job start date (ISO 8601 format: YYYY-MM-DD)",
+      "example": "2025-06-01"
+    },
+    "endDate": {
+      "type": "string",
+      "format": "date",
+      "description": "Job end date (ISO 8601 format: YYYY-MM-DD)",
+      "example": "2025-09-30"
+    },
+    "positions": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "Total number of available positions",
+      "example": 3
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Food & Beverage",
+        "Hospitality",
+        "Retail",
+        "Tourism",
+        "Agriculture",
+        "Events",
+        "Entertainment",
+        "Other"
+      ],
+      "description": "Job category/sector"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "published", "paused", "expired", "closed"],
+      "description": "Current status of the job listing",
+      "default": "draft"
+    },
+    "location": {
+      "type": "object",
+      "required": ["city", "country", "coordinates"],
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Full street address (optional)",
+          "example": "Via Roma 123"
+        },
+        "city": {
+          "type": "string",
+          "description": "City name",
+          "example": "Mechelen"
+        },
+        "province": {
+          "type": "string",
+          "description": "Province or state code (optional)",
+          "example": "Antwerp"
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "Postal/ZIP code (optional)",
+          "example": "2800"
+        },
+        "country": {
+          "type": "string",
+          "description": "Country name or ISO code",
+          "example": "Belgium"
+        },
+        "coordinates": {
+          "type": "object",
+          "required": ["lat", "lon"],
+          "properties": {
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "Latitude",
+              "example": 51.0259
+            },
+            "lon": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Longitude",
+              "example": 4.4775
+            }
+          }
+        }
+      }
+    },
+    "salary": {
+      "type": "object",
+      "required": ["currency", "period"],
+      "properties": {
+        "min": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum salary (optional)",
+          "example": 15
+        },
+        "max": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum salary (optional)",
+          "example": 24
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["EUR", "USD", "GBP", "CHF"],
+          "description": "Currency code (ISO 4217)",
+          "default": "EUR"
+        },
+        "period": {
+          "type": "string",
+          "enum": ["hour", "day", "week", "month", "fixed"],
+          "description": "Salary payment period",
+          "example": "hour"
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "hoursPerWeek": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168,
+          "description": "Expected working hours per week",
+          "example": 20
+        },
+        "flexibility": {
+          "type": "string",
+          "enum": ["immediate", "flexible", "fixed"],
+          "description": "Start date flexibility",
+          "example": "immediate"
+        },
+        "shiftType": {
+          "type": "string",
+          "enum": ["day", "night", "mixed", "rotating"],
+          "description": "Type of work shifts",
+          "example": "day"
+        }
+      }
+    },
+    "employment": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["full-time", "part-time", "temporary", "seasonal"],
+          "description": "Employment type",
+          "example": "part-time"
+        },
+        "contractType": {
+          "type": "string",
+          "enum": ["permanent", "fixed-term", "seasonal", "temporary"],
+          "description": "Contract type",
+          "example": "seasonal"
+        }
+      }
+    },
+    "responsibilities": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "Key job responsibilities and duties (single text field)",
+      "example": "Accogliere i clienti con cortesia e professionalità. Prendere le ordinazioni in modo accurato utilizzando il sistema POS. Servire cibo e bevande seguendo gli standard di qualità."
+    },
+    "benefits": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "Benefits and perks offered (single text field)",
+      "example": "Paga oraria competitiva più mance. Orari flessibili compatibili con altri impegni. Pasti inclusi durante il turno di lavoro."
+    },
+    "requirements": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "Job requirements and qualifications (single text field)",
+      "example": "Esperienza pregressa nel settore ristorazione preferibile. Attitudine friendly ed energica con spiccate capacità comunicative. Disponibilità weekend."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "maxLength": 30
+      },
+      "maxItems": 20,
+      "uniqueItems": true,
+      "description": "Searchable tags (lowercase, hyphen-separated)",
+      "example": ["fast-food", "waiter", "day-shift", "part-time"]
+    },
+    "vitto": {
+      "type": "boolean",
+      "description": "Indicates if meals are provided",
+      "example": true,
+      "default": false
+    },
+    "alloggio": {
+      "type": "boolean",
+      "description": "Indicates if accommodation is provided",
+      "example": false,
+      "default": false
+    },
+    "minConsecutiveDays": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 365,
+      "description": "Minimum number of consecutive days required for booking (e.g., minimum 7 days means worker must book at least one week)",
+      "example": 7
+    },
+    "minNoticeDays": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 90,
+      "description": "Minimum number of days in advance required for booking (e.g., 5 days means worker cannot book for tomorrow, must book at least 5 days before start date)",
+      "example": 5
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "immediate-start",
+          "part-time",
+          "full-time",
+          "housing-provided",
+          "transportation",
+          "meals-included",
+          "experience-required",
+          "no-experience",
+          "flexible-schedule",
+          "tips-included",
+          "bonus-available"
+        ]
+      },
+      "uniqueItems": true,
+      "description": "Quick feature badges displayed on listing card",
+      "example": ["immediate-start", "part-time", "flexible-schedule"]
+    },
+    "viewsCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of views (for analytics)",
+      "default": 0
+    },
+    "applicationsCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of applications received",
+      "default": 0
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the listing was published (ISO 8601)",
+      "example": "2025-06-01T10:00:00Z"
+    },
+    "expiresAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Optional expiration timestamp (ISO 8601)",
+      "example": "2025-10-01T00:00:00Z"
+    },
+    "ttl": {
+      "type": ["integer", "null"],
+      "description": "Unix timestamp for DynamoDB TTL (auto-delete expired listings)",
+      "example": 1727740800
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the listing was created (ISO 8601)",
+      "example": "2025-06-01T09:00:00Z"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of last update (ISO 8601)",
+      "example": "2025-06-01T09:00:00Z"
+    }
+  },
+  "examples": [
+    {
+      "listingId": "550e8400-e29b-41d4-a716-446655440000",
+      "companyId": "123e4567-e89b-12d3-a456-426614174000",
+      "title": "Looking for a part-time waiter for a fast food chain",
+      "description": "We are looking for energetic and customer-focused waiters to join our team for the summer season. You'll be working in a fast-paced environment serving customers.",
+      "startDate": "2025-06-01",
+      "endDate": "2025-09-30",
+      "positions": 3,
+      "category": "Food & Beverage",
+      "status": "published",
+      "location": {
+        "city": "Mechelen",
+        "province": "Antwerp",
+        "postalCode": "2800",
+        "country": "Belgium",
+        "coordinates": {
+          "lat": 51.0259,
+          "lon": 4.4775
+        }
+      },
+      "salary": {
+        "min": 15,
+        "max": 24,
+        "currency": "EUR",
+        "period": "hour"
+      },
+      "schedule": {
+        "hoursPerWeek": 20,
+        "flexibility": "immediate",
+        "shiftType": "day"
+      },
+      "employment": {
+        "type": "part-time",
+        "contractType": "seasonal"
+      },
+      "responsibilities": [
+        "Greet customers warmly and provide excellent customer service at all times",
+        "Take customer orders accurately (in person or at self-service kiosks)"
+      ],
+      "benefits": [
+        "Competitive hourly wage plus tips/bonuses (where applicable)",
+        "Flexible shifts and scheduling"
+      ],
+      "requirements": [
+        "Previous experience in customer service, hospitality, or food service preferred",
+        "Friendly, energetic, and customer-focused attitude"
+      ],
+      "tags": ["fast-food", "waiter", "day-shift", "part-time"],
+      "features": ["immediate-start", "part-time", "flexible-schedule"],
+      "viewsCount": 0,
+      "applicationsCount": 0,
+      "publishedAt": "2025-06-01T10:00:00Z",
+      "expiresAt": null,
+      "ttl": null,
+      "createdAt": "2025-06-01T09:00:00Z",
+      "updatedAt": "2025-06-01T09:00:00Z"
+    }
+  ]
+}

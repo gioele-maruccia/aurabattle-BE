@@ -1,0 +1,93 @@
+delete:
+  tags:
+    - User Profile & Settings
+  summary: Remove job listing from bookmarks
+  description: |
+    Remove a job listing from the user's bookmarks. This operation always succeeds even if:
+    - The job listing has been deleted from the system
+    - The job listing is no longer published
+    - The bookmark doesn't exist (idempotent)
+    
+    This allows users to clean up their bookmarks regardless of the job listing state.
+  operationId: removeJobListingBookmark
+  security:
+    - CognitoAuth: []
+  
+  parameters:
+    - name: job_listing_id
+      in: path
+      required: true
+      description: Unique identifier of the job listing to remove from bookmarks
+      schema:
+        type: string
+      example: "job-123"
+  
+  responses:
+    '200':
+      description: Bookmark removed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Bookmark removed successfully"
+              bookmarked_job_listings:
+                type: array
+                items:
+                  type: string
+                description: Updated list of user's bookmarked job listing IDs
+                example: ["job-456", "job-789"]
+    
+    '400':
+      description: Bad Request - Missing parameter
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Missing parameter: job_listing_id"
+    
+    '401':
+      description: Unauthorized - Invalid or missing authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Unauthorized"
+    
+    '404':
+      description: User profile not found or bookmark not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              examples:
+                profileNotFound:
+                  summary: User profile doesn't exist
+                  value:
+                    error: "User profile not found"
+                bookmarkNotFound:
+                  summary: Bookmark doesn't exist
+                  value:
+                    error: "Bookmark not found"
+    
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal Server Error"

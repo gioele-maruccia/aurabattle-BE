@@ -1,0 +1,17 @@
+{
+  "httpMethod": "OPTIONS",
+  "path": "/documents",
+  "pathParameters": null,
+  "queryStringParameters": null,
+  "headers": {
+    "Origin": "https://backoffice.example.com",
+    "Access-Control-Request-Method": "GET",
+    "Access-Control-Request-Headers": "authorization,content-type"
+  },
+  "requestContext": {
+    "httpMethod": "OPTIONS",
+    "path": "/documents"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

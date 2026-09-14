@@ -1,0 +1,114 @@
+    patch:
+      tags:
+        - Bookings
+      summary: Cancel a booking
+      description: |
+        Cancel a booking. Available to both workers and companies.
+        
+        **Access Control:**
+        - Worker: Can cancel their own pending or confirmed bookings
+        - Company: Can cancel any booking for their listings
+        - Backoffice: Can cancel any booking
+        
+        **Cancellation Rules:**
+        - Can only cancel pending or confirmed bookings
+        - Cannot cancel completed, rejected, or already cancelled bookings
+        - Cancelling confirmed booking frees up the position
+        - May have cancellation policy implications (future feature)
+        
+        **Side Effects:**
+        - Sets booking status to cancelled
+        - Updates cancelledAt timestamp
+        - Frees up listing position if was confirmed
+        - Sends notification to other party
+        - Records who cancelled (worker vs company)
+      operationId: cancelBooking
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Booking ID
+          example: "booking_2025_abc123"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+                  description: Optional cancellation reason
+                  example: "Personal circumstances have changed and I can no longer commit to this period"
+            examples:
+              worker_cancellation:
+                summary: Worker cancels with reason
+                value:
+                  reason: "Family emergency requires me to return home"
+              company_cancellation:
+                summary: Company cancels
+                value:
+                  reason: "Position no longer needed due to schedule changes"
+      responses:
+        '200':
+          description: Booking cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "Booking cancelled successfully"
+                  booking:
+                    $ref: '../../components/schemas/booking.yml#/Booking'
+        '400':
+          description: Invalid request - Cannot cancel booking in current status
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+              examples:
+                already_cancelled:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Booking is already cancelled"
+                already_completed:
+                  value:
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Cannot cancel a completed booking"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '403':
+          description: Forbidden - Not authorized to cancel this booking
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'

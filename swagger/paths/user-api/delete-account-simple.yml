@@ -1,0 +1,43 @@
+post:
+  tags:
+    - User Profile & Settings
+  summary: Request account deletion (stub)
+  description: |
+    **Stub endpoint** — marks the account as scheduled for deletion in 15 days.
+    
+    This is a placeholder for frontend integration. The full deletion flow
+    (grace period, booking suspension, job listing pause, auto-restore on login)
+    is handled by the `POST /profile/delete-request` endpoint once fully deployed.
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Account marked for deletion
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "account marked to be deleted in 15gg"
+    '401':
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

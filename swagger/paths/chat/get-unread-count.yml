@@ -1,0 +1,34 @@
+get:
+  tags:
+    - Chat
+  summary: Get total unread messages
+  description: |
+    Returns the total number of unread messages across all chats for the
+    logged-in user.
+  operationId: getUnreadCount
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Unread count retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              unreadCount:
+                type: integer
+                description: Total unread messages across all chats
+                example: 12
+    '401':
+      description: Unauthorized (invalid or missing token)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '500':
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

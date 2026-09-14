@@ -1,0 +1,177 @@
+JobListingUI:
+  type: object
+  description: Job listing formatted for UI display with company data and calculated fields
+  properties:
+    listingId:
+      type: string
+      example: "job-123"
+    title:
+      type: string
+      example: "Cameriere/a di sala"
+    description:
+      type: string
+      description: Truncated description (max 200 chars for list view)
+      example: "Cerchiamo cameriere/a esperto/a per stagione estiva..."
+    
+    company:
+      type: object
+      properties:
+        companyId:
+          type: string
+          example: "comp-456"
+        name:
+          type: string
+          example: "Hotel Bella Vista"
+        logoUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://s3.amazonaws.com/..."
+        rating:
+          type: number
+          format: float
+          example: 4.5
+        reviewsCount:
+          type: integer
+          example: 23
+    
+    location:
+      type: object
+      properties:
+        city:
+          type: string
+          example: "Rimini"
+        province:
+          type: string
+          example: "RN"
+        country:
+          type: string
+          example: "IT"
+        displayText:
+          type: string
+          example: "Rimini, IT"
+    
+    compensation:
+      type: object
+      description: |
+        Calculated total compensation. 
+        - For CCNL listings: calculated from contract.calculation.grossBasePay + superminimo
+        - For manual listings: taken from listing.salary field
+      properties:
+        minMonthly:
+          type: number
+          format: float
+          example: 1800
+        maxMonthly:
+          type: number
+          format: float
+          example: 1800
+        currency:
+          type: string
+          example: "EUR"
+        displayText:
+          type: string
+          example: "€1,800.00/month"
+        basePay:
+          type: number
+          format: float
+          example: 1800
+        includesSuperminimo:
+          type: boolean
+          example: false
+    
+    contract:
+      type: object
+      nullable: true
+      description: |
+        Contract details for CCNL listings. 
+        **Note**: This field is `null` for manual listings (non-FIPE companies).
+        When `contract` is null, compensation is calculated from the `salary` field instead.
+      properties:
+        level:
+          type: string
+          example: "4"
+        levelName:
+          type: string
+          example: "Quarto livello"
+        ccnlType:
+          type: string
+          example: "turismo"
+        paragraph:
+          type: string
+          enum: ["I", "II"]
+          example: "I"
+        displayText:
+          type: string
+          example: "CCNL Turismo - Quarto livello"
+    
+    schedule:
+      type: object
+      properties:
+        hoursPerWeek:
+          type: integer
+          example: 40
+        workDays:
+          type: array
+          items:
+            type: string
+          example: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+        displayText:
+          type: string
+          example: "40 hrs/week"
+    
+    employment:
+      type: object
+      properties:
+        typeId:
+          type: string
+          example: "seasonal-full-time"
+        typeName:
+          type: string
+          example: "Seasonal"
+        displayText:
+          type: string
+          example: "Seasonal"
+    
+    jobRole:
+      type: object
+      properties:
+        roleId:
+          type: string
+          example: "waiter"
+        roleName:
+          type: string
+          example: "Cameriere/a di sala"
+        category:
+          type: string
+          example: "Sala"
+    
+    startDate:
+      type: string
+      format: date
+      example: "2024-06-01"
+    endDate:
+      type: string
+      format: date
+      nullable: true
+      example: "2024-09-30"
+    category:
+      type: string
+      example: "hospitality"
+    positions:
+      type: integer
+      example: 3
+    publishedAt:
+      type: string
+      format: date-time
+      example: "2024-03-15T10:00:00Z"
+    status:
+      type: string
+      enum: [draft, published, paused, closed, archived]
+      example: "published"
+    viewsCount:
+      type: integer
+      example: 156
+    applicationsCount:
+      type: integer
+      example: 12

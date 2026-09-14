@@ -1,0 +1,4 @@
+# Lightweight FCM implementation using Google Auth
+# Instead of full firebase-admin SDK (too large for Lambda layer)
+google-auth==2.26.2
+requests==2.31.0

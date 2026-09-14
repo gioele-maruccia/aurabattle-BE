@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Firebase Notifications Service - Retention Push (3-Touch)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - dev-be
+      - prod
+    Description: Environment name
+
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+
+  FirebaseAdminLayerArn:
+    Type: String
+    Description: ARN of the Firebase Admin Layer (from chat stack export)
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        USER_PROFILES_TABLE: !Ref UserProfilesTableName
+        FIREBASE_SERVICE_ACCOUNT_PATH: /opt/python/beebusy-99d60-firebase-adminsdk-fbsvc-b37bca6781.json
+        AWS_ACCOUNT_REGION: !Ref AWS::Region
+
+Resources:
+
+  # ============================================================
+  # IAM Role — EventBridge Scheduler → Lambda invocation
+  # ============================================================
+  RetentionSchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-retention-scheduler-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeSendRetentionPush
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt SendRetentionPushFunction.Arn
+
+  # ============================================================
+  # Lambda: send-retention-push
+  # Triggered by EventBridge Scheduler (one-time jobs T1/T2/T3)
+  # ============================================================
+  SendRetentionPushFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-firebase-send-retention-push'
+      CodeUri: ../../../src/lambdas/services/firebase-notifications/send-retention-push/
+      Handler: app.lambda_handler
+      Layers:
+        - !Ref FirebaseAdminLayerArn
+      Environment:
+        Variables:
+          SCHEDULER_ROLE_ARN: !GetAtt RetentionSchedulerExecutionRole.Arn
+          SEND_RETENTION_PUSH_FUNCTION_ARN: !GetAtt SendRetentionPushFunction.Arn
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}'
+            - Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+                - scheduler:UpdateSchedule
+                - scheduler:DeleteSchedule
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*'
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt RetentionSchedulerExecutionRole.Arn
+
+Outputs:
+  SendRetentionPushFunctionArn:
+    Description: ARN of send-retention-push Lambda
+    Value: !GetAtt SendRetentionPushFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-SendRetentionPushFunctionArn'
+
+  RetentionSchedulerExecutionRoleArn:
+    Description: ARN of IAM Role for EventBridge Scheduler
+    Value: !GetAtt RetentionSchedulerExecutionRole.Arn
+    Export:
+      Name: !Sub '${Environment}-RetentionSchedulerRoleArn'

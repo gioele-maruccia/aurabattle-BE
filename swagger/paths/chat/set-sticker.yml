@@ -1,0 +1,91 @@
+post:
+  tags:
+    - Chat
+  summary: Set sticker/reaction
+  description: |
+    Add, change, or remove a sticker/reaction on a message.
+    
+    **Requirements:**
+    - User must be participant in the chat
+    - Can add reaction to any message in the chat
+    
+    **Supported Stickers:**
+    - thumbs_up: 👍
+    - thumbs_down: 👎
+    - heart: ❤️
+    - smile: 😊
+    - fire: 🔥
+    - check: ✅
+    - question: ❓
+    
+    **Business Rules:**
+    - Each user can have max 1 sticker per message
+    - Sending same sticker replaces previous one
+    - Sending empty string removes sticker
+    - Stickers are stored with userId and timestamp
+  operationId: setSticker
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: "chat_40f1671d354346a0"
+    - name: messageId
+      in: path
+      required: true
+      description: Message ID to add sticker to
+      schema:
+        type: string
+        example: "msg_abc123def456"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../../components/schemas/chat.yml#/SetStickerRequest'
+        examples:
+          add_thumbs_up:
+            summary: Add thumbs up
+            value:
+              sticker: "thumbs_up"
+          change_to_heart:
+            summary: Change to heart
+            value:
+              sticker: "heart"
+          remove_sticker:
+            summary: Remove sticker
+            value:
+              sticker: ""
+  responses:
+    '200':
+      description: Sticker updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Sticker added successfully"
+    '400':
+      description: Bad request (invalid sticker type)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '403':
+      description: Forbidden (not authorized for this chat)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'
+    '404':
+      description: Message not found
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/errors.yml#/Error'

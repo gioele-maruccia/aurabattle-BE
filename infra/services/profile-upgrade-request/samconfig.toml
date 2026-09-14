@@ -1,0 +1,82 @@
+version = 0.1
+
+
+
+# ============================================
+# DEFAULT CONFIGURATION (DEV)
+# ============================================
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "dev-profile-upgrade-request"
+template_file = "infra/services/profile-upgrade-request/template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-request"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "UserPoolId=eu-south-1_0oK9agPYd",
+    "UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "UserProfilesTableName=dev-UserProfiles"
+]
+
+
+# ============================================
+# DEV ENVIRONMENT
+# ============================================
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "dev-profile-upgrade-request"
+template_file = "infra/services/profile-upgrade-request/template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-request"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "UserPoolId=eu-south-1_0oK9agPYd",
+    "UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "UserProfilesTableName=dev-UserProfiles"
+]
+
+# ============================================
+# PROD ENVIRONMENT
+# ============================================
+
+[prod]
+
+[prod.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "prod-profile-upgrade-request"
+template_file = "infra/services/profile-upgrade-request/template.yaml"
+resolve_s3 = false
+s3_prefix = "profile-upgrade-request"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=prod",
+    "UserPoolId=eu-south-1_iCBtUlJO6",
+    "UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_iCBtUlJO6",
+    "UserProfilesTableName=prod-UserProfiles"
+]

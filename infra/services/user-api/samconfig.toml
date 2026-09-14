@@ -1,0 +1,79 @@
+version = 0.1
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "user-api-service-dev"
+s3_prefix = "user-api"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "UserPoolId=eu-south-1_0oK9agPYd",
+	"UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "UserProfilesTableName=dev-UserProfiles",
+    "UserDocumentsTableName=dev-UserDocuments", 
+    "DocumentsBucketName=beezey-dev-user-documents", 
+    "CompaniesTableName=dev-Companies", 
+    "KmsKeyArn=arn:aws:kms:eu-south-1:881962383770:key/dba20d4f-3d24-4f4d-a476-4e5a42a7533b", 
+    "JobListingsTableName=dev-JobListings"
+]
+
+[dev]
+
+[dev.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev.deploy.parameters]
+stack_name = "user-api-service-dev"
+s3_prefix = "user-api"
+s3_bucket = "beezey-dev"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "UserPoolId=eu-south-1_0oK9agPYd",
+	"UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_0oK9agPYd",
+    "UserProfilesTableName=dev-UserProfiles",
+    "UserDocumentsTableName=dev-UserDocuments", 
+    "DocumentsBucketName=beezey-dev-user-documents", 
+    "CompaniesTableName=dev-Companies",
+    "KmsKeyArn=arn:aws:kms:eu-south-1:881962383770:key/dba20d4f-3d24-4f4d-a476-4e5a42a7533b", 
+    "JobListingsTableName=dev-JobListings"
+]
+
+[prod]
+
+[prod.build.parameters]
+use_container = true
+cached = true
+parallel = true
+
+[prod.deploy.parameters]
+stack_name = "user-api-service-prod"
+s3_prefix = "user-api"
+s3_bucket = "beezey-prod"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=prod",
+    "UserPoolId=eu-south-1_iCBtUlJO6",
+	"UserPoolArn=arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_iCBtUlJO6",
+    "UserProfilesTableName=prod-UserProfiles",
+    "UserDocumentsTableName=prod-UserDocuments",
+    "DocumentsBucketName=beezey-prod-user-documents", 
+    "CompaniesTableName=prod-Companies",
+    "KmsKeyArn=arn:aws:kms:eu-south-1:881962383770:key/aa45aed4-3d74-476e-a67e-b9616eb4235c", 
+    "JobListingsTableName=prod-JobListings",
+]

@@ -1,0 +1,26 @@
+{
+  "httpMethod": "GET", 
+  "path": "/documents/user/user123",
+  "pathParameters": {
+    "user_sub": "user123"
+  },
+  "queryStringParameters": {
+    "status": "AWAITING_REVIEW"
+  },
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "admin123",
+          "email": "admin@example.com"
+        }
+      }
+    }
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

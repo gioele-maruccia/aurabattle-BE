@@ -1,0 +1,4 @@
+[submodule "modules/common-beebusy"]
+	path = modules/common-beebusy
+	url = https://github.com/gioele-maruccia/common-beebusy-module
+	branch = main

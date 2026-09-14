@@ -1,0 +1,1171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Bookings API service for Beezey seasonal job platform
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - dev-be
+    - prod
+    Description: Environment name
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+  CognitoUserPoolId:
+    Type: String
+    Description: ID of the Cognito User Pool for AdminGetUser calls
+    Default: eu-south-1_0oK9agPYd
+  ChatSharedLayerArn:
+    Type: String
+    Description: ARN of the Chat Shared Layer (from chat service stack)
+  ChatWebSocketApiId:
+    Type: String
+    Description: ID of the Chat WebSocket API Gateway (for notifications)
+    Default: ''
+  FirebaseAdminLayerArn:
+    Type: String
+    Description: ARN of the Firebase Admin SDK layer (from chat service stack)
+    Default: ''
+Conditions:
+  HasChatSharedLayerArn:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: ChatSharedLayerArn
+      - ''
+  HasFirebaseAdminLayerArn:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: FirebaseAdminLayerArn
+      - ''
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        BOOKINGS_TABLE_NAME:
+          Fn::Sub: ${Environment}-Bookings
+        JOB_LISTINGS_TABLE_NAME:
+          Fn::Sub: ${Environment}-JobListings
+        COMPANIES_TABLE_NAME:
+          Fn::Sub: ${Environment}-Companies
+        REVIEWS_TABLE_NAME:
+          Fn::Sub: ${Environment}-Reviews
+        USER_PROFILES_TABLE_NAME:
+          Fn::Sub: ${Environment}-UserProfiles
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: bookings
+        POWERTOOLS_METRICS_NAMESPACE: Beezey
+Resources:
+  BookingsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: ${Environment}-bookings-api
+      StageName:
+        Ref: Environment
+      Cors:
+        AllowMethods: '''GET,POST,PUT,DELETE,PATCH,OPTIONS'''
+        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+        AllowOrigin: '''*'''
+        MaxAge: '''600'''
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn:
+              Ref: CognitoUserPoolArn
+      TracingEnabled: true
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: BookingsApi
+  CreateBookingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-create
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/ac5e729da64bb1c7badb5fe36743ce91
+      Handler: app.lambda_handler
+      Description: Create a new booking/application for a job listing
+      Environment:
+        Variables:
+          CREATE_CHAT_FUNCTION_NAME:
+            Fn::Sub: ${Environment}-chat-create
+          USER_PROFILES_TABLE_NAME:
+            Fn::Sub: ${Environment}-UserProfiles
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-JobListings/index/*
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+          - Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${Environment}-chat-create
+      Events:
+        CreateBookingLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings
+            Method: POST
+        CreateBooking:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings
+            Method: POST
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CreateBookingFunction
+  GetBookingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-get
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/a6294b6d44bef829f3a4b1d7a0b32537
+      Handler: app.lambda_handler
+      Description: Get booking details by ID
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+          - Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: CognitoUserPoolId
+      Events:
+        GetBookingLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}
+            Method: GET
+        GetBooking:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}
+            Method: GET
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: GetBookingFunction
+  ListWorkerBookingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-list-worker
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/add33e3303939160422cbe41f9bf99bd
+      Handler: app.lambda_handler
+      Description: List all bookings for a worker
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/workerId-startDate-index
+      Events:
+        ListWorkerBookingsLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/worker/{workerId}
+            Method: GET
+        ListWorkerBookings:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/worker/{workerId}
+            Method: GET
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ListWorkerBookingsFunction
+  ListCompanyBookingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-list-company
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/b81644de3d3822b16baa64a0943cb980
+      Handler: app.lambda_handler
+      Description: List all bookings for a company
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/companyId-*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/*
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+          - Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: CognitoUserPoolId
+      Events:
+        ListCompanyBookingsLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/company/{companyId}
+            Method: GET
+        ListCompanyBookings:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/company/{companyId}
+            Method: GET
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ListCompanyBookingsFunction
+  ListListingBookingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-list-listing
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/aa233262d0e2b4ee0e812fa15c9715e7
+      Handler: app.lambda_handler
+      Description: List all bookings for a specific job listing
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/*
+      Events:
+        ListListingBookingsLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/listing/{listingId}
+            Method: GET
+        ListListingBookings:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/listing/{listingId}
+            Method: GET
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ListListingBookingsFunction
+  UpdateBookingStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-update-status
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/01d83838bcc59bc67af2136fdbd5d058
+      Handler: app.lambda_handler
+      Description: Update booking status (accept/reject)
+      Environment:
+        Variables:
+          BOOKINGS_TABLE_NAME:
+            Fn::Sub: ${Environment}-Bookings
+          JOB_LISTINGS_TABLE_NAME:
+            Fn::Sub: ${Environment}-JobListings
+          COMPANIES_TABLE_NAME:
+            Fn::Sub: ${Environment}-Companies
+          USER_PROFILES_TABLE_NAME:
+            Fn::Sub: ${Environment}-UserProfiles
+          CHATS_TABLE_NAME:
+            Fn::Sub: ${Environment}-Chats
+          MESSAGES_TABLE_NAME:
+            Fn::Sub: ${Environment}-Messages
+          CONNECTION_MANAGER_TABLE_NAME:
+            Fn::Sub: ${Environment}-ConnectionManager
+          WEBSOCKET_API_ENDPOINT:
+            Fn::Sub: https://${ChatWebSocketApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+          USER_POOL_ID:
+            Ref: CognitoUserPoolId
+      Layers:
+      - Fn::If:
+        - HasChatSharedLayerArn
+        - Ref: ChatSharedLayerArn
+        - Ref: AWS::NoValue
+      - Fn::If:
+        - HasFirebaseAdminLayerArn
+        - Ref: FirebaseAdminLayerArn
+        - Ref: AWS::NoValue
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Chats
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Messages
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-ConnectionManager
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+          - Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApiId}/${Environment}/POST/@connections/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+          - Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-ConnectionManager/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/*
+      Events:
+        UpdateBookingStatusLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}/status
+            Method: PATCH
+        UpdateBookingStatus:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}/status
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: UpdateBookingStatusFunction
+  UpdateBookingDatesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-update-dates
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/469b27ba2105367f277b90a3929788d5
+      Handler: app.lambda_handler
+      Description: Update booking dates (worker only, pending bookings)
+      Environment:
+        Variables:
+          CHATS_TABLE_NAME:
+            Fn::Sub: ${Environment}-Chats
+          MESSAGES_TABLE_NAME:
+            Fn::Sub: ${Environment}-Messages
+          COMPANIES_TABLE_NAME:
+            Fn::Sub: ${Environment}-Companies
+          CONNECTION_MANAGER_TABLE_NAME:
+            Fn::Sub: ${Environment}-ConnectionManager
+          WEBSOCKET_API_ENDPOINT:
+            Fn::Sub: https://${ChatWebSocketApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+          USER_POOL_ID:
+            Ref: CognitoUserPoolId
+      Layers:
+      - Fn::If:
+        - HasChatSharedLayerArn
+        - Ref: ChatSharedLayerArn
+        - Ref: AWS::NoValue
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Chats
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Messages
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-ConnectionManager
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+          - Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApiId}/${Environment}/POST/@connections/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+          - Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-ConnectionManager/index/*
+      Events:
+        UpdateBookingDatesLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}/dates
+            Method: PATCH
+        UpdateBookingDates:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}/dates
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: UpdateBookingDatesFunction
+  ConfirmBookingDatesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-confirm-dates
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/dcaf8f498f176c606382cf896a489ca6
+      Handler: app.lambda_handler
+      Description: Confirm proposed booking dates (company representative only)
+      Environment:
+        Variables:
+          CHATS_TABLE_NAME:
+            Fn::Sub: ${Environment}-Chats
+          MESSAGES_TABLE_NAME:
+            Fn::Sub: ${Environment}-Messages
+          USER_PROFILES_TABLE_NAME:
+            Fn::Sub: ${Environment}-UserProfiles
+          CONNECTION_MANAGER_TABLE_NAME:
+            Fn::Sub: ${Environment}-ConnectionManager
+          WEBSOCKET_API_ENDPOINT:
+            Fn::Sub: https://${ChatWebSocketApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+          USER_POOL_ID:
+            Ref: CognitoUserPoolId
+      Layers:
+      - Fn::If:
+        - HasChatSharedLayerArn
+        - Ref: ChatSharedLayerArn
+        - Ref: AWS::NoValue
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Chats
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Messages
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-ConnectionManager
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+          - Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatWebSocketApiId}/${Environment}/POST/@connections/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          Resource:
+          - Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Chats/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-UserProfiles/index/*
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-ConnectionManager/index/*
+      Events:
+        ConfirmBookingDatesLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}/confirm-dates
+            Method: PATCH
+        ConfirmBookingDates:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}/confirm-dates
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ConfirmBookingDatesFunction
+  CancelBookingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-cancel
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/cf32e42fbfa39a738b14d2b1f02c74f7
+      Handler: app.lambda_handler
+      Description: Cancel a booking (worker or company)
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Companies/index/*
+      Events:
+        CancelBookingLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}/cancel
+            Method: PATCH
+        CancelBooking:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}/cancel
+            Method: PATCH
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CancelBookingFunction
+  CalculateNetSalaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-calculate-net-salary
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/b39c6da7f430c3212092731279c71f78
+      Handler: app.lambda_handler
+      Description: Calculate net salary for a worker based on booking dates and residence
+      Environment:
+        Variables:
+          USER_PROFILES_TABLE:
+            Fn::Sub: ${Environment}-UserProfiles
+          TAX_CACHE_TABLE:
+            Fn::Sub: ${Environment}-TaxCache
+          JOB_LISTINGS_TABLE_NAME:
+            Fn::Sub: ${Environment}-JobListings
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-TaxCache
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      Events:
+        CalculateNetSalaryLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/calculate-net-salary
+            Method: POST
+        CalculateNetSalary:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/calculate-net-salary
+            Method: POST
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CalculateNetSalaryFunction
+  CreateReviewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-create-review
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/19e2995f987fbc172c096e0c2a7fa424
+      Handler: app.lambda_handler
+      Description: Create a review for a completed booking
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Reviews
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-UserProfiles
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Reviews/index/reviewerId-createdAt-index
+      Events:
+        CreateReviewLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/{bookingId}/review
+            Method: POST
+        CreateReview:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/{bookingId}/review
+            Method: POST
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CreateReviewFunction
+  GetReviewSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-get-review-summary
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/d37e15514589b518378fa05330a78806
+      Handler: app.lambda_handler
+      Description: Get review summary (average ratings) for a target (company or worker)
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Reviews
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Reviews/index/targetId-createdAt-index
+      Events:
+        GetReviewSummaryLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /reviews/target/{targetId}/summary
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        GetReviewSummary:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/reviews/target/{targetId}/summary
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: GetReviewSummaryFunction
+  ListReviewsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-list-reviews
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/68446506e3ab02b2228792169a413b2d
+      Handler: app.lambda_handler
+      Description: List all reviews for a target (company or worker) with full details
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Reviews
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Reviews/index/targetId-createdAt-index
+      Events:
+        ListReviewsLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /reviews/target/{targetId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        ListReviews:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/reviews/target/{targetId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ListReviewsFunction
+  CreateBlackoutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-create-blackout
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/a26d8e5100a69d134cbe85a2723faa84
+      Handler: app.lambda_handler
+      Description: Create a blackout period for a job listing
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        CreateBlackoutLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/blackout
+            Method: POST
+        CreateBlackout:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/blackout
+            Method: POST
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CreateBlackoutFunction
+  ListBlackoutsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-list-blackouts
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/a4c75935e3db44538449f3a1dd7975e7
+      Handler: app.lambda_handler
+      Description: List blackout periods for a job listing
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        ListBlackoutsLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/blackout/listing/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        ListBlackouts:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/blackout/listing/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: ListBlackoutsFunction
+  DeleteBlackoutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-delete-blackout
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/04c67ab3953cd2f874541eaf0ae3a4f9
+      Handler: app.lambda_handler
+      Description: Delete a blackout period
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Companies
+      Events:
+        DeleteBlackoutLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/blackout/{bookingId}
+            Method: DELETE
+        DeleteBlackout:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/blackout/{bookingId}
+            Method: DELETE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: DeleteBlackoutFunction
+  CheckAvailabilityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-bookings-check-availability
+      CodeUri: s3://beezey-prod/bookings/20260420-111321/37160a26d6dab8c18c8c7509d6ec705d
+      Handler: app.lambda_handler
+      Description: Check availability for a date range (considers bookings and blackouts)
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-Bookings
+      - DynamoDBReadPolicy:
+          TableName:
+            Fn::Sub: ${Environment}-JobListings
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Query
+          Resource:
+          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/listingId-startDate-index
+      Events:
+        CheckAvailabilityLegacy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /bookings/availability/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        CheckAvailability:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BookingsApi
+            Path: /v1/bookings/availability/{listingId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+      Tags:
+        Environment:
+          Ref: Environment
+        Application: Beezey
+        Service: Bookings
+    Metadata:
+      SamResourceId: CheckAvailabilityFunction
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId:
+        Ref: BookingsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault4XX
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId:
+        Ref: BookingsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault5XX
+Outputs:
+  BookingsApiUrl:
+    Description: API Gateway endpoint URL for Bookings API
+    Value:
+      Fn::Sub: https://${BookingsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-BookingsApiUrl
+  BookingsApiId:
+    Description: API Gateway ID
+    Value:
+      Ref: BookingsApi
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-BookingsApiId
+  CreateBookingFunctionArn:
+    Description: ARN of CreateBooking Lambda function
+    Value:
+      Fn::GetAtt:
+      - CreateBookingFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-CreateBookingFunctionArn
+  GetBookingFunctionArn:
+    Description: ARN of GetBooking Lambda function
+    Value:
+      Fn::GetAtt:
+      - GetBookingFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-GetBookingFunctionArn
+  UpdateBookingStatusFunctionArn:
+    Description: ARN of UpdateBookingStatus Lambda function
+    Value:
+      Fn::GetAtt:
+      - UpdateBookingStatusFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-UpdateBookingStatusFunctionArn
+  UpdateBookingDatesFunctionArn:
+    Description: ARN of UpdateBookingDates Lambda function
+    Value:
+      Fn::GetAtt:
+      - UpdateBookingDatesFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-UpdateBookingDatesFunctionArn
+  CreateBlackoutFunctionArn:
+    Description: ARN of CreateBlackout Lambda function
+    Value:
+      Fn::GetAtt:
+      - CreateBlackoutFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-CreateBlackoutFunctionArn
+  CheckAvailabilityFunctionArn:
+    Description: ARN of CheckAvailability Lambda function
+    Value:
+      Fn::GetAtt:
+      - CheckAvailabilityFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-CheckAvailabilityFunctionArn
+  CalculateNetSalaryFunctionArn:
+    Description: ARN of CalculateNetSalary Lambda function
+    Value:
+      Fn::GetAtt:
+      - CalculateNetSalaryFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-CalculateNetSalaryFunctionArn
+  CreateReviewFunctionArn:
+    Description: ARN of CreateReview Lambda function
+    Value:
+      Fn::GetAtt:
+      - CreateReviewFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-CreateReviewFunctionArn
+  GetReviewSummaryFunctionArn:
+    Description: ARN of GetReviewSummary Lambda function
+    Value:
+      Fn::GetAtt:
+      - GetReviewSummaryFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-GetReviewSummaryFunctionArn
+  ListReviewsFunctionArn:
+    Description: ARN of ListReviews Lambda function
+    Value:
+      Fn::GetAtt:
+      - ListReviewsFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${Environment}-ListReviewsFunctionArn

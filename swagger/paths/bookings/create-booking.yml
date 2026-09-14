@@ -1,0 +1,351 @@
+    post:
+      tags:
+        - Bookings
+      summary: Create new booking
+      description: |
+        Create a new booking/application for a job listing. Only available for authenticated worker users.
+        
+        **Requirements:**
+        - Valid worker profile with approved status
+        - Job listing must be published and not expired
+        - No date conflicts with existing worker bookings
+        - Listing must have available positions
+        - Start date cannot be in the past
+        
+        **Business Rules:**
+        - Cannot apply twice to the same listing (unless previous was rejected/cancelled)
+        - Worker must be available for the entire period
+        - Checks for blackout periods on the listing
+        
+        **Status Flow:**
+        - New booking starts in 'pending' status
+        - Company must approve/reject
+        - After approval, status changes to 'confirmed'
+        
+        **Side Effects:**
+        - Creates booking record
+        - Sends notification to company
+        - Validates date availability across all worker bookings
+      operationId: createBooking
+      security:
+        - CognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - listingId
+                - startDate
+                - endDate
+              properties:
+                listingId:
+                  type: string
+                  format: uuid
+                  description: Job listing ID to apply for
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                startDate:
+                  type: string
+                  format: date
+                  description: Desired booking start date (ISO 8601)
+                  example: "2025-06-15"
+                endDate:
+                  type: string
+                  format: date
+                  description: Desired booking end date (ISO 8601)
+                  example: "2025-08-31"
+                message:
+                  type: string
+                  maxLength: 500
+                  description: Optional message to company
+                  example: "I have 3 years of experience in hospitality and I'm fluent in English and Italian."
+                preferredShift:
+                  type: string
+                  enum: [morning, afternoon, evening, night, flexible]
+                  description: Preferred work shift
+                  example: "morning"
+            examples:
+              standard_application:
+                summary: Standard job application
+                value:
+                  listingId: "550e8400-e29b-41d4-a716-446655440000"
+                  startDate: "2025-06-15"
+                  endDate: "2025-08-31"
+                  message: "I have 3 years of experience in hospitality."
+                  preferredShift: "morning"
+              seasonal_summer:
+                summary: Full summer season
+                value:
+                  listingId: "660e8400-e29b-41d4-a716-446655440001"
+                  startDate: "2025-07-01"
+                  endDate: "2025-09-15"
+                  message: "Available for the entire summer season."
+                  preferredShift: "flexible"
+      responses:
+        '201':
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: Specific error/success code for client-side handling
+                    example: 3001
+                  statusCode:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: "Booking created successfully"
+                  booking:
+                    $ref: '../../components/schemas/booking.yml#/Booking'
+                  chatId:
+                    type: string
+                    description: Chat ID created for this booking (if successful)
+                    example: "CHAT#2025-12-03T10:30:45Z#abc123"
+                  chatCreated:
+                    type: boolean
+                    description: Whether chat was successfully created
+                    example: true
+              examples:
+                booking_with_chat:
+                  summary: Booking created with chat
+                  value:
+                    statusCode: 201
+                    message: "Booking created successfully"
+                    chatId: "CHAT#2025-12-03T10:30:45Z#abc123"
+                    chatCreated: true
+                    booking:
+                      bookingId: "booking_2025_abc123"
+                      listingId: "550e8400-e29b-41d4-a716-446655440000"
+                      workerId: "worker_abc123"
+                      companyId: "company_xyz789"
+                      status: "pending"
+                      startDate: "2025-06-15"
+                      endDate: "2025-08-31"
+                      createdAt: "2025-05-15T10:30:00Z"
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: Specific error code for client-side handling
+                  statusCode:
+                    type: integer
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                missing_fields:
+                  summary: Missing required fields
+                  value:
+                    code: 4001
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Missing required fields: listingId, startDate, endDate"
+                invalid_date_format:
+                  summary: Invalid date format
+                  value:
+                    code: 4003
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Invalid date format. Use ISO 8601 (YYYY-MM-DD)"
+                end_date_before_start:
+                  summary: End date must be after start date
+                  value:
+                    code: 4002
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "End date must be after start date"
+                listing_not_published:
+                  summary: Job listing is not published
+                  value:
+                    code: 4004
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Job listing is not published"
+                dates_outside_listing_period:
+                  summary: Booking dates must be within listing period
+                  value:
+                    code: 4005
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Booking dates must be within listing period"
+                minimum_advance_days:
+                  summary: Bookings must be made at least X days in advance
+                  value:
+                    code: 4006
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Bookings must be made at least 5 days in advance"
+                blackout_period:
+                  summary: Date range overlaps with blackout period
+                  value:
+                    code: 4007
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "Date range overlaps with blackout period"
+                all_positions_filled:
+                  summary: All positions for this listing are filled
+                  value:
+                    code: 4008
+                    statusCode: 400
+                    error: "Bad Request"
+                    message: "All positions for this listing are filled"
+        '403':
+          description: Forbidden - Not authorized or rejected booking blocks dates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: Specific error code for client-side handling
+                  statusCode:
+                    type: integer
+                    example: 403
+                  error:
+                    type: string
+                    example: "Forbidden"
+                  message:
+                    type: string
+                  conflictingBookingId:
+                    type: string
+                  conflictingStatus:
+                    type: string
+                  conflictingDates:
+                    type: object
+                    properties:
+                      startDate:
+                        type: string
+                      endDate:
+                        type: string
+              examples:
+                not_worker:
+                  summary: Only worker users can create bookings
+                  value:
+                    code: 4009
+                    statusCode: 403
+                    error: "Forbidden"
+                    message: "Only worker users can create bookings"
+                rejected_booking:
+                  summary: Previously rejected booking blocks these dates
+                  value:
+                    code: 4010
+                    statusCode: 403
+                    error: "Forbidden"
+                    message: "You cannot rebook for this job listing in the requested dates because your application was previously rejected by the company"
+                    conflictingBookingId: "booking_xyz789"
+                    conflictingStatus: "rejected"
+                    conflictingDates:
+                      startDate: "2026-02-15"
+                      endDate: "2026-02-20"
+        '409':
+          description: Conflict - Date conflicts with existing bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: Specific error code for client-side handling
+                  statusCode:
+                    type: integer
+                    example: 409
+                  error:
+                    type: string
+                    example: "Conflict"
+                  message:
+                    type: string
+                  conflictingBookingId:
+                    type: string
+                  conflictingListingId:
+                    type: string
+                  conflictingStatus:
+                    type: string
+                  conflictingDates:
+                    type: object
+                    properties:
+                      startDate:
+                        type: string
+                      endDate:
+                        type: string
+              examples:
+                pending_same_listing:
+                  summary: Pending booking for same listing
+                  value:
+                    code: 4012
+                    statusCode: 409
+                    error: "Conflict"
+                    message: "You already have a pending booking for this job listing in the requested dates"
+                    conflictingBookingId: "booking_abc123"
+                    conflictingStatus: "pending"
+                    conflictingDates:
+                      startDate: "2026-02-15"
+                      endDate: "2026-02-20"
+                confirmed_same_listing:
+                  summary: Confirmed booking for same listing
+                  value:
+                    code: 4013
+                    statusCode: 409
+                    error: "Conflict"
+                    message: "You already have a confirmed booking for this job listing in the requested dates"
+                    conflictingBookingId: "booking_abc456"
+                    conflictingStatus: "confirmed"
+                    conflictingDates:
+                      startDate: "2026-02-15"
+                      endDate: "2026-02-20"
+                confirmed_different_listing:
+                  summary: Confirmed booking for different listing
+                  value:
+                    code: 4014
+                    statusCode: 409
+                    error: "Conflict"
+                    message: "You cannot create a new booking because you already have a confirmed booking for another job listing during these dates"
+                    conflictingBookingId: "booking_def789"
+                    conflictingListingId: "listing_xyz999"
+                    conflictingStatus: "confirmed"
+                    conflictingDates:
+                      startDate: "2026-02-15"
+                      endDate: "2026-02-20"
+                other_status:
+                  summary: Booking with other status blocks dates
+                  value:
+                    code: 4015
+                    statusCode: 409
+                    error: "Conflict"
+                    message: "You already have a confirmed booking for another job listing during this period (2026-02-15 to 2026-02-20)"
+                    conflictingBookingId: "booking_def789"
+                    conflictingListingId: "listing_xyz999"
+                    conflictingStatus: "confirmed"
+                    conflictingDates:
+                      startDate: "2026-02-15"
+                      endDate: "2026-02-20"
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '404':
+          description: Job listing not found or not published
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/responses/ErrorResponse.yml#/ErrorResponse'
