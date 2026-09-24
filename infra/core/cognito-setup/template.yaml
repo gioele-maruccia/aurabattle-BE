@@ -6,12 +6,10 @@ Description: Deploy ONLY PostConfirmation Lambda - NO User Pool creation (uses e
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: dev-aurabattle
     AllowedValues:
-      - dev
-      - dev-be
-      - staging
-      - prod
+      - dev-aurabattle
+      - prod-aurabattle
     Description: Ambiente di deployment
 
   UserProfilesTableName:
@@ -34,7 +32,7 @@ Resources:
       FunctionName: !Sub '${Environment}-cognito-post-confirmation'
       CodeUri: ../../../src/lambdas/core/post-confirmation/
       Handler: app.lambda_handler
-      Runtime: python3.13
+      Runtime: python3.10
       Timeout: 30
       MemorySize: 512
       Environment:

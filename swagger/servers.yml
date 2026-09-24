@@ -1,108 +1,17 @@
 
-  # Local proxy - routes to all APIs
-  - url: http://host.docker.internal:8081
-    description: Local Development (via Auth Proxy - Docker)
-  
-  # Fallback for non-Docker environments
+  # Local proxy - routes to all APIs (default: seleziona questo nel dropdown "Servers")
   - url: http://localhost:8081
     description: Local Development (via Auth Proxy)
 
-  # ============================================================================
-  # DEV-BE environment - v1 routes (latest features in testing)
-  # ============================================================================
-
-  - url: https://2jqe82fq14.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] User API"
-  - url: https://8kdmqi7g65.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Job Listings API"
-  - url: https://asumkdvdnb.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Bookings API"
-  - url: https://mm49ly9k9h.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Chat API"
-  - url: https://hf75ehks68.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Support Chat API"
-  - url: https://ndokvfiy77.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Reference Data API"
-  - url: https://cooqrfmw85.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Profile Upgrade Documents API"
-  - url: https://7mazsheddj.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Profile Upgrade Request API"
-  - url: https://66vxwqa5u7.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Backoffice API"
-  - url: https://vf4w0qixb9.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Contracts API"
-  - url: https://pwm42jgx9e.execute-api.eu-south-1.amazonaws.com/dev-be/v1
-    description: "[DEV-BE v1] Companies API"
+  # Alternativa se accedi a Swagger UI da dentro un altro container Docker
+  - url: http://host.docker.internal:8081
+    description: Local Development (via Auth Proxy - Docker-to-Docker)
 
   # ============================================================================
-  # DEV-BE environment - legacy routes (no version prefix)
+  # DEV-AURABATTLE environment - Direct (no proxy, for reference)
   # ============================================================================
 
-  - url: https://2jqe82fq14.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] User API"
-  - url: https://8kdmqi7g65.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Job Listings API"
-  - url: https://asumkdvdnb.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Bookings API"
-  - url: https://mm49ly9k9h.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Chat API"
-  - url: https://hf75ehks68.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Support Chat API"
-  - url: https://ndokvfiy77.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Reference Data API"
-  - url: https://cooqrfmw85.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Profile Upgrade Documents API"
-  - url: https://7mazsheddj.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Profile Upgrade Request API"
-  - url: https://66vxwqa5u7.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Backoffice API"
-  - url: https://vf4w0qixb9.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Contracts API"
-  - url: https://pwm42jgx9e.execute-api.eu-south-1.amazonaws.com/dev-be
-    description: "[DEV-BE legacy] Companies API"
-
-  # ============================================================================
-  # DEV environment (stable dev)
-  # ============================================================================
-
-  # Backoffice API
-  - url: https://v7m02xrzyh.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Backoffice API - Dev (Direct)
-
-  # Documents API
-  - url: https://b99hejeuca.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Documents API - Dev (Direct)
-  - url: https://uuob2qxq6i.execute-api.eu-south-1.amazonaws.com/prod/v1
-    description: Documents API - Prod (Direct)
-
-  # User Profile API
-  - url: https://7mld8ngu7f.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: User Profile API - Dev (Direct)
-
-  # Companies API
-  - url: https://n4gq6fx4qd.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Companies API - Dev (Direct)
-
-  # Job Listings API
-  - url: https://1mgnhefmo3.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Job Listings API - Dev (Direct)
-
-  # Bookings API
-  - url: https://bawcexfzmf.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Bookings API - Dev (Direct)
-
-  # Reference Data API
-  - url: https://kn3bka3cec.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Reference Data API - Dev (Direct)
-
-  # Contracts API
-  - url: https://pbymzdq509.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Contracts API - Dev (Direct)
-  
-  # Chat API
-  - url: https://57s2xhuuo4.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Chat API - Dev (Direct)
-
-  # Support Chat API
-  - url: https://gru7fsup3e.execute-api.eu-south-1.amazonaws.com/dev/v1
-    description: Support Chat API - Dev (Direct)
+  - url: https://hk3y2bs3ph.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1
+    description: "[DEV-AURABATTLE] User API (Direct)"
+  - url: https://ln6a4z3lp4.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1
+    description: "[DEV-AURABATTLE] Battles API (Direct)"

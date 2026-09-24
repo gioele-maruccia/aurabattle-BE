@@ -1,0 +1,24 @@
+get:
+  tags:
+    - Battles
+  summary: Le mie battle
+  description: Ritorna tutte le battle create dall'utente autenticato, qualsiasi stato.
+  operationId: getMyBattles
+  security:
+    - CognitoAuth: []
+  responses:
+    '200':
+      description: Lista battle dell'utente
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              items:
+                type: array
+                items:
+                  $ref: '../../components/schemas/battles/Battle.yml'
+              count:
+                type: integer
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

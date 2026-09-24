@@ -58,7 +58,17 @@ def handler(event, context):
                 address['country'] = 'IT'
             update_parts.append('address = :address')
             expr_values[':address'] = address
-        
+
+        # Aggiorna display_name (nome pubblico)
+        if 'display_name' in body:
+            update_parts.append('display_name = :display_name')
+            expr_values[':display_name'] = body['display_name']
+
+        # Aggiorna avatar_url
+        if 'avatar_url' in body:
+            update_parts.append('avatar_url = :avatar_url')
+            expr_values[':avatar_url'] = body['avatar_url']
+
         if not update_parts:
             return {
                 'statusCode': 400,

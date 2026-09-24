@@ -1,0 +1,36 @@
+delete:
+  tags:
+    - Battles
+  summary: Elimina una battle
+  description: Solo l'host della battle può eliminarla.
+  operationId: deleteBattle
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Battle eliminata
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+    '403':
+      description: Solo l'host può eliminare la battle
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

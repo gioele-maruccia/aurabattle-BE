@@ -2,7 +2,7 @@
 
 /**
  * Cognito Authentication Proxy for Swagger UI
- * Environment-based configuration (dev/prod)
+ * Environment-based configuration (dev-aurabattle/prod-aurabattle)
  */
 
 const http = require('http');
@@ -14,51 +14,38 @@ const { URL } = require('url');
 // ENVIRONMENT CONFIGURATION
 // ============================================================================
 
-const ENV = process.env.ENV || 'dev';
+const ENV = process.env.ENV || 'dev-aurabattle';
 
 const ENVIRONMENTS = {
-  dev: {
+  'dev-aurabattle': {
     cognito: {
       users: {
         region: 'eu-south-1',
-        userPoolId: 'eu-south-1_0oK9agPYd',
-        clientId: '79g67hnuepfuoh1fnk4d98jfpu',
+        userPoolId: 'eu-south-1_ULXAFvzY9',
+        clientId: '1si0vr079rbrvtck9ht4cpob78',
       }
     },
     apiGateways: {
-      backoffice: 'https://v7m02xrzyh.execute-api.eu-south-1.amazonaws.com/dev',
-      documents: 'https://fwizu30er5.execute-api.eu-south-1.amazonaws.com/dev',
-      userProfile: 'https://vl053j522a.execute-api.eu-south-1.amazonaws.com/dev',
-      companies: ' https://60yduam5il.execute-api.eu-south-1.amazonaws.com/dev',
-      jobListings: 'https://0kur695aae.execute-api.eu-south-1.amazonaws.com/dev',
-      bookings: 'https://abala746ia.execute-api.eu-south-1.amazonaws.com/dev',
-      referenceData: 'https://8b9akxu7z4.execute-api.eu-south-1.amazonaws.com/dev',
-      contracts: 'https://ua6afz3kzb.execute-api.eu-south-1.amazonaws.com/dev',
-      chat: 'https://57s2xhuuo4.execute-api.eu-south-1.amazonaws.com/dev',
-      supportChat: 'https://gru7fsup3e.execute-api.eu-south-1.amazonaws.com/dev',
-      userApi: 'https://8y5y7khdp8.execute-api.eu-south-1.amazonaws.com/dev'
+      // Aggiungi qui i gateway man mano che deployi gli altri servizi
+      userApi: 'https://hk3y2bs3ph.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1',
+      backoffice: '',
+      battles: 'https://ln6a4z3lp4.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1',
+      participations: '',
     }
   },
-  prod: {
+  'prod-aurabattle': {
     cognito: {
       users: {
         region: 'eu-south-1',
-        userPoolId: 'eu-south-1_iCBtUlJO6',
-        clientId: '20gudbvdh3hesbge0c8od0202b',
+        userPoolId: '',
+        clientId: '',
       }
     },
     apiGateways: {
-      backoffice: 'https://b59g0m7g4j.execute-api.eu-south-1.amazonaws.com/prod',
-      documents: 'https://uuob2qxq6i.execute-api.eu-south-1.amazonaws.com/prod',
-      userProfile: 'https://0h1mgdk871.execute-api.eu-south-1.amazonaws.com/prod', 
-      companies: 'https://bn6bl5uqoa.execute-api.eu-south-1.amazonaws.com/prod',
-      jobListings: 'https://m0vjkzixzk.execute-api.eu-south-1.amazonaws.com/prod',
-      bookings: 'https://2cn7qkhhhj.execute-api.eu-south-1.amazonaws.com/prod',
-      referenceData: 'https://10bkq6xynh.execute-api.eu-south-1.amazonaws.com/prod',
-      contracts: 'https://dfuatoula1.execute-api.eu-south-1.amazonaws.com/prod',
-      chat: '',
-      supportChat: '',
-      userApi: 'https://o2hw6imm12.execute-api.eu-south-1.amazonaws.com/prod'
+      userApi: '',
+      backoffice: '',
+      battles: '',
+      participations: '',
     }
   }
 };
@@ -68,70 +55,21 @@ const CONFIG = {
   cognito: ENVIRONMENTS[ENV].cognito,
   apiGateways: ENVIRONMENTS[ENV].apiGateways,
   proxy: { port: 8081 },
-  
-  // Route mapping: which API Gateway to use for each path pattern
+
+  // Route mapping: which API Gateway to use for each path pattern.
+  // Aggiungi qui i pattern man mano che sblocchi nuovi servizi.
   routeMapping: {
     '/auth/': 'local',
-    
-    // Profile endpoints (more specific first)
+
+    // User API (profile, settings, fcm-token, delete-account)
     '/profile': 'userApi',
     '/settings': 'userApi',
-    '/verifications': 'userApi',
-    '/ratings': 'userApi',
-    '/bookmarks/': 'userApi',
-    
-    // Chat endpoints (more specific first)
-    '/chats/[^/]+/messages/[^/]+/state': 'chat',    // PATCH /chats/{chatId}/messages/{messageId}/state
-    '/chats/[^/]+/messages/[^/]+/sticker': 'chat',  // POST /chats/{chatId}/messages/{messageId}/sticker
-    '/chats/[^/]+/messages': 'chat',                // GET/POST /chats/{chatId}/messages
-    '/chats/[^/]+/upload-url': 'chat',              // GET /chats/{chatId}/upload-url
-    '/chats/[^/]+/download-url': 'chat',            // GET /chats/{chatId}/download-url
-    '/chats/[^/]+/request-help': 'chat',            // POST /chats/{chatId}/request-help
-    '/chats/[^/]+/status': 'chat',                  // PATCH /chats/{chatId}/status
-    '/chats': 'chat',                               // GET/POST /chats
-    
-    // Support Chat endpoints
-    '/support-chats/[^/]+/messages/[^/]+/state': 'supportChat',     // PATCH /support-chats/{supportChatId}/messages/{messageId}/state
-    '/support-chats/[^/]+/messages/[^/]+/sticker': 'supportChat',   // POST /support-chats/{supportChatId}/messages/{messageId}/sticker
-    '/support-chats/[^/]+/messages': 'supportChat',                 // GET/POST /support-chats/{supportChatId}/messages
-    '/support-chats/[^/]+/upload-url': 'supportChat',               // GET /support-chats/{supportChatId}/upload-url
-    '/support-chats/[^/]+/download-url': 'supportChat',             // GET /support-chats/{supportChatId}/download-url
-    '/support-chats/[^/]+/status': 'supportChat',                   // PATCH /support-chats/{supportChatId}/status
-    '/support-chats': 'supportChat',                                 // GET/POST /support-chats
-    
-    '/contracts/': 'contracts',
-    '/reference-data': 'referenceData',
-    '/bookings/blackout/listing/': 'bookings',
-    '/bookings/blackout/': 'bookings',
-    '/bookings/blackout/[^/]+': 'bookings',
-    '/bookings/availability/': 'bookings',
-    '/bookings/worker/': 'bookings',
-    '/bookings/company/': 'bookings',
-    '/bookings/listing/': 'bookings',
-    '/bookings/[^/]+/status': 'bookings',
-    '/bookings/[^/]+/cancel': 'bookings',
-    '/bookings/[^/]+': 'bookings',
-    '/bookings': 'bookings',
-    '/workers/calendar': 'bookings',
-    '/listings/company/': 'jobListings',
-    '/listings/my': 'jobListings',
-    '/listings/[^/]+/publish': 'jobListings',
-    '/listings/[^/]+/pause': 'jobListings',
-    '/listings/[^/]+/close': 'jobListings',
-    '/listings/[^/]+': 'jobListings',
-    '/listings': 'jobListings',
-    '/companies/my-applicable-job-roles': 'companies',
-    '/companies/public/': 'companies',
-    '/companies/[^/]+': 'companies',
-    '/companies': 'companies',
-    '/documents/user/': 'backoffice',
-    '/documents/download/': 'backoffice',
-    '/documents/stats': 'backoffice',
-    '/users/search': 'backoffice',
-    '/documents/upload-url': 'documents',
-    '/user/': 'documents',
-    '/initiate-upgrade': 'userProfile',
-    '/documents': 'backoffice',
+    '/users/[^/]+/fcm-token': 'userApi',
+    '/bookmarks/battles': 'userApi',
+
+    // Battles
+    '/battles': 'battles',
+    '/battles/': 'battles',
   }
 };
 
@@ -191,6 +129,77 @@ class CognitoAuth {
       });
     });
   }
+
+  runAwsCli(args) {
+    return new Promise((resolve, reject) => {
+      const aws = spawn('aws', args);
+      let stdout = '';
+      let stderr = '';
+
+      aws.stdout.on('data', (data) => stdout += data.toString());
+      aws.stderr.on('data', (data) => stderr += data.toString());
+
+      aws.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(stderr || 'AWS CLI command failed'));
+          return;
+        }
+        resolve(stdout ? JSON.parse(stdout) : {});
+      });
+    });
+  }
+
+  async signUp(username, password, givenName, familyName, autoConfirm = true) {
+    const userAttributes = [`Name=given_name,Value=${givenName || ''}`];
+    if (familyName) userAttributes.push(`Name=family_name,Value=${familyName}`);
+
+    const signUpResult = await this.runAwsCli([
+      'cognito-idp', 'sign-up',
+      '--region', this.region,
+      '--client-id', this.clientId,
+      '--username', username,
+      '--password', password,
+      '--user-attributes', ...userAttributes,
+      '--output', 'json'
+    ]);
+
+    if (!autoConfirm) {
+      return {
+        userSub: signUpResult.UserSub,
+        confirmed: false,
+        message: 'Account creato. Controlla la mail per il codice di verifica e usa POST /auth/confirm.'
+      };
+    }
+
+    // Auto-confirma l'utente (skip del codice email) - solo per comodità in dev/test
+    await this.runAwsCli([
+      'cognito-idp', 'admin-confirm-sign-up',
+      '--region', this.region,
+      '--user-pool-id', this.userPoolId,
+      '--username', username
+    ]);
+
+    return {
+      userSub: signUpResult.UserSub,
+      confirmed: true,
+      message: 'Account creato e confermato. Ora puoi fare login con POST /auth/login/users.'
+    };
+  }
+
+  async confirmSignUp(username, code) {
+    await this.runAwsCli([
+      'cognito-idp', 'confirm-sign-up',
+      '--region', this.region,
+      '--client-id', this.clientId,
+      '--username', username,
+      '--confirmation-code', code
+    ]);
+
+    return {
+      confirmed: true,
+      message: 'Account confermato. Ora puoi fare login con POST /auth/login/users.'
+    };
+  }
 }
 
 // ============================================================================
@@ -232,10 +241,19 @@ class ProxyServer {
 
     const url = new URL(req.url, `http://localhost:${this.config.proxy.port}`);
 
-    if (url.pathname === '/auth/login' || 
-        url.pathname === '/auth/login/users' ||
-        url.pathname === '/auth/login/backoffice') {
+    if (url.pathname === '/auth/login' ||
+        url.pathname === '/auth/login/users') {
       await this.handleLogin(req, res);
+      return;
+    }
+
+    if (url.pathname === '/auth/signup') {
+      await this.handleSignup(req, res);
+      return;
+    }
+
+    if (url.pathname === '/auth/confirm') {
+      await this.handleConfirm(req, res);
       return;
     }
 
@@ -255,7 +273,7 @@ class ProxyServer {
       console.log(`[AUTH] Login attempt: ${username}`);
       const tokens = await this.auth.login(username, password);
       console.log(`[AUTH] Success: ${username}`);
-      
+
       this.sendJson(res, 200, tokens);
     } catch (error) {
       console.error(`[AUTH] Failed:`, error.message);
@@ -263,36 +281,79 @@ class ProxyServer {
     }
   }
 
+  async handleSignup(req, res) {
+    try {
+      const body = await this.readBody(req);
+      const { username, password, given_name, family_name, auto_confirm } = JSON.parse(body);
+
+      if (!username || !password) {
+        this.sendError(res, 400, 'username and password required');
+        return;
+      }
+
+      const autoConfirm = auto_confirm === true; // default false: rispecchia il flusso reale dell'app
+      console.log(`[AUTH] Signup attempt: ${username} (auto_confirm=${autoConfirm})`);
+      const result = await this.auth.signUp(username, password, given_name, family_name, autoConfirm);
+      console.log(`[AUTH] Signup success: ${username}`);
+
+      this.sendJson(res, 201, result);
+    } catch (error) {
+      console.error(`[AUTH] Signup failed:`, error.message);
+      this.sendError(res, 400, error.message);
+    }
+  }
+
+  async handleConfirm(req, res) {
+    try {
+      const body = await this.readBody(req);
+      const { username, code } = JSON.parse(body);
+
+      if (!username || !code) {
+        this.sendError(res, 400, 'username and code required');
+        return;
+      }
+
+      console.log(`[AUTH] Confirm attempt: ${username}`);
+      const result = await this.auth.confirmSignUp(username, code);
+      console.log(`[AUTH] Confirm success: ${username}`);
+
+      this.sendJson(res, 200, result);
+    } catch (error) {
+      console.error(`[AUTH] Confirm failed:`, error.message);
+      this.sendError(res, 400, error.message);
+    }
+  }
+
   determineApiGateway(pathname) {
     // Remove query string from pathname
     const pathOnly = pathname.split('?')[0];
-    
+
     for (const [pattern, gateway] of Object.entries(this.config.routeMapping)) {
       const regex = new RegExp('^' + pattern);
       if (regex.test(pathOnly)) {
         return gateway;
       }
     }
-    return 'backoffice';
+    return null;
   }
 
   proxyToApiGateway(req, res) {
     const pathname = new URL(req.url, `http://localhost:${this.config.proxy.port}`).pathname;
     const gatewayType = this.determineApiGateway(pathname);
-    
-    if (gatewayType === 'local') {
+
+    if (!gatewayType || gatewayType === 'local') {
       this.sendError(res, 404, 'Endpoint not found');
       return;
     }
-    
+
     const apiGatewayUrl = this.config.apiGateways[gatewayType];
-    
+
     if (!apiGatewayUrl) {
       console.error(`[PROXY] No API Gateway URL configured for: ${gatewayType}`);
       this.sendError(res, 502, `API Gateway not configured for ${gatewayType}`);
       return;
     }
-    
+
     const apiUrl = new URL(apiGatewayUrl);
     const basePath = apiUrl.pathname.replace(/\/$/, '');
     const incomingPath = req.url.startsWith('/') ? req.url : `/${req.url}`;
@@ -370,7 +431,7 @@ class ProxyServer {
   }
 
   sendJson(res, statusCode, data) {
-    res.writeHead(statusCode, { 
+    res.writeHead(statusCode, {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*'
     });

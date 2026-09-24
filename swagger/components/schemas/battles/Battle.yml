@@ -1,0 +1,34 @@
+type: object
+properties:
+  battle_id:
+    type: string
+    format: uuid
+    example: "a6d66a62-4bcd-4069-9ba5-6eeff473264f"
+  host_id:
+    type: string
+    format: uuid
+    description: user_id dell'utente che ha creato la battle
+    example: "864eb230-a071-708c-ec7e-a1c6446c9cbe"
+  title:
+    type: string
+    example: "Torneo Aura Street"
+  description:
+    type: string
+    example: "Prima battle di prova"
+  location:
+    type: string
+    example: "Milano, Parco Sempione"
+  event_datetime:
+    type: string
+    format: date-time
+    example: "2026-10-15T18:00:00Z"
+  status:
+    type: string
+    enum: [published, closed]
+    example: "published"
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time

@@ -4,7 +4,10 @@ Description: User API - Profile and preferences management
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: dev-aurabattle
+    AllowedValues:
+    - dev-aurabattle
+    - prod-aurabattle
   UserPoolId:
     Type: String
     Description: Cognito User Pool ID
@@ -14,24 +17,12 @@ Parameters:
   UserProfilesTableName:
     Type: String
     Description: DynamoDB User Profiles table name
-  UserDocumentsTableName:
+  BattlesTableName:
     Type: String
-    Description: DynamoDB User Documents table name
-  DocumentsBucketName:
-    Type: String
-    Description: S3 bucket name for user documents
-  CompaniesTableName:
-    Type: String
-    Description: DynamoDB Companies table name
-  JobListingsTableName:
-    Type: String
-    Description: DynamoDB Job Listings table name
-  KmsKeyArn:
-    Type: String
-    Description: KMS Key ARN for DynamoDB encryption
+    Description: DynamoDB Battles table name
 Globals:
   Function:
-    Runtime: python3.13
+    Runtime: python3.10
     Timeout: 30
     Environment:
       Variables:
@@ -41,12 +32,6 @@ Globals:
           Ref: UserProfilesTableName
         USER_POOL_ID:
           Ref: UserPoolId
-        JOB_LISTINGS_TABLE:
-          Ref: JobListingsTableName
-        COMPANIES_TABLE:
-          Ref: CompaniesTableName
-        COMPANIES_BUCKET_NAME:
-          Fn::Sub: beezey-${Environment}-companies-assets
 Resources:
   UserAPI:
     Type: AWS::Serverless::Api
@@ -71,44 +56,14 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-get-profile
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/d8d98947619d354f6c2c53610a15e1ec
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/24bf344397ca0f65e038ca613c1f38c9
       Handler: app.handler
       Timeout: 30
-      Environment:
-        Variables:
-          BOOKINGS_TABLE:
-            Fn::Sub: ${Environment}-Bookings
-          COMPANIES_TABLE:
-            Fn::Sub: ${Environment}-Companies
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Fn::Sub: ${Environment}-Bookings
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Fn::Sub: ${Environment}-Companies
-      - Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:Query
-          Resource:
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/workerId-startDate-index
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/companyId-status-index
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index
       Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /profile
-            Method: GET
         Get:
           Type: Api
           Properties:
@@ -123,7 +78,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-update-profile
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/d5d4cbfc5bd50f8c56ed57ada717b958
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/0c8f13c74b5e7e0964a6d1a14750bc37
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -136,13 +91,6 @@ Resources:
           Resource:
             Ref: UserPoolArn
       Events:
-        UpdateLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /profile
-            Method: PUT
         Update:
           Type: Api
           Properties:
@@ -157,20 +105,13 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-update-settings
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/be4e7fff132cdefcde3d8a75d221425c
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/be4e7fff132cdefcde3d8a75d221425c
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
       Events:
-        UpdateLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /settings
-            Method: PATCH
         Update:
           Type: Api
           Properties:
@@ -180,204 +121,15 @@ Resources:
             Method: PATCH
     Metadata:
       SamResourceId: UpdateSettingsFunction
-  GetVerificationsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-get-verifications
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/2e90a27196d38b92b7be44c154f5cbff
-      Handler: app.handler
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /verifications
-            Method: GET
-        Get:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/verifications
-            Method: GET
-    Metadata:
-      SamResourceId: GetVerificationsFunction
-  GetRatingsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-get-ratings
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/cb2ca0e1faead9d0b752991367695b69
-      Handler: app.handler
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /ratings
-            Method: GET
-        Get:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/ratings
-            Method: GET
-    Metadata:
-      SamResourceId: GetRatingsFunction
-  DeleteUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-delete-user
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/d0c6c61d59a67292be406ca12c62ef7f
-      Handler: app.handler
-      Timeout: 30
-      Environment:
-        Variables:
-          USER_DOCUMENTS_TABLE:
-            Ref: UserDocumentsTableName
-          DOCUMENTS_BUCKET:
-            Ref: DocumentsBucketName
-          COMPANIES_TABLE:
-            Ref: CompaniesTableName
-          JOB_LISTINGS_TABLE:
-            Ref: JobListingsTableName
-          BOOKINGS_TABLE:
-            Fn::Sub: ${Environment}-Bookings
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserDocumentsTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: CompaniesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Fn::Sub: ${Environment}-Bookings
-      - S3CrudPolicy:
-          BucketName:
-            Ref: DocumentsBucketName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - cognito-idp:AdminDeleteUser
-          - cognito-idp:AdminGetUser
-          - cognito-idp:AdminListGroupsForUser
-          Resource:
-            Ref: UserPoolArn
-        - Effect: Allow
-          Action:
-          - kms:Decrypt
-          - kms:DescribeKey
-          - kms:GenerateDataKey
-          Resource:
-            Ref: KmsKeyArn
-      Events:
-        DeleteLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /profile
-            Method: DELETE
-        Delete:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/profile
-            Method: DELETE
-    Metadata:
-      SamResourceId: DeleteUserFunction
-  RequestAccountDeletionFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-request-account-deletion
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/e84dbf8597dc3aa2129a8a277f976443
-      Handler: app.handler
-      Timeout: 60
-      Environment:
-        Variables:
-          BOOKINGS_TABLE:
-            Fn::Sub: ${Environment}-Bookings
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Fn::Sub: ${Environment}-Bookings
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: CompaniesTableName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - cognito-idp:AdminListGroupsForUser
-          Resource:
-            Ref: UserPoolArn
-        - Effect: Allow
-          Action:
-          - dynamodb:Query
-          Resource:
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/workerId-startDate-index
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/companyId-status-index
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index
-      Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /profile/delete-request
-            Method: POST
-        Post:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/profile/delete-request
-            Method: POST
-    Metadata:
-      SamResourceId: RequestAccountDeletionFunction
   DeleteAccountSimpleFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-delete-account-simple
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/410d146a606989b724af217cda95071d
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/410d146a606989b724af217cda95071d
       Handler: app.handler
       Timeout: 10
       Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /profile/delete-account-simple
-            Method: POST
         Post:
           Type: Api
           Properties:
@@ -387,217 +139,18 @@ Resources:
             Method: POST
     Metadata:
       SamResourceId: DeleteAccountSimpleFunction
-  ProcessAccountDeletionsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-process-account-deletions
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/99a9fdb5f32470278aebeb4e96121c2f
-      Handler: app.handler
-      Timeout: 300
-      Environment:
-        Variables:
-          USER_DOCUMENTS_TABLE:
-            Ref: UserDocumentsTableName
-          DOCUMENTS_BUCKET:
-            Ref: DocumentsBucketName
-          BOOKINGS_TABLE:
-            Fn::Sub: ${Environment}-Bookings
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserDocumentsTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: CompaniesTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      - DynamoDBCrudPolicy:
-          TableName:
-            Fn::Sub: ${Environment}-Bookings
-      - S3CrudPolicy:
-          BucketName:
-            Ref: DocumentsBucketName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - cognito-idp:AdminDeleteUser
-          Resource:
-            Ref: UserPoolArn
-        - Effect: Allow
-          Action:
-          - dynamodb:Scan
-          Resource:
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}
-        - Effect: Allow
-          Action:
-          - dynamodb:Query
-          Resource:
-          - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index
-        - Effect: Allow
-          Action:
-          - kms:Decrypt
-          - kms:DescribeKey
-          - kms:GenerateDataKey
-          Resource:
-            Ref: KmsKeyArn
-      Events:
-        DailySchedule:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 3 * * ? *)
-            Name:
-              Fn::Sub: ${Environment}-process-account-deletions-daily
-            Description: Daily schedule to permanently delete accounts past the 15-day
-              grace period
-            Enabled: true
-    Metadata:
-      SamResourceId: ProcessAccountDeletionsFunction
-  AddBookmarkFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-add-bookmark
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/7eb5196aee76ffd2acf3447481b36282
-      Handler: app.handler
-      Environment:
-        Variables:
-          JOB_LISTINGS_TABLE:
-            Ref: JobListingsTableName
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /bookmarks/job-listings/{job_listing_id}
-            Method: POST
-        Post:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/bookmarks/job-listings/{job_listing_id}
-            Method: POST
-    Metadata:
-      SamResourceId: AddBookmarkFunction
-  RemoveBookmarkFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-remove-bookmark
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/e79598c4363e4252345318a33b46cd81
-      Handler: app.handler
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      Events:
-        DeleteLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /bookmarks/job-listings/{job_listing_id}
-            Method: DELETE
-        Delete:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/bookmarks/job-listings/{job_listing_id}
-            Method: DELETE
-    Metadata:
-      SamResourceId: RemoveBookmarkFunction
-  ListBookmarksFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-user-api-list-bookmarks
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/df7aae239bb94dd0005303b1641a0ada
-      Handler: app.handler
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: UserProfilesTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: JobListingsTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: CompaniesTableName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          - s3:HeadObject
-          Resource:
-            Fn::Sub: arn:aws:s3:::beezey-${Environment}-companies-assets/*
-      Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /bookmarks/job-listings
-            Method: GET
-        Get:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /v1/bookmarks/job-listings
-            Method: GET
-    Metadata:
-      SamResourceId: ListBookmarksFunction
   RegisterFcmTokenFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-register-fcm-token
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/d9398057352b7cbef83c228ffaad5f3b
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/d9398057352b7cbef83c228ffaad5f3b
       Handler: app.handler
-      Environment:
-        Variables:
-          SCHEDULER_ROLE_ARN:
-            Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role
-          SEND_RETENTION_PUSH_FUNCTION_ARN:
-            Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${Environment}-firebase-send-retention-push
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - scheduler:CreateSchedule
-          - scheduler:UpdateSchedule
-          - scheduler:DeleteSchedule
-          Resource:
-            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*
-        - Effect: Allow
-          Action: iam:PassRole
-          Resource:
-            Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role
       Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /users/{userId}/fcm-token
-            Method: POST
         Post:
           Type: Api
           Properties:
@@ -607,52 +160,83 @@ Resources:
             Method: POST
     Metadata:
       SamResourceId: RegisterFcmTokenFunction
-  TrackRetentionEventFunction:
+  AddBookmarkFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: ${Environment}-user-api-track-retention-event
-      CodeUri: s3://beezey-dev/user-api/20260504-153412/89278039e69051c842a4825fcdc04d42
+        Fn::Sub: ${Environment}-user-api-add-bookmark
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/b256c66ddf2ed4a1f58661e4591a7a9d
       Handler: app.handler
       Environment:
         Variables:
-          SCHEDULER_ROLE_ARN:
-            Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role
-          SEND_RETENTION_PUSH_FUNCTION_ARN:
-            Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${Environment}-firebase-send-retention-push
+          BATTLES_TABLE:
+            Ref: BattlesTableName
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - scheduler:CreateSchedule
-          - scheduler:UpdateSchedule
-          - scheduler:DeleteSchedule
-          Resource:
-            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*
-        - Effect: Allow
-          Action: iam:PassRole
-          Resource:
-            Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
       Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: UserAPI
-            Path: /users/{userId}/retention-event
-            Method: POST
         Post:
           Type: Api
           Properties:
             RestApiId:
               Ref: UserAPI
-            Path: /v1/users/{userId}/retention-event
+            Path: /v1/bookmarks/battles/{battleId}
             Method: POST
     Metadata:
-      SamResourceId: TrackRetentionEventFunction
+      SamResourceId: AddBookmarkFunction
+  RemoveBookmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-user-api-remove-bookmark
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/ca458ade5a67f7d1502659a395c74e6c
+      Handler: app.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: UserAPI
+            Path: /v1/bookmarks/battles/{battleId}
+            Method: DELETE
+    Metadata:
+      SamResourceId: RemoveBookmarkFunction
+  ListBookmarksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-user-api-list-bookmarks
+      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/58483b9c334f84d43cb3915ab3578a82
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLES_TABLE:
+            Ref: BattlesTableName
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: UserAPI
+            Path: /v1/bookmarks/battles
+            Method: GET
+    Metadata:
+      SamResourceId: ListBookmarksFunction
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:
@@ -679,11 +263,6 @@ Outputs:
   ApiEndpoint:
     Value:
       Fn::Sub: https://${UserAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-  RetentionSchedulerRoleArn:
-    Description: ARN of IAM Role for EventBridge Scheduler (retention push, created
-      by firebase-notifications stack)
-    Value:
-      Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role
   ApiId:
     Value:
       Ref: UserAPI
@@ -692,16 +271,4 @@ Outputs:
     Value:
       Fn::GetAtt:
       - DeleteAccountSimpleFunction
-      - Arn
-  RequestAccountDeletionFunctionArn:
-    Description: ARN of RequestAccountDeletion Lambda function
-    Value:
-      Fn::GetAtt:
-      - RequestAccountDeletionFunction
-      - Arn
-  ProcessAccountDeletionsFunctionArn:
-    Description: ARN of ProcessAccountDeletions Lambda function (cron)
-    Value:
-      Fn::GetAtt:
-      - ProcessAccountDeletionsFunction
       - Arn

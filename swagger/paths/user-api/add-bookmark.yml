@@ -1,123 +1,35 @@
 post:
   tags:
     - User Profile & Settings
-  summary: Add job listing to bookmarks
-  description: |
-    Add a job listing to the user's bookmarks. Only published job listings can be bookmarked.
-    
-    **Requirements:**
-    - Job listing must exist
-    - Job listing status must be 'published'
-    - Job listing cannot already be bookmarked (idempotent check)
-    
-    **Status handling:**
-    - ✅ Allowed: `published`
-    - ❌ Blocked: `draft`, `paused`, `closed`, `archived`
-  operationId: addJobListingBookmark
+  summary: Salva una battle nei bookmark
+  operationId: addBookmark
   security:
     - CognitoAuth: []
-  
   parameters:
-    - name: job_listing_id
+    - name: battleId
       in: path
       required: true
-      description: Unique identifier of the job listing to bookmark
       schema:
         type: string
-      example: "job-123"
-  
   responses:
     '200':
-      description: Bookmark added successfully
+      description: Bookmark aggiunto (idempotente)
       content:
         application/json:
           schema:
             type: object
             properties:
-              message:
-                type: string
-                example: "Bookmark added successfully"
-              bookmarked_job_listings:
+              success:
+                type: boolean
+              bookmarked_battles:
                 type: array
                 items:
                   type: string
-                description: Complete list of user's bookmarked job listing IDs
-                example: ["job-123", "job-456", "job-789"]
-    
-    '400':
-      description: Bad Request - Job listing cannot be bookmarked
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              message:
-                type: string
-          examples:
-            notPublished:
-              summary: Job listing is not published
-              value:
-                error: "Cannot bookmark job listing with status: paused"
-                message: "Only published job listings can be bookmarked"
-            missingParameter:
-              summary: Missing path parameter
-              value:
-                error: "Missing parameter: job_listing_id"
-    
-    '401':
-      description: Unauthorized - Invalid or missing authentication token
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-                example: "Unauthorized"
-    
     '404':
-      description: Not Found - Job listing or user profile not found
+      description: Battle non trovata
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              error:
-                type: string
-          examples:
-            jobListingNotFound:
-              summary: Job listing not found
-              value:
-                error: "Job listing not found"
-            userProfileNotFound:
-              summary: User profile not found
-              value:
-                error: "User profile not found"
-    
-    '409':
-      description: Conflict - Bookmark already exists
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              message:
-                type: string
-          example:
-            error: "Bookmark already exists"
-            message: "This job listing is already in your bookmarks"
-    
-    '500':
-      description: Internal server error
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-                example: "Internal Server Error"
+            $ref: '../../components/schemas/common.yml#/Error'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

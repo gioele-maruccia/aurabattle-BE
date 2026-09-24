@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Battles Data - DynamoDB table
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
+
+Resources:
+  BattlesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Battles'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: battle_id
+          AttributeType: S
+        - AttributeName: host_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: event_datetime
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: battle_id
+          KeyType: HASH
+
+      GlobalSecondaryIndexes:
+        - IndexName: host_id-index
+          KeySchema:
+            - AttributeName: host_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+        - IndexName: status-event_datetime-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: event_datetime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  TableName:
+    Value: !Ref BattlesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt BattlesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'

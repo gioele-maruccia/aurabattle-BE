@@ -1,0 +1,21 @@
+get:
+  tags:
+    - Battles
+  summary: Dettaglio battle
+  description: Nessuna autenticazione richiesta.
+  operationId: getBattle
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Battle trovata
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/battles/Battle.yml'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'

@@ -1,0 +1,49 @@
+version = 0.1
+
+[default]
+
+[default.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "dev-aurabattle-battles-data"
+s3_prefix = "battles"
+s3_bucket = "aurabattle-dev-artifacts"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev-aurabattle"
+
+[dev-aurabattle]
+
+[dev-aurabattle.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[dev-aurabattle.deploy.parameters]
+stack_name = "dev-aurabattle-battles-data"
+s3_prefix = "battles"
+s3_bucket = "aurabattle-dev-artifacts"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev-aurabattle"
+
+[prod-aurabattle]
+
+[prod-aurabattle.build.parameters]
+use_container = false
+cached = true
+parallel = true
+
+[prod-aurabattle.deploy.parameters]
+stack_name = "prod-aurabattle-battles-data"
+s3_prefix = "battles"
+s3_bucket = "aurabattle-prod-artifacts"
+region = "eu-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod-aurabattle"

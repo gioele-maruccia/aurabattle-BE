@@ -24,11 +24,6 @@ def lambda_handler(event, context):
                 "family_name": "Rossi",
                 "birthdate": "1990-01-15",
                 "phone_number": "+39...",
-                "custom:profile_type": "basic",
-                "address": "Via Roma 123",
-                "custom:city": "Milano",
-                "custom:postal_code": "20100",
-                "custom:province": "MI",
                 ...
             }
         },
@@ -55,65 +50,52 @@ def lambda_handler(event, context):
                 'birthdate': attrs.get('birthdate', ''),
                 'phone_number': attrs.get('phone_number', '')
             },
-            
-            # Indirizzo e localizzazione geografica
-            'address': {
-                'street': attrs.get('address', ''),
-                'city': attrs.get('custom:city', ''),
-                'postal_code': attrs.get('custom:postal_code', ''),
-                'province': attrs.get('custom:province', ''),
-                'country': 'IT'  # Default Italia
-            },
-            
-            # Tipo profilo
-            'profile_type': attrs.get('custom:profile_type', 'basic'),
-            
+
+            # Nome pubblico mostrato agli altri utenti (default: given_name)
+            'display_name': attrs.get('given_name', ''),
+            'avatar_url': None,
+
+            # Stato account (per moderazione)
+            'account_status': 'active',
+
+            # Contatori denormalizzati (aggiornati quando esisterà la tabella Battles)
+            'hosted_battles_count': 0,
+            'joined_battles_count': 0,
+
             # Stato verifiche
             'verifications': {
                 'email_verified': True,  # Email già confermata da Cognito
-                'phone_verified': False,
-                'identity_verified': False,
-                'payment_verified': False
+                'phone_verified': False
             },
-            
-            # Ratings e reviews iniziali
-            'ratings': {
-                'average': 0,
-                'count': 0,
-                'as_worker': {
-                    'average': 0,
-                    'count': 0
-                },
-                'as_employer': {
-                    'average': 0,
-                    'count': 0
-                }
+
+            # Statistiche aura (placeholder, da definire con le regole delle battle)
+            'aura_stats': {
+                'level': 0,
+                'wins': 0,
+                'losses': 0
             },
-            
+
             # Preferenze notifiche (default)
             'notification_preferences': {
                 'email_enabled': False,
                 'push_enabled': False,
-                'sms_enabled': False,
                 'channels': {
-                    'new_jobs': False,
-                    'applications': False,
+                    'new_battles': False,
+                    'battle_reminders': False,
                     'messages': False,
                     'marketing': False
                 }
             },
-            
+
             # Localizzazione (default Italia)
             'localization': {
                 'preferred_language': 'it',
-                'timezone': 'Europe/Rome',
-                'currency': 'EUR',
-                'auto_translation_enabled': True  # Default: traduzione abilitata
+                'timezone': 'Europe/Rome'
             },
-            
-            # Job listings salvati nei bookmark
-            'bookmarked_job_listings': [],  # Array di job_listing_id salvati nei bookmark
-            
+
+            # Battle salvate nei bookmark (aura battle a cui l'utente vuole assistere/partecipare)
+            'bookmarked_battles': [],
+
             # Timestamp
             'created_at': datetime.utcnow().isoformat() + 'Z',
             'updated_at': datetime.utcnow().isoformat() + 'Z'

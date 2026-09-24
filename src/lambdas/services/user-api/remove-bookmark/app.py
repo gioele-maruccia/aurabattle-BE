@@ -1,6 +1,6 @@
 """
-User API - Remove Job Listing Bookmark
-Rimuove un job listing dai bookmark dell'utente
+User API - Remove Battle Bookmark
+Rimuove una battle dai bookmark dell'utente autenticato.
 """
 import json
 import os
@@ -10,77 +10,42 @@ from datetime import datetime
 dynamodb = boto3.resource('dynamodb')
 user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
 
+
+def _cors_response(status_code, body):
+    return {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            'Access-Control-Allow-Methods': 'DELETE,OPTIONS',
+        },
+        'body': json.dumps(body, default=str),
+    }
+
+
 def handler(event, context):
-    """
-    DELETE /bookmarks/job-listings/{job_listing_id}
-    Rimuove un job listing dai bookmark dell'utente
-    """
     try:
-        # Estrai user_id dal token Cognito
         user_id = event['requestContext']['authorizer']['claims']['sub']
-        
-        # Estrai job_listing_id dai path parameters
-        job_listing_id = event['pathParameters']['job_listing_id']
-        
-        print(f"[RemoveBookmark] User {user_id} removing job listing {job_listing_id}")
-        
-        # Recupera il profilo utente per trovare l'indice del bookmark
-        profile_response = user_profiles_table.get_item(Key={'user_id': user_id})
-        
-        if 'Item' not in profile_response:
-            return {
-                'statusCode': 404,
-                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Not Found', 'message': 'User profile not found', 'code': 4289})
-            }
-        
-        profile = profile_response['Item']
-        bookmarked_listings = profile.get('bookmarked_job_listings', [])
-        
-        # Trova l'indice del job listing da rimuovere
-        if job_listing_id not in bookmarked_listings:
-            return {
-                'statusCode': 404,
-                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Not Found', 'message': 'Bookmark not found', 'code': 4124})
-            }
-        
-        index = bookmarked_listings.index(job_listing_id)
-        
-        # Rimuovi il bookmark usando l'indice
-        response = user_profiles_table.update_item(
+        battle_id = event['pathParameters']['battleId']
+
+        profile = user_profiles_table.get_item(Key={'user_id': user_id}).get('Item')
+        if not profile:
+            return _cors_response(404, {'error': 'Not Found', 'message': 'Profile not found'})
+
+        bookmarks = [b for b in profile.get('bookmarked_battles', []) if b != battle_id]
+
+        user_profiles_table.update_item(
             Key={'user_id': user_id},
-            UpdateExpression=f'REMOVE bookmarked_job_listings[{index}] SET updated_at = :timestamp',
+            UpdateExpression='SET bookmarked_battles = :bookmarks, updated_at = :now',
             ExpressionAttributeValues={
-                ':timestamp': datetime.utcnow().isoformat() + 'Z'
-            },
-            ReturnValues='ALL_NEW'
+                ':bookmarks': bookmarks,
+                ':now': datetime.utcnow().isoformat() + 'Z',
+            }
         )
-        
-        print(f"[RemoveBookmark] ✅ Bookmark removed successfully")
-        
-        return {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({
-                'message': 'Bookmark removed successfully',
-                'bookmarked_job_listings': response['Attributes'].get('bookmarked_job_listings', []),
-                'code': 3028
-            })
-        }
-        
-    except KeyError as e:
-        print(f"[RemoveBookmark] ❌ Missing parameter: {str(e)}")
-        return {
-            'statusCode': 400,
-            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'Bad Request', 'message': f'Missing parameter: {str(e)}', 'code': 4290})
-        }
-        
+
+        return _cors_response(200, {'success': True, 'bookmarked_battles': bookmarks})
+
     except Exception as e:
-        print(f"[RemoveBookmark] ❌ Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'Internal Server Error', 'message': str(e), 'code': 5082})
-        }
+        print(f"[remove-bookmark] Error: {e}")
+        return _cors_response(500, {'error': 'Internal Server Error', 'message': str(e)})

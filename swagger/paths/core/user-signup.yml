@@ -1,0 +1,83 @@
+    post:
+      tags:
+        - Authentication
+      summary: User Signup (dev/test only)
+      description: |
+        Crea un nuovo utente su Cognito.
+
+        Per default (`auto_confirm` assente o `false`) si comporta come farà
+        l'app: Cognito invia una mail con un codice, che poi confermi con
+        **POST /auth/confirm**. Imposta `auto_confirm: true` solo per bypassare
+        la mail e creare rapidamente account di test.
+
+        **Nota:** questo endpoint esiste solo nel proxy locale (`auth-proxy.js`),
+        non è un'API AWS reale — è una comodità per lo sviluppo/testing.
+
+        **Usage (flusso reale, default):**
+        1. Compila email, password, nome e cognome
+        2. Click "Execute"
+        3. Controlla la mail per il codice
+        4. Usa **POST /auth/confirm** con email e codice
+        5. Ora puoi fare login con **POST /auth/login/users**
+
+        **Usage (bypass rapido per test):**
+        1. Compila i campi e imposta `auto_confirm: true`
+        2. Click "Execute"
+        3. L'account viene creato e confermato: ora puoi fare login con
+           **POST /auth/login/users**
+      operationId: userSignup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  format: email
+                  example: "test@example.com"
+                password:
+                  type: string
+                  format: password
+                  description: Minimo 8 caratteri, maiuscola, minuscola, numero
+                  example: "TestAura123!"
+                given_name:
+                  type: string
+                  example: "Mario"
+                family_name:
+                  type: string
+                  example: "Rossi"
+                auto_confirm:
+                  type: boolean
+                  default: false
+                  description: |
+                    Se false (default), rispecchia il flusso reale dell'app: Cognito
+                    invia il codice via mail, confermalo con POST /auth/confirm.
+                    Se true, conferma subito senza mail (solo per test rapidi).
+                  example: false
+      responses:
+        '201':
+          description: Account creato e confermato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userSub:
+                    type: string
+                    example: "769ea220-0041-7031-53c8-1695c582b409"
+                  confirmed:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+        '400':
+          description: Richiesta non valida (es. password debole, utente già esistente)
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'

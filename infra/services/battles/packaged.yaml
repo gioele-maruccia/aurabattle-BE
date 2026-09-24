@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Battles API - Create, browse and manage battles
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+    - dev-aurabattle
+    - prod-aurabattle
+  UserPoolArn:
+    Type: String
+    Description: Cognito User Pool ARN
+  BattlesTableName:
+    Type: String
+    Description: DynamoDB Battles table name
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 30
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        BATTLES_TABLE:
+          Ref: BattlesTableName
+        USER_PROFILES_TABLE:
+          Ref: UserProfilesTableName
+Resources:
+  BattlesApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: Environment
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn:
+              Ref: UserPoolArn
+      Cors:
+        AllowMethods: '''*'''
+        AllowHeaders: '''Content-Type,Authorization'''
+        AllowOrigin: '''*'''
+    Metadata:
+      SamResourceId: BattlesApi
+  CreateBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-create
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/ae4b8efe7612c68fd441b190528d30a0
+      Handler: app.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles
+            Method: POST
+    Metadata:
+      SamResourceId: CreateBattleFunction
+  ListBattlesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-list
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/6b0b3748668e2029fedfa7102f05471b
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ListBattlesFunction
+  GetMyBattlesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-get-my
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/1abbff270f9c2ba69b2f86bbbdb96bb1
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles/my
+            Method: GET
+    Metadata:
+      SamResourceId: GetMyBattlesFunction
+  GetBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-get
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/b7122822f808c08f08ebab7ecd190d74
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: GetBattleFunction
+  UpdateBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-update
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/49226e0267f819e6c18eef8564bf2892
+      Handler: app.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: PUT
+    Metadata:
+      SamResourceId: UpdateBattleFunction
+  DeleteBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-delete
+      CodeUri: s3://aurabattle-dev-artifacts/battles-dev-aurabattle/20260924-114642/a328deb10dd03548065d6e6535f859e9
+      Handler: app.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: DELETE
+    Metadata:
+      SamResourceId: DeleteBattleFunction
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId:
+        Ref: BattlesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault4XX
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId:
+        Ref: BattlesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault5XX
+Outputs:
+  ApiEndpoint:
+    Value:
+      Fn::Sub: https://${BattlesApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  ApiId:
+    Value:
+      Ref: BattlesApi

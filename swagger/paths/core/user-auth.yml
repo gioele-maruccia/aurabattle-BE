@@ -4,16 +4,16 @@
       summary: User Login
       description: |
         Authenticate app users with Cognito.
-        
-        **User Pool:** eu-south-1_0oK9agPYd
-        **Client ID:** 79g67hnuepfuoh1fnk4d98jfpu
-        
+
+        **User Pool:** eu-south-1_ULXAFvzY9 (dev-aurabattle)
+        **Client ID:** 1si0vr079rbrvtck9ht4cpob78
+
         **Usage:**
         1. Enter your user credentials
         2. Click "Execute"
         3. Copy the `idToken`
         4. Click "Authorize" at top and paste token
-        
+
       operationId: userLogin
       requestBody:
         required: true
@@ -22,8 +22,8 @@
             schema:
               $ref: '../../components/schemas/backoffice.yml#/LoginRequest'
             example:
-              username: "diveradar24@gmail.com"
-              password: "DiveRadar@123"
+              username: "you@example.com"
+              password: "YourPassword123!"
       responses:
         '200':
           description: Login successful

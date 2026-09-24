@@ -1,0 +1,51 @@
+put:
+  tags:
+    - Battles
+  summary: Aggiorna una battle
+  description: Solo l'host della battle può modificarla.
+  operationId: updateBattle
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            location:
+              type: string
+            event_datetime:
+              type: string
+              format: date-time
+            status:
+              type: string
+              enum: [published, closed]
+              description: "'closed' per chiudere la battle (es. tutti i posti coperti, evento annullato)"
+  responses:
+    '200':
+      description: Battle aggiornata
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/battles/Battle.yml'
+    '403':
+      description: Solo l'host può modificare la battle
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

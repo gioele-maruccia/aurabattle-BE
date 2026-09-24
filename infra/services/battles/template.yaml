@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Battles API - Create, browse and manage battles
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+  UserPoolArn:
+    Type: String
+    Description: Cognito User Pool ARN
+
+  BattlesTableName:
+    Type: String
+    Description: DynamoDB Battles table name
+
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 30
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        BATTLES_TABLE: !Ref BattlesTableName
+        USER_PROFILES_TABLE: !Ref UserProfilesTableName
+
+Resources:
+  BattlesApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !Ref UserPoolArn
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  # POST /battles - Crea una nuova battle (auth richiesta)
+  CreateBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-create
+      CodeUri: ../../../src/lambdas/services/battles/create-battle/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles
+            Method: POST
+
+  # GET /battles - Lista pubblica delle battle pubblicate (no auth)
+  ListBattlesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-list
+      CodeUri: ../../../src/lambdas/services/battles/list-battles/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  # GET /battles/my - Le mie battle (auth richiesta)
+  GetMyBattlesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-get-my
+      CodeUri: ../../../src/lambdas/services/battles/get-my-battles/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/my
+            Method: GET
+
+  # GET /battles/{battleId} - Dettaglio battle (no auth)
+  GetBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-get
+      CodeUri: ../../../src/lambdas/services/battles/get-battle/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  # PUT /battles/{battleId} - Aggiorna battle (solo host)
+  UpdateBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-update
+      CodeUri: ../../../src/lambdas/services/battles/update-battle/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: PUT
+
+  # DELETE /battles/{battleId} - Elimina battle (solo host)
+  DeleteBattleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-delete
+      CodeUri: ../../../src/lambdas/services/battles/delete-battle/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}
+            Method: DELETE
+
+  # CORS su risposte di errore API Gateway
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref BattlesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref BattlesApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub 'https://${BattlesApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+  ApiId:
+    Value: !Ref BattlesApi

@@ -5,52 +5,36 @@ Description: User API - Profile and preferences management
 Parameters:
   Environment:
     Type: String
-    Default: dev
-  
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
   UserPoolId:
     Type: String
     Description: Cognito User Pool ID
-  
+
   UserPoolArn:
     Type: String
     Description: Cognito User Pool ARN
-  
+
   UserProfilesTableName:
     Type: String
     Description: DynamoDB User Profiles table name
-  
-  UserDocumentsTableName:
+
+  BattlesTableName:
     Type: String
-    Description: DynamoDB User Documents table name
-  
-  DocumentsBucketName:
-    Type: String
-    Description: S3 bucket name for user documents
-  
-  CompaniesTableName:
-    Type: String
-    Description: DynamoDB Companies table name
-  
-  JobListingsTableName:
-    Type: String
-    Description: DynamoDB Job Listings table name
-  
-  KmsKeyArn:
-    Type: String
-    Description: KMS Key ARN for DynamoDB encryption
+    Description: DynamoDB Battles table name
 
 Globals:
   Function:
-    Runtime: python3.13
+    Runtime: python3.10
     Timeout: 30
     Environment:
       Variables:
         ENVIRONMENT: !Ref Environment
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
         USER_POOL_ID: !Ref UserPoolId
-        JOB_LISTINGS_TABLE: !Ref JobListingsTableName
-        COMPANIES_TABLE: !Ref CompaniesTableName
-        COMPANIES_BUCKET_NAME: !Sub 'beezey-${Environment}-companies-assets'
 
 Resources:
   UserAPI:
@@ -68,7 +52,7 @@ Resources:
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
 
-  # GET /profile - Ottieni profilo completo (con auto-restore se account in eliminazione)
+  # GET /profile - Ottieni profilo completo
   GetProfileFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -76,34 +60,10 @@ Resources:
       CodeUri: ../../../src/lambdas/services/user-api/get-profile/
       Handler: app.handler
       Timeout: 30
-      Environment:
-        Variables:
-          BOOKINGS_TABLE: !Sub '${Environment}-Bookings'
-          COMPANIES_TABLE: !Sub '${Environment}-Companies'
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Sub '${Environment}-Bookings'
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobListingsTableName
-        - DynamoDBReadPolicy:
-            TableName: !Sub '${Environment}-Companies'
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:Query
-              Resource:
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/workerId-startDate-index'
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/companyId-status-index'
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index'
       Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /profile
-            Method: GET
         Get:
           Type: Api
           Properties:
@@ -111,7 +71,7 @@ Resources:
             Path: /v1/profile
             Method: GET
 
-  # PUT /profile - Aggiorna profilo completo (Cognito + DynamoDB: profile + address)
+  # PUT /profile - Aggiorna profilo completo (Cognito + DynamoDB)
   UpdateProfileFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -127,12 +87,6 @@ Resources:
                 - cognito-idp:AdminUpdateUserAttributes
               Resource: !Ref UserPoolArn
       Events:
-        UpdateLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /profile
-            Method: PUT
         Update:
           Type: Api
           Properties:
@@ -140,7 +94,7 @@ Resources:
             Path: /v1/profile
             Method: PUT
 
-  # PATCH /settings - Aggiorna TUTTE le preferenze (notifiche + localizzazione + traduzione + payment)
+  # PATCH /settings - Aggiorna preferenze (notifiche + localizzazione)
   UpdateSettingsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -151,167 +105,12 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
       Events:
-        UpdateLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /settings
-            Method: PATCH
         Update:
           Type: Api
           Properties:
             RestApiId: !Ref UserAPI
             Path: /v1/settings
             Method: PATCH
-
-  # GET /verifications - Ottieni stato verifiche
-  GetVerificationsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-get-verifications
-      CodeUri: ../../../src/lambdas/services/user-api/get-verifications/
-      Handler: app.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref UserProfilesTableName
-      Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /verifications
-            Method: GET
-        Get:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/verifications
-            Method: GET
-
-  # GET /ratings - Ottieni ratings e reviews
-  GetRatingsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-get-ratings
-      CodeUri: ../../../src/lambdas/services/user-api/get-ratings/
-      Handler: app.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref UserProfilesTableName
-      Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /ratings
-            Method: GET
-        Get:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/ratings
-            Method: GET
-
-  # DELETE /profile - Elimina utente da Cognito e UserProfiles
-  DeleteUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-delete-user
-      CodeUri: ../../../src/lambdas/services/user-api/delete-user/
-      Handler: app.handler
-      Timeout: 30
-      Environment:
-        Variables:
-          USER_DOCUMENTS_TABLE: !Ref UserDocumentsTableName
-          DOCUMENTS_BUCKET: !Ref DocumentsBucketName
-          COMPANIES_TABLE: !Ref CompaniesTableName
-          JOB_LISTINGS_TABLE: !Ref JobListingsTableName
-          BOOKINGS_TABLE: !Sub '${Environment}-Bookings'
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserProfilesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserDocumentsTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref CompaniesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobListingsTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Sub '${Environment}-Bookings'
-        - S3CrudPolicy:
-            BucketName: !Ref DocumentsBucketName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminDeleteUser
-                - cognito-idp:AdminGetUser
-                - cognito-idp:AdminListGroupsForUser
-              Resource: !Ref UserPoolArn
-            - Effect: Allow
-              Action:
-                - kms:Decrypt
-                - kms:DescribeKey
-                - kms:GenerateDataKey
-              Resource: !Ref KmsKeyArn
-      Events:
-        DeleteLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /profile
-            Method: DELETE
-        Delete:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/profile
-            Method: DELETE
-
-  # POST /profile/delete-request - Richiesta eliminazione account (grace period 15gg)
-  RequestAccountDeletionFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-request-account-deletion
-      CodeUri: ../../../src/lambdas/services/user-api/request-account-deletion/
-      Handler: app.handler
-      Timeout: 60
-      Environment:
-        Variables:
-          BOOKINGS_TABLE: !Sub '${Environment}-Bookings'
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserProfilesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Sub '${Environment}-Bookings'
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobListingsTableName
-        - DynamoDBReadPolicy:
-            TableName: !Ref CompaniesTableName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminListGroupsForUser
-              Resource: !Ref UserPoolArn
-            - Effect: Allow
-              Action:
-                - dynamodb:Query
-              Resource:
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/workerId-startDate-index'
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-Bookings/index/companyId-status-index'
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index'
-      Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /profile/delete-request
-            Method: POST
-        Post:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/profile/delete-request
-            Method: POST
 
   # Stub API - Eliminazione account semplificata (placeholder per il frontend)
   DeleteAccountSimpleFunction:
@@ -322,12 +121,6 @@ Resources:
       Handler: app.handler
       Timeout: 10
       Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /profile/delete-account-simple
-            Method: POST
         Post:
           Type: Api
           Properties:
@@ -335,63 +128,25 @@ Resources:
             Path: /v1/profile/delete-account-simple
             Method: POST
 
-  # Cron job - Eliminazione definitiva account dopo 15gg (ogni notte alle 3 AM UTC)
-  ProcessAccountDeletionsFunction:
+  # POST /users/{userId}/fcm-token - Registra FCM token per notifiche push
+  RegisterFcmTokenFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ${Environment}-user-api-process-account-deletions
-      CodeUri: ../../../src/lambdas/services/user-api/process-account-deletions/
+      FunctionName: !Sub ${Environment}-user-api-register-fcm-token
+      CodeUri: ../../../src/lambdas/services/user-api/register-fcm-token/
       Handler: app.handler
-      Timeout: 300
-      Environment:
-        Variables:
-          USER_DOCUMENTS_TABLE: !Ref UserDocumentsTableName
-          DOCUMENTS_BUCKET: !Ref DocumentsBucketName
-          BOOKINGS_TABLE: !Sub '${Environment}-Bookings'
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserDocumentsTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref CompaniesTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobListingsTableName
-        - DynamoDBCrudPolicy:
-            TableName: !Sub '${Environment}-Bookings'
-        - S3CrudPolicy:
-            BucketName: !Ref DocumentsBucketName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminDeleteUser
-              Resource: !Ref UserPoolArn
-            - Effect: Allow
-              Action:
-                - dynamodb:Scan
-              Resource:
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfilesTableName}'
-            - Effect: Allow
-              Action:
-                - dynamodb:Query
-              Resource:
-                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobListingsTableName}/index/companyId-createdAt-index'
-            - Effect: Allow
-              Action:
-                - kms:Decrypt
-                - kms:DescribeKey
-                - kms:GenerateDataKey
-              Resource: !Ref KmsKeyArn
       Events:
-        DailySchedule:
-          Type: Schedule
+        Post:
+          Type: Api
           Properties:
-            Schedule: cron(0 3 * * ? *)
-            Name: !Sub '${Environment}-process-account-deletions-daily'
-            Description: Daily schedule to permanently delete accounts past the 15-day grace period
-            Enabled: true
+            RestApiId: !Ref UserAPI
+            Path: /v1/users/{userId}/fcm-token
+            Method: POST
 
-  # POST /bookmarks/job-listings/{job_listing_id} - Aggiungi job listing ai bookmark
+  # POST /bookmarks/battles/{battleId} - Aggiungi battle ai bookmark
   AddBookmarkFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -400,27 +155,21 @@ Resources:
       Handler: app.handler
       Environment:
         Variables:
-          JOB_LISTINGS_TABLE: !Ref JobListingsTableName
+          BATTLES_TABLE: !Ref BattlesTableName
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
         - DynamoDBReadPolicy:
-            TableName: !Ref JobListingsTableName
+            TableName: !Ref BattlesTableName
       Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /bookmarks/job-listings/{job_listing_id}
-            Method: POST
         Post:
           Type: Api
           Properties:
             RestApiId: !Ref UserAPI
-            Path: /v1/bookmarks/job-listings/{job_listing_id}
+            Path: /v1/bookmarks/battles/{battleId}
             Method: POST
 
-  # DELETE /bookmarks/job-listings/{job_listing_id} - Rimuovi job listing dai bookmark
+  # DELETE /bookmarks/battles/{battleId} - Rimuovi battle dai bookmark
   RemoveBookmarkFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -431,128 +180,35 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
       Events:
-        DeleteLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /bookmarks/job-listings/{job_listing_id}
-            Method: DELETE
         Delete:
           Type: Api
           Properties:
             RestApiId: !Ref UserAPI
-            Path: /v1/bookmarks/job-listings/{job_listing_id}
+            Path: /v1/bookmarks/battles/{battleId}
             Method: DELETE
 
-  # GET /bookmarks/job-listings - Lista tutti i bookmark dell'utente
+  # GET /bookmarks/battles - Lista battle salvate nei bookmark
   ListBookmarksFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${Environment}-user-api-list-bookmarks
       CodeUri: ../../../src/lambdas/services/user-api/list-bookmarks/
       Handler: app.handler
+      Environment:
+        Variables:
+          BATTLES_TABLE: !Ref BattlesTableName
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref UserProfilesTableName
         - DynamoDBReadPolicy:
-            TableName: !Ref JobListingsTableName
-        - DynamoDBReadPolicy:
-            TableName: !Ref CompaniesTableName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:HeadObject
-              Resource: !Sub 'arn:aws:s3:::beezey-${Environment}-companies-assets/*'
+            TableName: !Ref BattlesTableName
       Events:
-        GetLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /bookmarks/job-listings
-            Method: GET
         Get:
           Type: Api
           Properties:
             RestApiId: !Ref UserAPI
-            Path: /v1/bookmarks/job-listings
+            Path: /v1/bookmarks/battles
             Method: GET
-
-  # POST /users/{userId}/fcm-token - Registra FCM token per notifiche push
-  RegisterFcmTokenFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-register-fcm-token
-      CodeUri: ../../../src/lambdas/services/user-api/register-fcm-token/
-      Handler: app.handler
-      Environment:
-        Variables:
-          SCHEDULER_ROLE_ARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role'
-          SEND_RETENTION_PUSH_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${Environment}-firebase-send-retention-push'
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserProfilesTableName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - scheduler:CreateSchedule
-                - scheduler:UpdateSchedule
-                - scheduler:DeleteSchedule
-              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*'
-            - Effect: Allow
-              Action: iam:PassRole
-              Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role'
-      Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /users/{userId}/fcm-token
-            Method: POST
-        Post:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/users/{userId}/fcm-token
-            Method: POST
-
-  # POST /users/{userId}/retention-event - Traccia eventi del flusso di upgrade (3-Touch push)
-  TrackRetentionEventFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${Environment}-user-api-track-retention-event
-      CodeUri: ../../../src/lambdas/services/user-api/track-retention-event/
-      Handler: app.handler
-      Environment:
-        Variables:
-          SCHEDULER_ROLE_ARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role'
-          SEND_RETENTION_PUSH_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${Environment}-firebase-send-retention-push'
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserProfilesTableName
-        - Statement:
-            - Effect: Allow
-              Action:
-                - scheduler:CreateSchedule
-                - scheduler:UpdateSchedule
-                - scheduler:DeleteSchedule
-              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/task_upgrade_reminder_*'
-            - Effect: Allow
-              Action: iam:PassRole
-              Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role'
-      Events:
-        PostLegacy:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /users/{userId}/retention-event
-            Method: POST
-        Post:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserAPI
-            Path: /v1/users/{userId}/retention-event
-            Method: POST
 
   # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
   GatewayResponseDefault4XX:
@@ -576,17 +232,8 @@ Resources:
 Outputs:
   ApiEndpoint:
     Value: !Sub 'https://${UserAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
-  RetentionSchedulerRoleArn:
-    Description: ARN of IAM Role for EventBridge Scheduler (retention push, created by firebase-notifications stack)
-    Value: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${Environment}-retention-scheduler-role'
   ApiId:
     Value: !Ref UserAPI
   DeleteAccountSimpleFunctionArn:
     Description: ARN of DeleteAccountSimple stub Lambda function
     Value: !GetAtt DeleteAccountSimpleFunction.Arn
-  RequestAccountDeletionFunctionArn:
-    Description: ARN of RequestAccountDeletion Lambda function
-    Value: !GetAtt RequestAccountDeletionFunction.Arn
-  ProcessAccountDeletionsFunctionArn:
-    Description: ARN of ProcessAccountDeletions Lambda function (cron)
-    Value: !GetAtt ProcessAccountDeletionsFunction.Arn

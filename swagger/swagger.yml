@@ -8,27 +8,11 @@ servers:
 tags:
   - name: Authentication
     description: Cognito authentication endpoints
-  - name: Profile upgrade
-    description: Document upload and status for app users (profile-upgrade-documents project)
   - name: User Profile & Settings
-    description: User profile management - personal info, address, ratings, User preferences - notifications, localization, translation, payment
-  - name: Companies
-    description: Company profile management (companies-api project)
-  - name: Job listings
-    description: Job listings management (job-listings-api project)
-  - name: Contracts
-    description: CCNL Turismo contract calculations and base pay management (contracts-api project)
-  - name: Bookings
-    description: Booking management (bookings-api project)
-  - name: Chat
-    description: Real-time chat and messaging between workers and companies
-  - name: Support Chat
-    description: Support chat system for users to communicate with Beezey administrators
-  - name: Backoffice
-    description: Document management operations (backoffice-api-sam project)
-  - name: Reference data
-    description: Reference data for job listings (job roles, contracts, categories, employment types)
-    
+    description: User profile management and preferences
+  - name: Battles
+    description: Creazione e gestione delle aura battle
+
 components:
   securitySchemes:
     CognitoAuth:
@@ -36,281 +20,24 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        JWT token obtained from /auth/login endpoint.
+        JWT token obtained from /auth/login/users endpoint.
         Token expires after 1 hour.
 
 
 paths:
 
   # ============================================================================
-  # BOOKINGS
-  # ============================================================================
-  
-  /bookings:
-    $ref: './paths/bookings/create-booking.yml'
-
-  /bookings/{bookingId}:
-    $ref: './paths/bookings/get-booking-by-id.yml'
-
-  /bookings/worker/{workerId}:
-    $ref: './paths/bookings/list-worker-bookings.yml'
-
-  /bookings/company/{companyId}:
-    $ref: './paths/bookings/list-company-bookings.yml'
-
-  /bookings/listing/{listingId}:
-    $ref: './paths/bookings/get-listing-bookings.yml'
-
-  /bookings/{bookingId}/status:
-    $ref: './paths/bookings/get-booking-status.yml'
-
-  /bookings/{bookingId}/cancel:
-    $ref: './paths/bookings/cancel-booking.yml'
-
-  /bookings/{bookingId}/dates:
-    $ref: './paths/bookings/update-booking-dates.yml'
-
-  /bookings/{bookingId}/confirm-dates:
-    $ref: './paths/bookings/confirm-booking-dates.yml'
-
-  /bookings/blackout:
-    $ref: './paths/bookings/blackout-booking.yml'
-
-  /bookings/blackout/listing/{listingId}:
-    $ref: './paths/bookings/listing-blackout-by-id.yml'
-  
-  /bookings/blackout/{bookingId}:
-    $ref: './paths/bookings/delete-blackout.yml'
-
-  /bookings/availability/{listingId}:
-    $ref: './paths/bookings/check-availability.yml'
-
-  /bookings/calculate-net-salary:
-    $ref: './paths/bookings/calculate-net-salary.yml'
-
-  /bookings/{bookingId}/review:
-    $ref: './paths/bookings/create-review.yml'
-
-  /reviews/target/{targetId}/summary:
-    $ref: './paths/bookings/get-review-summary.yml'
-
-  /reviews/target/{targetId}:
-    $ref: './paths/bookings/list-reviews.yml'
-    
-  # ============================================================================
   # AUTHENTICATION
   # ============================================================================
-  
+
   /auth/login/users:
     $ref: './paths/core/user-auth.yml'
 
+  /auth/signup:
+    $ref: './paths/core/user-signup.yml'
 
-  # ============================================================================
-  # BACKOFFICE - DOCUMENTS
-  # ============================================================================
-
-  /documents:
-    $ref: './paths/backoffice/documents.yml'
-
-  /documents/user/{user_sub}:
-    $ref: './paths/backoffice/user-documents.yml'
-
-  /documents/download/{user_sub}/{document_id}:
-    $ref: './paths/backoffice/documents-download.yml'
-
-  /documents/{user_sub}/{document_id}/status:
-    $ref: './paths/backoffice/update-document-status.yml'
-
-  # ============================================================================
-  # BACKOFFICE - USERS & STATISTICS
-  # ============================================================================
-
-  /users/search:
-    $ref: './paths/backoffice/search-users.yml'
-
-  /documents/stats:
-    $ref: './paths/backoffice/documents-statistics.yml'
-
-  /reset-profile:
-    $ref: './paths/backoffice/reset-profile.yml'
-
-  # ============================================================================
-  # APP - DOCUMENTS UPLOAD
-  # ============================================================================
-
-  /documents/upload-url:
-      $ref: './paths/profile-upgrade-documents/upload-url.yml'
-
-  /documents/verify-face:
-      $ref: './paths/profile-upgrade-documents/verify-face.yml'
-
-  /user/{user_sub}/documents/status:
-      $ref: './paths/profile-upgrade-documents/user-documents-status.yml'
-
-
-  # ============================================================================
-  # APP - USER PROFILE UPGRADE
-  # ============================================================================
-
-  /initiate-upgrade:
-      $ref: './paths/profile-upgrade-request/initiate-upgrade.yml'
-
-  # ============================================================================
-  # COMPANIES API
-  # ============================================================================
-
-  /companies:
-    post:
-      $ref: './paths/companies/create-company.yml'
-    get:
-      $ref: './paths/companies/list-companies.yml'
-
-  /companies/{userId}:
-    get:
-      $ref: './paths/companies/get-company-by-userId.yml'
-    put:
-      $ref: './paths/companies/update-company-profile.yml'
-    delete:
-      $ref: './paths/companies/delete-company.yml'
-
-  /companies/public/{companyId}:
-      $ref: './paths/companies/get-company-profile-by-companyId.yml'
-
-  /companies/my-applicable-job-roles:
-    $ref: './paths/companies/get-my-applicable-job-roles.yml'
-
-  # ============================================================================
-  # JOB LISTINGS API
-  # ============================================================================
-
-  /listings:
-    post:
-      $ref: './paths/job-listings/create-job-listing.yml#/post'
-    get:
-      $ref: './paths/job-listings/list-listings.yml#/get'
-
-  /listings/my:
-      $ref: './paths/job-listings/get-my-listings.yml'
-
-  /listings/{listingId}:
-      get:
-        $ref: './paths/job-listings/get-update-delete.yml#/get'
-      put:
-        $ref: './paths/job-listings/get-update-delete.yml#/put'
-      delete:
-        $ref: './paths/job-listings/delete-listing.yml#/delete'
-
-  /listings/{listingId}/publish:
-      $ref: './paths/job-listings/publish.yml'
-
-  /listings/{listingId}/pause:
-      $ref: './paths/job-listings/pause.yml'
-
-  /listings/company/{companyId}:
-      $ref: './paths/job-listings/get-company-listings.yml'
-
-  # ============================================================================
-  # CHAT API
-  # ============================================================================
-
-  /chats:
-    get:
-      $ref: './paths/chat/get-my-chats.yml#/get'
-    post:
-      $ref: './paths/chat/create-chat.yml#/post'
-
-  /chats/unread-count:
-    get:
-      $ref: './paths/chat/get-unread-count.yml#/get'
-
-  /chats/{chatId}:
-    delete:
-      $ref: './paths/chat/delete-chat.yml#/delete'
-
-  /chats/{chatId}/status:
-    $ref: './paths/chat/update-chat-status.yml'
-
-  /chats/{chatId}/messages:
-    get:
-      $ref: './paths/chat/get-messages.yml#/get'
-    post:
-      $ref: './paths/chat/send-message.yml#/post'
-
-  /chats/{chatId}/messages/{messageId}/state:
-    $ref: './paths/chat/update-message-state.yml'
-
-  /chats/{chatId}/messages/{messageId}/sticker:
-    $ref: './paths/chat/set-sticker.yml'
-
-  /chats/{chatId}/upload-url:
-    $ref: './paths/chat/get-upload-url.yml'
-
-  /chats/{chatId}/download-url:
-    $ref: './paths/chat/get-download-url.yml'
-
-  /chats/{chatId}/request-help:
-    $ref: './paths/chat/request-beezey-help.yml'
-
-  # Backoffice endpoints for chat
-  /backoffice/chats/with-help-requests:
-    $ref: './paths/chat/backoffice-get-chats-with-help.yml'
-
-  # WebSocket chat actions (sent over WSS connection, documented here for reference)
-  /ws/chats/typing:
-    post:
-      $ref: './paths/chat/typing-status.yml#/post'
-
-  # ============================================================================
-  # SUPPORT CHAT API
-  # ============================================================================
-
-  /support-chats:
-    post:
-      $ref: './paths/support-chat/create-support-chat.yml#/post'
-    get:
-      $ref: './paths/support-chat/get-my-support-chats.yml#/get'
-
-  /support-chats/initiate:
-    $ref: './paths/support-chat/initiate-support-chat.yml'
-
-  /support-chats/{supportChatId}:
-    delete:
-      $ref: './paths/support-chat/delete-support-chat.yml#/delete'
-
-  /support-chats/{supportChatId}/status:
-    $ref: './paths/support-chat/update-support-chat-status.yml'
-
-  /support-chats/{supportChatId}/messages:
-    get:
-      $ref: './paths/support-chat/get-support-messages.yml#/get'
-    post:
-      $ref: './paths/support-chat/send-support-message.yml#/post'
-
-  /support-chats/{supportChatId}/messages/{messageId}/state:
-    $ref: './paths/support-chat/update-support-message-state.yml'
-
-  /support-chats/{supportChatId}/messages/{messageId}/sticker:
-    $ref: './paths/support-chat/set-support-sticker.yml'
-
-  /support-chats/{supportChatId}/upload-url:
-    $ref: './paths/support-chat/get-support-upload-url.yml'
-
-  /support-chats/{supportChatId}/download-url:
-    $ref: './paths/support-chat/get-support-download-url.yml'
-
-  # ============================================================================
-  # REFERENCE DATA API
-  # ============================================================================
-
-  /reference-data:
-      $ref: './paths/reference-data-configuration/get-reference-data.yml'
-
-  # ============================================================================
-  # CONTRACTS API
-  # ============================================================================
-
-  /contracts/calculate-base-pay:
-      $ref: './paths/contracts/calculate-base-pay.yml'
+  /auth/confirm:
+    $ref: './paths/core/user-confirm.yml'
 
   # ============================================================================
   # USER API - Profile & Settings Management
@@ -321,36 +48,51 @@ paths:
       $ref: './paths/user-api/get-profile.yml#/get'
     put:
       $ref: './paths/user-api/update-profile.yml#/put'
-    delete:
-      $ref: './paths/user-api/delete-profile.yml#/delete'
 
   /settings:
     $ref: './paths/user-api/update-settings.yml'
-
-  /verifications:
-    $ref: './paths/user-api/get-verifications.yml'
-
-  /ratings:
-    $ref: './paths/user-api/get-ratings.yml'
-
-  /bookmarks/job-listings:
-    get:
-      $ref: './paths/user-api/list-bookmarks.yml#/get'
-
-  /bookmarks/job-listings/{job_listing_id}:
-    post:
-      $ref: './paths/user-api/add-bookmark.yml#/post'
-    delete:
-      $ref: './paths/user-api/remove-bookmark.yml#/delete'
-
-  /users/{userId}/fcm-token:
-    $ref: './paths/user-api/register-fcm-token.yml'
-
-  /profile/delete-request:
-    post:
-      $ref: './paths/user-api/request-account-deletion.yml#/post'
 
   /profile/delete-account-simple:
     post:
       $ref: './paths/user-api/delete-account-simple.yml#/post'
 
+  /users/{userId}/fcm-token:
+    $ref: './paths/user-api/register-fcm-token.yml'
+
+  /bookmarks/battles:
+    get:
+      $ref: './paths/user-api/list-bookmarks.yml#/get'
+
+  /bookmarks/battles/{battleId}:
+    post:
+      $ref: './paths/user-api/add-bookmark.yml#/post'
+    delete:
+      $ref: './paths/user-api/remove-bookmark.yml#/delete'
+
+  # ============================================================================
+  # BATTLES
+  # ============================================================================
+
+  /battles:
+    post:
+      $ref: './paths/battles/create-battle.yml#/post'
+    get:
+      $ref: './paths/battles/list-battles.yml#/get'
+
+  /battles/my:
+    $ref: './paths/battles/get-my-battles.yml'
+
+  /battles/{battleId}:
+    get:
+      $ref: './paths/battles/get-battle.yml#/get'
+    put:
+      $ref: './paths/battles/update-battle.yml#/put'
+    delete:
+      $ref: './paths/battles/delete-battle.yml#/delete'
+
+  # ============================================================================
+  # DA SBLOCCARE MAN MANO CHE DEPLOYIAMO I PROSSIMI SERVIZI:
+  # - Backoffice (search-users) — pronto, non ancora deployato
+  # - Participations (ex bookings)
+  # - Chat / Support Chat
+  # ============================================================================

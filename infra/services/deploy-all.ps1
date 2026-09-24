@@ -15,12 +15,7 @@ $services = @(
     "bookings",
     "support-chat",
     "backoffice",
-    "companies",
-    "contracts",
     "job-listings",
-    "profile-upgrade-documents",
-    "profile-upgrade-request",
-    "reference-data-configuration",
     "user-api",
     "email-notifications"
 )

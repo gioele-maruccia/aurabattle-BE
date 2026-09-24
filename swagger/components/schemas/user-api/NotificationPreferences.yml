@@ -4,42 +4,37 @@ properties:
   email_enabled:
     type: boolean
     description: Enable email notifications
-    example: true
+    example: false
   push_enabled:
     type: boolean
     description: Enable push notifications
-    example: true
-  sms_enabled:
-    type: boolean
-    description: Enable SMS notifications
     example: false
   channels:
     type: object
     description: Notification channels preferences
     properties:
-      new_jobs:
+      new_battles:
         type: boolean
-        description: Notify about new job listings
-        example: true
-      applications:
+        description: Notify about new battles
+        example: false
+      battle_reminders:
         type: boolean
-        description: Notify about job applications
-        example: true
+        description: Notify about upcoming battle reminders
+        example: false
       messages:
         type: boolean
         description: Notify about new chat messages
-        example: true
+        example: false
       marketing:
         type: boolean
         description: Receive marketing communications
         example: false
     required:
-      - new_jobs
-      - applications
+      - new_battles
+      - battle_reminders
       - messages
       - marketing
 required:
   - email_enabled
   - push_enabled
-  - sms_enabled
   - channels

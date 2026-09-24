@@ -1,0 +1,38 @@
+get:
+  tags:
+    - Battles
+  summary: Lista pubblica delle battle
+  description: Ritorna le battle pubblicate, ordinate per data evento (dalla più vicina). Nessuna autenticazione richiesta.
+  operationId: listBattles
+  parameters:
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+    - name: cursor
+      in: query
+      required: false
+      description: Valore di `next_cursor` ottenuto dalla risposta precedente, per caricare la pagina successiva
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Lista battle
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              items:
+                type: array
+                items:
+                  $ref: '../../components/schemas/battles/Battle.yml'
+              count:
+                type: integer
+              next_cursor:
+                type: string
+                nullable: true
+                description: Presente solo se ci sono altri risultati. Passalo come `cursor` alla chiamata successiva.

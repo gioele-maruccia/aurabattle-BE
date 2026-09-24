@@ -4,14 +4,13 @@ Description: User Profiles Data - Simple DynamoDB table
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: dev-aurabattle
     AllowedValues:
-      - dev
-      - dev-be
-      - prod
+      - dev-aurabattle
+      - prod-aurabattle
 
 Conditions:
-  IsProduction: !Equals [!Ref Environment, prod]
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
 
 Resources:
   UserProfilesTable:
@@ -25,24 +24,15 @@ Resources:
           AttributeType: S
         - AttributeName: email
           AttributeType: S
-        - AttributeName: profile_type
-          AttributeType: S
-      
+
       KeySchema:
         - AttributeName: user_id
           KeyType: HASH
-      
+
       GlobalSecondaryIndexes:
         - IndexName: email-index
           KeySchema:
             - AttributeName: email
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-        
-        - IndexName: profile-type-index
-          KeySchema:
-            - AttributeName: profile_type
               KeyType: HASH
           Projection:
             ProjectionType: ALL
@@ -61,7 +51,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
-          Value: Beezey
+          Value: aurabattle
 
 Outputs:
   TableName:

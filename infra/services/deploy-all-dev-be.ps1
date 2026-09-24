@@ -1,6 +1,6 @@
 # Deploy all services dev-be
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$services = @("firebase-notifications","chat","bookings","support-chat","backoffice","companies","contracts","job-listings","profile-upgrade-documents","profile-upgrade-request","reference-data-configuration","user-api")
+$services = @("firebase-notifications","chat","bookings","support-chat","backoffice","job-listings","user-api")
 $success = @()
 $failed = @()
 

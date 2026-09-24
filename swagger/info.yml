@@ -1,36 +1,26 @@
-  title: 4SeasonsJob - Complete API Documentation
+  title: Aura Battle - API Documentation
   description: |
-    Complete API documentation for 4SeasonsJob platform.
-    
-    ## Projects
-    - **backoffice-api-sam**: Backoffice operations (document review, user management, statistics)
-    - **profile-upgrade-documents**: Document upload from mobile app
-    - **profile-upgrade-request**: User profile upgrade workflow
-    - **companies-api**: Company profile management
-    - **job-listings-api**: Job listings management
-    
+    API documentation for the Aura Battle platform.
+
+    Endpoints appear here progressively as each backend piece is deployed.
+
     ---
-    
+
     ## Authentication
-    This API supports two types of authentication:
-  
-    
-    ### User Login (for app users)
-    Use **POST /auth/login/users** with user credentials
-    - User Pool: eu-south-1_0oK9agPYd
-    
+    Use **POST /auth/login/users** with user credentials (Cognito).
+
     ### How to Authenticate:
-    1. Choose the appropriate login endpoint
+    1. Open **POST /auth/login/users**
     2. Click "Try it out"
-    3. Enter your username and password
+    3. Enter email and password
     4. Click "Execute"
     5. Copy the `idToken` from the response
     6. Click the "Authorize" button (lock icon) at the top
     7. Paste the token and click "Authorize"
     8. Now you can test all protected endpoints
-    
+
     **Note:** Token expires after 1 hour. Re-login to get a new token.
-  version: 2.2.0
+  version: 0.1.0
   contact:
     name: API Support
-    email: support@example.com
+    email: gioele.maruccia@iocivivo.it

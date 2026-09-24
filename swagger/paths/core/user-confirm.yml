@@ -1,0 +1,48 @@
+    post:
+      tags:
+        - Authentication
+      summary: Confirm Signup (email code)
+      description: |
+        Conferma la registrazione con il codice ricevuto via email
+        (da usare quando il signup è stato fatto con `auto_confirm: false`).
+
+        **Nota:** questo endpoint esiste solo nel proxy locale (`auth-proxy.js`),
+        non è un'API AWS reale.
+      operationId: userConfirmSignup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - code
+              properties:
+                username:
+                  type: string
+                  format: email
+                  example: "test@example.com"
+                code:
+                  type: string
+                  description: Codice a 6 cifre ricevuto via email
+                  example: "123456"
+      responses:
+        '200':
+          description: Account confermato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  confirmed:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+        '400':
+          description: Codice non valido o scaduto
+          content:
+            application/json:
+              schema:
+                $ref: '../../components/schemas/common.yml#/Error'

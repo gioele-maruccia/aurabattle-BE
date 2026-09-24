@@ -3,7 +3,7 @@
 # Deploy della tabella DynamoDB per profili utente
 
 param(
-    [string]$Environment = "dev",
+    [string]$Environment = "dev-aurabattle",
     [string]$Region = "eu-south-1"
 )
 
@@ -46,6 +46,7 @@ sam deploy `
     --region $Region `
     --capabilities CAPABILITY_IAM `
     --no-fail-on-empty-changeset `
+    --tags Project=aurabattle Environment=$Environment `
     --parameter-overrides `
         Environment=$Environment
 

@@ -1,0 +1,47 @@
+post:
+  tags:
+    - Battles
+  summary: Crea una nuova battle
+  description: L'utente autenticato ne diventa l'host. La battle è subito pubblica.
+  operationId: createBattle
+  security:
+    - CognitoAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - title
+            - location
+            - event_datetime
+          properties:
+            title:
+              type: string
+              example: "Torneo Aura Street"
+            description:
+              type: string
+              example: "Prima battle di prova"
+            location:
+              type: string
+              example: "Milano, Parco Sempione"
+            event_datetime:
+              type: string
+              format: date-time
+              example: "2026-10-15T18:00:00Z"
+  responses:
+    '201':
+      description: Battle creata
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/battles/Battle.yml'
+    '400':
+      description: Campi obbligatori mancanti
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

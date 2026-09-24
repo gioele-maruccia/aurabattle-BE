@@ -20,7 +20,14 @@ put:
               $ref: '../../components/schemas/user-api/ProfileInfo.yml'
             address:
               $ref: '../../components/schemas/user-api/Address.yml'
-        
+            display_name:
+              type: string
+              description: Nome pubblico mostrato agli altri utenti
+              example: "Mario R."
+            avatar_url:
+              type: string
+              example: "https://cdn.example.com/avatars/user123.jpg"
+
         examples:
           updateName:
             summary: Update name only
@@ -28,7 +35,13 @@ put:
               profile:
                 given_name: "Mario"
                 family_name: "Rossi"
-          
+
+          updateDisplayNameAndAvatar:
+            summary: Update display name and avatar
+            value:
+              display_name: "Mario R."
+              avatar_url: "https://cdn.example.com/avatars/user123.jpg"
+
           updateAddress:
             summary: Update address only
             value:

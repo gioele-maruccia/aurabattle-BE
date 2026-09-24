@@ -1,85 +1,61 @@
-# 4SeasonsJob API - Swagger UI Documentation
+# Swagger - Aura Battle API
 
-Simple launcher for Swagger UI with authentication proxy supporting dev/prod environments.
+Guida per avviare e usare Swagger UI in locale per testare le API del backend.
 
-## Quick Start
+## Prerequisiti
 
-### Prerequisites
+- **Docker Desktop** installato e avviato (serve per Swagger UI)
+- **Node.js** installato (serve per il proxy di autenticazione)
+- **AWS CLI** installato e configurato (`aws configure`) con un utente/profilo che abbia permessi Cognito sull'account `881962383770`, region `eu-south-1`
 
-- **Docker** - [Download](https://docs.docker.com/get-docker/)
-- **Node.js** - [Download](https://nodejs.org/)
-- **AWS CLI** (configured) - [Download](https://aws.amazon.com/cli/)
+Il proxy usa l'AWS CLI sotto il cofano per parlare con Cognito (signup, conferma, login) — senza credenziali configurate queste chiamate falliscono.
 
-### Bundle Swagger
+## 1. Avvia Swagger UI
 
-Before launching, bundle the swagger files:
+In un terminale, dalla cartella `swagger/`:
 
-```bash
-npx @redocly/cli bundle swagger.yml -o swagger-bundled.yml
+```powershell
+.\launch-swagger.ps1
 ```
 
-### Launch
+Si apre su **http://localhost:8080**.
 
-```bash
-# Start dev environment
-./launch-swagger.sh dev
+## 2. Avvia il proxy di autenticazione
 
-# Start prod environment  
-./launch-swagger.sh prod
+In un **secondo** terminale, sempre da `swagger/`:
 
-# Stop all
-./launch-swagger.sh stop
+```powershell
+node auth-proxy.js
 ```
 
-Browser opens automatically at `http://localhost:8080`
+Resta acceso finché lo usi: instrada le chiamate di Swagger verso le vere API AWS e gestisce login/signup con Cognito.
 
-## How to Authenticate
+## 3. Seleziona il server giusto
 
-1. **Login** - Use `POST /auth/login/users`
-2. **Copy token** - Get `idToken` from response
-3. **Authorize** - Click 🔓 button and paste token
-4. **Test APIs** - All endpoints now work
+Apri **http://localhost:8080**, in alto trovi il dropdown "Servers": assicurati sia selezionato
 
-Token expires in 1 hour - re-login to refresh.
-
-## Environments
-
-**Dev:**
-- Cognito Pool: `eu-south-1_0oK9agPYd`
-- APIs: All dev endpoints
-
-**Prod:**
-- Cognito Pool: `eu-south-1_iCBtUlJO6`
-- APIs: Production endpoints (where configured)
-
-## Main APIs
-
-- `/auth/login/*` - Authentication
-- `/contracts/calculate-base-pay` - CCNL salary calculations
-- `/reference-data` - Job roles, contracts, categories
-- `/companies/*` - Company management
-- `/listings/*` - Job listings
-- `/bookings/*` - Bookings & applications
-
-## Troubleshooting
-
-**Port already in use?**
-```bash
-./launch-swagger.sh stop
-./launch-swagger.sh dev
+```
+http://localhost:8081 — Local Development (via Auth Proxy)
 ```
 
-**Check logs:**
-```bash
-tail -f proxy-dev.log
+(è già il default; se per sbaglio selezioni `host.docker.internal:8081` le chiamate falliscono con `NetworkError`, perché quell'indirizzo lo risolve solo Docker, non il browser).
+
+## 4. Rigenera la spec dopo un aggiornamento
+
+Se il backend ti dice che ha aggiunto/modificato endpoint, va ribuildata la spec bundle prima di vederla in UI:
+
+```powershell
+npx -y @apidevtools/swagger-cli bundle swagger.yml -o swagger-bundled.yml -t yaml
 ```
 
-**Docker issues:**
-```bash
-docker ps
-docker logs swagger-ui-docs-dev
-```
+poi ricarica la pagina (o `docker restart swagger-ui-docs-dev` se non si aggiorna da sola).
 
----
+## 5. Crea un account e testa gli endpoint
 
-**Access:** http://localhost:8080 (Swagger UI) | http://localhost:8081 (Proxy)
+1. **POST /auth/signup** — email, password, nome, cognome (lascia `auto_confirm` non impostato: replica il flusso reale, riceverai una mail con un codice)
+2. **POST /auth/confirm** — stessa email + codice ricevuto via mail
+3. **POST /auth/login/users** — stesse credenziali → copia il valore `idToken` dalla risposta
+4. Click sul lucchetto **"Authorize"** in alto a destra → incolla l'`idToken` → Authorize
+5. Ora puoi provare `GET/PUT /profile`, `PATCH /settings`, ecc. — il token dura 1 ora, poi rifai il login
+
+> Nota: `auto_confirm: true` in `/auth/signup` esiste solo come scorciatoia per creare velocemente account di test (salta la mail) — nell'app reale questo passaggio non esiste, il flusso è sempre quello dei punti 1-2.
