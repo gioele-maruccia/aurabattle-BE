@@ -56,7 +56,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-get-profile
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/24bf344397ca0f65e038ca613c1f38c9
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/24bf344397ca0f65e038ca613c1f38c9
       Handler: app.handler
       Timeout: 30
       Policies:
@@ -78,7 +78,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-update-profile
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/0c8f13c74b5e7e0964a6d1a14750bc37
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/0c8f13c74b5e7e0964a6d1a14750bc37
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -105,7 +105,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-update-settings
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/be4e7fff132cdefcde3d8a75d221425c
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/be4e7fff132cdefcde3d8a75d221425c
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -126,7 +126,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-delete-account-simple
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/410d146a606989b724af217cda95071d
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/410d146a606989b724af217cda95071d
       Handler: app.handler
       Timeout: 10
       Events:
@@ -144,7 +144,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-register-fcm-token
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/d9398057352b7cbef83c228ffaad5f3b
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/d9398057352b7cbef83c228ffaad5f3b
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -165,7 +165,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-add-bookmark
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/b256c66ddf2ed4a1f58661e4591a7a9d
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/b256c66ddf2ed4a1f58661e4591a7a9d
       Handler: app.handler
       Environment:
         Variables:
@@ -193,7 +193,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-remove-bookmark
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/ca458ade5a67f7d1502659a395c74e6c
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/ca458ade5a67f7d1502659a395c74e6c
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -214,7 +214,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-user-api-list-bookmarks
-      CodeUri: s3://aurabattle-dev-artifacts/user-api-dev-aurabattle/20260924-114156/58483b9c334f84d43cb3915ab3578a82
+      CodeUri: s3://aurabattle-prod-artifacts/user-api-prod-aurabattle/20260928-105140/58483b9c334f84d43cb3915ab3578a82
       Handler: app.handler
       Environment:
         Variables:

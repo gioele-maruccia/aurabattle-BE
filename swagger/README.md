@@ -28,17 +28,29 @@ In un **secondo** terminale, sempre da `swagger/`:
 node auth-proxy.js
 ```
 
-Resta acceso finché lo usi: instrada le chiamate di Swagger verso le vere API AWS e gestisce login/signup con Cognito.
+Resta acceso finché lo usi: instrada le chiamate di Swagger verso le vere API AWS e gestisce login/signup con Cognito. Punta **dev-aurabattle** e ascolta su `:8081`.
+
+### Vuoi testare anche PROD? ⚠️
+
+Per lavorare/verificare su produzione (dati e utenti **reali**), avvia un **secondo** proxy in un terzo terminale:
+
+```powershell
+$env:ENV = "prod-aurabattle"
+node auth-proxy.js
+```
+
+Ascolta su `:8082` (porta diversa apposta, così puoi tenere dev e prod aperti insieme senza rischiare di confonderli). Il banner di avvio del proxy ti dice sempre chiaramente quale ambiente stai colpendo.
 
 ## 3. Seleziona il server giusto
 
-Apri **http://localhost:8080**, in alto trovi il dropdown "Servers": assicurati sia selezionato
+Apri **http://localhost:8080**, in alto trovi il dropdown "Servers":
 
 ```
-http://localhost:8081 — Local Development (via Auth Proxy)
+[DEV] http://localhost:8081 — Local Development (via Auth Proxy)        ← default, usalo per lo sviluppo quotidiano
+[PROD] http://localhost:8082 — ⚠️ PRODUZIONE REALE                       ← solo se sai cosa stai facendo
 ```
 
-(è già il default; se per sbaglio selezioni `host.docker.internal:8081` le chiamate falliscono con `NetworkError`, perché quell'indirizzo lo risolve solo Docker, non il browser).
+Il server selezionato **è** l'ambiente su cui agisci: se scegli `:8082` stai creando/modificando utenti e dati veri. Se per sbaglio selezioni `host.docker.internal:8081` le chiamate falliscono con `NetworkError`, perché quell'indirizzo lo risolve solo Docker, non il browser.
 
 ## 4. Rigenera la spec dopo un aggiornamento
 

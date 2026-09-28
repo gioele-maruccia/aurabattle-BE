@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # ============================================================
-# Battles Service - Deploy PROD-AURABATTLE
+# User API Service - Deploy PROD-AURABATTLE
 # ⚠️  QUESTO SCRIPT MODIFICA L'AMBIENTE DI PRODUZIONE! ⚠️
 # ============================================================
 
@@ -17,23 +17,25 @@ if (-not (Test-Path $ConfigFile)) {
 
 $Environment           = $ProdAuraBattle_Environment
 $Region                = $ProdAuraBattle_Region
-$StackName             = "prod-aurabattle-battles-service"
+$StackName             = "prod-aurabattle-user-api"
 $S3Bucket              = $ProdAuraBattle_ArtifactsBucket
-$UserPoolArn           = $ProdAuraBattle_UserPoolArn
-$BattlesTableName      = $ProdAuraBattle_BattlesTable
+$UserPoolId            = $ProdAuraBattle_UserPoolId
+$UserPoolArn            = $ProdAuraBattle_UserPoolArn
 $UserProfilesTableName = $ProdAuraBattle_UserProfilesTable
+$BattlesTableName      = $ProdAuraBattle_BattlesTable
 
-if ($UserPoolArn -eq "PLACEHOLDER_RUN_PREREQS") {
+if ($UserPoolId -eq "PLACEHOLDER_RUN_PREREQS") {
     Write-Host "[ERROR] Cognito non configurato! Esegui: scripts\create-aurabattle-prereqs.ps1 -Environment prod-aurabattle" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Red
-Write-Host "   DEPLOY BATTLES API - PROD-AURABATTLE" -ForegroundColor Red
+Write-Host "   DEPLOY USER API - PROD-AURABATTLE" -ForegroundColor Red
 Write-Host "============================================" -ForegroundColor Red
 Write-Host "Stack:  $StackName" -ForegroundColor Yellow
 Write-Host "Region: $Region" -ForegroundColor Yellow
+Write-Host "Table:  $UserProfilesTableName" -ForegroundColor Yellow
 Write-Host "============================================" -ForegroundColor Red
 Write-Host ""
 
@@ -61,7 +63,7 @@ try {
 
 if (Test-Path .aws-sam) { Remove-Item -Recurse -Force .aws-sam }
 if (Test-Path packaged.yaml) { Remove-Item -Force packaged.yaml }
-if (-not $stackExists) { aws s3 rm "s3://$S3Bucket/battles-prod-aurabattle/" --recursive --region $Region 2>$null }
+if (-not $stackExists) { aws s3 rm "s3://$S3Bucket/user-api-prod-aurabattle/" --recursive --region $Region 2>$null }
 
 $validateResult = sam validate --template-file template.yaml --region $Region 2>&1
 if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Template non valido!" -ForegroundColor Red; Write-Host $validateResult -ForegroundColor Red; exit 1 }
@@ -71,7 +73,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Build fallito!" -ForegroundColor 
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 sam package --template-file .aws-sam/build/template.yaml `
-    --s3-bucket $S3Bucket --s3-prefix "battles-prod-aurabattle/$timestamp" `
+    --s3-bucket $S3Bucket --s3-prefix "user-api-prod-aurabattle/$timestamp" `
     --region $Region --output-template-file packaged.yaml 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Package fallito!" -ForegroundColor Red; exit 1 }
 
@@ -81,9 +83,10 @@ aws cloudformation deploy `
     --tags "Project=aurabattle" "Environment=prod-aurabattle" `
     --parameter-overrides `
         "Environment=$Environment" `
+        "UserPoolId=$UserPoolId" `
         "UserPoolArn=$UserPoolArn" `
-        "BattlesTableName=$BattlesTableName" `
         "UserProfilesTableName=$UserProfilesTableName" `
+        "BattlesTableName=$BattlesTableName" `
     --no-fail-on-empty-changeset 2>&1 | Out-Host
 
 if ($LASTEXITCODE -ne 0) {
@@ -93,9 +96,10 @@ if ($LASTEXITCODE -ne 0) {
         --tags "Key=Project,Value=aurabattle" "Key=Environment,Value=prod-aurabattle" `
         --parameters `
             "ParameterKey=Environment,ParameterValue=$Environment" `
+            "ParameterKey=UserPoolId,ParameterValue=$UserPoolId" `
             "ParameterKey=UserPoolArn,ParameterValue=$UserPoolArn" `
-            "ParameterKey=BattlesTableName,ParameterValue=$BattlesTableName" `
             "ParameterKey=UserProfilesTableName,ParameterValue=$UserProfilesTableName" `
+            "ParameterKey=BattlesTableName,ParameterValue=$BattlesTableName" `
         --disable-rollback 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DEPLOY FALLITO!" -ForegroundColor Red; exit 1 }
     aws cloudformation wait stack-create-complete --stack-name $StackName --region $Region
@@ -103,5 +107,9 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "   [SUCCESS] DEPLOY BATTLES API PROD-AURABATTLE COMPLETATO!" -ForegroundColor Green
+Write-Host "   [SUCCESS] DEPLOY USER API PROD-AURABATTLE COMPLETATO!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
+Write-Host ""
+aws cloudformation describe-stacks --stack-name $StackName --region $Region `
+    --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' --output table
+Write-Host ""

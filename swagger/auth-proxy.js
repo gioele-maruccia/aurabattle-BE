@@ -37,14 +37,14 @@ const ENVIRONMENTS = {
     cognito: {
       users: {
         region: 'eu-south-1',
-        userPoolId: '',
-        clientId: '',
+        userPoolId: 'eu-south-1_BKPMyjxEF',
+        clientId: 'b0l5i2khen7os0v2n60blonnj',
       }
     },
     apiGateways: {
-      userApi: '',
+      userApi: 'https://ytgs3hvtrh.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1',
       backoffice: '',
-      battles: '',
+      battles: 'https://f07ziuaot5.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1',
       participations: '',
     }
   }
@@ -54,7 +54,7 @@ const CONFIG = {
   environment: ENV,
   cognito: ENVIRONMENTS[ENV].cognito,
   apiGateways: ENVIRONMENTS[ENV].apiGateways,
-  proxy: { port: 8081 },
+  proxy: { port: parseInt(process.env.PORT || (ENV === 'prod-aurabattle' ? '8082' : '8081'), 10) },
 
   // Route mapping: which API Gateway to use for each path pattern.
   // Aggiungi qui i pattern man mano che sblocchi nuovi servizi.

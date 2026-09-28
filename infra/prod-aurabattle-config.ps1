@@ -1,8 +1,8 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # ============================================================
 # prod-aurabattle Environment Configuration
 # ============================================================
-# GENERATO da: scripts/create-prod-aurabattle-prereqs.ps1
+# GENERATO da: scripts/create-aurabattle-prereqs.ps1
 # NON modificare manualmente - rieseguire lo script prereqs
 # ============================================================
 
@@ -11,9 +11,9 @@ $ProdAuraBattle_Region      = "eu-south-1"
 $ProdAuraBattle_AccountId   = "881962383770"
 
 # ---- Cognito User Pool ----
-$ProdAuraBattle_UserPoolId  = "PLACEHOLDER_RUN_PREREQS"
-$ProdAuraBattle_UserPoolArn = "PLACEHOLDER_RUN_PREREQS"
-$ProdAuraBattle_ClientId    = "PLACEHOLDER_RUN_PREREQS"
+$ProdAuraBattle_UserPoolId  = "eu-south-1_BKPMyjxEF"
+$ProdAuraBattle_UserPoolArn = "arn:aws:cognito-idp:eu-south-1:881962383770:userpool/eu-south-1_BKPMyjxEF"
+$ProdAuraBattle_ClientId    = "b0l5i2khen7os0v2n60blonnj"
 
 # ---- S3 Buckets ----
 $ProdAuraBattle_ArtifactsBucket = "aurabattle-prod-artifacts"

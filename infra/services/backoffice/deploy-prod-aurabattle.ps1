@@ -4,6 +4,8 @@
 # ⚠️  QUESTO SCRIPT MODIFICA L'AMBIENTE DI PRODUZIONE! ⚠️
 # ============================================================
 
+param([switch]$Yes)
+
 $ErrorActionPreference = "Continue"
 
 $ConfigFile = Join-Path $PSScriptRoot "..\..\prod-aurabattle-config.ps1"
@@ -33,10 +35,12 @@ Write-Host "Region: $Region" -ForegroundColor Yellow
 Write-Host "============================================" -ForegroundColor Red
 Write-Host ""
 
-$confirm = Read-Host "Sei sicuro di voler procedere? (digita 'yes' per confermare)"
-if ($confirm -ne "yes") {
-    Write-Host "[ABORT] Deploy annullato" -ForegroundColor Yellow
-    exit 0
+if (-not $Yes) {
+    $confirm = Read-Host "Sei sicuro di voler procedere? (digita 'yes' per confermare)"
+    if ($confirm -ne "yes") {
+        Write-Host "[ABORT] Deploy annullato" -ForegroundColor Yellow
+        exit 0
+    }
 }
 
 $stackExists = $false

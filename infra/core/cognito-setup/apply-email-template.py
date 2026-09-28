@@ -34,7 +34,7 @@ def main():
 
     verification_template = {"DefaultEmailOption": "CONFIRM_WITH_CODE"}
     if email_message:
-        verification_template["EmailSubject"] = "Il tuo codice di verifica beebusy"
+        verification_template["EmailSubject"] = "Il tuo codice di verifica aura battle"
         verification_template["EmailMessage"] = email_message
 
     response = client.update_user_pool(

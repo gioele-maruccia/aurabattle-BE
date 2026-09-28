@@ -1,17 +1,25 @@
 
-  # Local proxy - routes to all APIs (default: seleziona questo nel dropdown "Servers")
+  # Local proxy - DEV (default: seleziona questo per lavorare su dev-aurabattle)
   - url: http://localhost:8081
-    description: Local Development (via Auth Proxy)
+    description: "[DEV] Local Development (via Auth Proxy)"
+
+  # Local proxy - PROD (attenzione: agisce su dati/utenti reali!)
+  - url: http://localhost:8082
+    description: "[PROD] ⚠️ Local Development (via Auth Proxy) - PRODUZIONE REALE"
 
   # Alternativa se accedi a Swagger UI da dentro un altro container Docker
   - url: http://host.docker.internal:8081
-    description: Local Development (via Auth Proxy - Docker-to-Docker)
+    description: "[DEV] Local Development (via Auth Proxy - Docker-to-Docker)"
 
   # ============================================================================
-  # DEV-AURABATTLE environment - Direct (no proxy, for reference)
+  # Direct (no proxy) - solo per riferimento, non selezionabili per login/signup
   # ============================================================================
 
   - url: https://hk3y2bs3ph.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1
     description: "[DEV-AURABATTLE] User API (Direct)"
   - url: https://ln6a4z3lp4.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1
     description: "[DEV-AURABATTLE] Battles API (Direct)"
+  - url: https://ytgs3hvtrh.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1
+    description: "[PROD-AURABATTLE] User API (Direct)"
+  - url: https://f07ziuaot5.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1
+    description: "[PROD-AURABATTLE] Battles API (Direct)"

@@ -24,7 +24,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-cognito-post-confirmation
-      CodeUri: s3://aurabattle-dev-artifacts/cognito-setup-dev-aurabattle/20260915-093529/3abec0b684ce361a47dd68c8c772d6ea
+      CodeUri: s3://aurabattle-prod-artifacts/cognito-setup-prod-aurabattle/20260928-111615/3abec0b684ce361a47dd68c8c772d6ea
       Handler: app.lambda_handler
       Runtime: python3.10
       Timeout: 30

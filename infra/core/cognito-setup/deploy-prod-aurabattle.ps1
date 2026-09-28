@@ -6,6 +6,8 @@
 # ⚠️  QUESTO SCRIPT MODIFICA L'AMBIENTE DI PRODUZIONE! ⚠️
 # ============================================================
 
+param([switch]$Yes)
+
 $ErrorActionPreference = "Continue"
 
 # Carica configurazione prod-aurabattle
@@ -47,11 +49,13 @@ Write-Host ""
 Write-Host "[WARNING] Stai per fare il deploy in PRODUZIONE!" -ForegroundColor Yellow
 Write-Host "Questo modificherà il trigger PostConfirmation su Cognito LIVE!" -ForegroundColor Yellow
 Write-Host ""
-$confirm = Read-Host "Sei sicuro di voler procedere? (digita 'yes' per confermare)"
-if ($confirm -ne "yes") {
-    Write-Host ""
-    Write-Host "[ABORT] Deploy annullato" -ForegroundColor Yellow
-    exit 0
+if (-not $Yes) {
+    $confirm = Read-Host "Sei sicuro di voler procedere? (digita 'yes' per confermare)"
+    if ($confirm -ne "yes") {
+        Write-Host ""
+        Write-Host "[ABORT] Deploy annullato" -ForegroundColor Yellow
+        exit 0
+    }
 }
 Write-Host ""
 Write-Host "[OK] Confermato, procedo con il deploy PROD-AURABATTLE..." -ForegroundColor Green
