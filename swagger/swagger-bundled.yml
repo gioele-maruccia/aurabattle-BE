@@ -1129,6 +1129,8 @@ paths:
               required:
                 - title
                 - location
+                - latitude
+                - longitude
                 - event_datetime
               properties:
                 title:
@@ -1140,6 +1142,18 @@ paths:
                 location:
                   type: string
                   example: 'Milano, Parco Sempione'
+                latitude:
+                  type: number
+                  format: double
+                  minimum: -90
+                  maximum: 90
+                  example: 45.4719
+                longitude:
+                  type: number
+                  format: double
+                  minimum: -180
+                  maximum: 180
+                  example: 9.1697
                 event_datetime:
                   type: string
                   format: date-time
@@ -1170,6 +1184,18 @@ paths:
                   location:
                     type: string
                     example: 'Milano, Parco Sempione'
+                  latitude:
+                    type: number
+                    format: double
+                    minimum: -90
+                    maximum: 90
+                    example: 45.4719
+                  longitude:
+                    type: number
+                    format: double
+                    minimum: -180
+                    maximum: 180
+                    example: 9.1697
                   event_datetime:
                     type: string
                     format: date-time
@@ -1313,6 +1339,16 @@ paths:
                   type: string
                 location:
                   type: string
+                latitude:
+                  type: number
+                  format: double
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  format: double
+                  minimum: -180
+                  maximum: 180
                 event_datetime:
                   type: string
                   format: date-time

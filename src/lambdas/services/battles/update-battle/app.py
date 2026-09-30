@@ -6,11 +6,12 @@ import json
 import os
 import boto3
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 
-UPDATABLE_FIELDS = ['title', 'description', 'location', 'event_datetime', 'status']
+UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status']
 ALLOWED_STATUSES = ['published', 'closed']
 
 
@@ -27,11 +28,21 @@ def _cors_response(status_code, body):
     }
 
 
+def _parse_coordinate(value, min_value, max_value):
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, TypeError):
+        return None
+    if decimal_value < min_value or decimal_value > max_value:
+        return None
+    return decimal_value
+
+
 def handler(event, context):
     try:
         user_id = event['requestContext']['authorizer']['claims']['sub']
         battle_id = event['pathParameters']['battleId']
-        body = json.loads(event.get('body') or '{}')
+        body = json.loads(event.get('body') or '{}', parse_float=Decimal)
 
         existing = battles_table.get_item(Key={'battle_id': battle_id}).get('Item')
         if not existing:
@@ -45,6 +56,18 @@ def handler(event, context):
                 'error': 'Bad Request',
                 'message': f'status must be one of: {", ".join(ALLOWED_STATUSES)}'
             })
+
+        if 'latitude' in body:
+            latitude = _parse_coordinate(body['latitude'], -90, 90)
+            if latitude is None:
+                return _cors_response(400, {'error': 'Bad Request', 'message': 'latitude must be a number between -90 and 90'})
+            body['latitude'] = latitude
+
+        if 'longitude' in body:
+            longitude = _parse_coordinate(body['longitude'], -180, 180)
+            if longitude is None:
+                return _cors_response(400, {'error': 'Bad Request', 'message': 'longitude must be a number between -180 and 180'})
+            body['longitude'] = longitude
 
         update_parts = []
         expr_values = {':now': datetime.utcnow().isoformat() + 'Z'}
