@@ -17,6 +17,9 @@ Parameters:
   UserProfilesTableName:
     Type: String
     Description: DynamoDB User Profiles table name
+  BattleCoversBucketName:
+    Type: String
+    Description: S3 bucket name for battle cover uploads
 Globals:
   Function:
     Runtime: python3.10
@@ -30,6 +33,18 @@ Globals:
         USER_PROFILES_TABLE:
           Ref: UserProfilesTableName
 Resources:
+  PillowLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Sub: ${Environment}-pillow-layer
+      Description: Pillow (image processing) for battle cover resize
+      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/52a64ecf6d7d9ff9c0348a7734758eeb
+      CompatibleRuntimes:
+      - python3.10
+      RetentionPolicy: Retain
+    Metadata:
+      SamResourceId: PillowLayer
   BattlesApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -53,7 +68,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-create
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/084d22efe2c8a4dc2654699cf922a4de
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/084d22efe2c8a4dc2654699cf922a4de
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -77,7 +92,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-list
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/6b0b3748668e2029fedfa7102f05471b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/6b0b3748668e2029fedfa7102f05471b
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -100,7 +115,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get-my
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/1abbff270f9c2ba69b2f86bbbdb96bb1
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/1abbff270f9c2ba69b2f86bbbdb96bb1
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -121,7 +136,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/b7122822f808c08f08ebab7ecd190d74
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/b7122822f808c08f08ebab7ecd190d74
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -144,7 +159,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-update
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/cff4c6d7e2d73c6bd31fdf74157b1261
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/72917b5d7dc74afef621f1b7aed44469
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -165,7 +180,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-delete
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-172411/a328deb10dd03548065d6e6535f859e9
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/a328deb10dd03548065d6e6535f859e9
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -184,6 +199,66 @@ Resources:
             Method: DELETE
     Metadata:
       SamResourceId: DeleteBattleFunction
+  RequestCoverUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-request-cover-upload-url
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/4b4197f798e9aebcff9c1b6701bfe55d
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLE_COVERS_BUCKET:
+            Ref: BattleCoversBucketName
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::${BattleCoversBucketName}/uploads/*
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BattlesApi
+            Path: /v1/battles/{battleId}/cover-upload-url
+            Method: POST
+    Metadata:
+      SamResourceId: RequestCoverUploadUrlFunction
+  ProcessCoverUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-process-cover-upload
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261001-174451/a91b3561ae204dfed0e75a66f677984b
+      Handler: app.handler
+      Timeout: 60
+      MemorySize: 512
+      Layers:
+      - Ref: PillowLayer
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - s3:GetObject
+          - s3:DeleteObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::${BattleCoversBucketName}/uploads/*
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::${BattleCoversBucketName}/covers/*
+    Metadata:
+      SamResourceId: ProcessCoverUploadFunction
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:
@@ -213,3 +288,13 @@ Outputs:
   ApiId:
     Value:
       Ref: BattlesApi
+  ProcessCoverUploadFunctionArn:
+    Description: ARN of the S3-triggered cover resize Lambda (wired to the bucket
+      post-deploy)
+    Value:
+      Fn::GetAtt:
+      - ProcessCoverUploadFunction
+      - Arn
+  ProcessCoverUploadFunctionName:
+    Value:
+      Ref: ProcessCoverUploadFunction

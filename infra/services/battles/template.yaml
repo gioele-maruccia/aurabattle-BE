@@ -22,6 +22,10 @@ Parameters:
     Type: String
     Description: DynamoDB User Profiles table name
 
+  BattleCoversBucketName:
+    Type: String
+    Description: S3 bucket name for battle cover uploads
+
 Globals:
   Function:
     Runtime: python3.10
@@ -33,6 +37,16 @@ Globals:
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
 
 Resources:
+  PillowLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${Environment}-pillow-layer'
+      Description: Pillow (image processing) for battle cover resize
+      ContentUri: ../../../src/lambdas/layers/pillow/
+      CompatibleRuntimes:
+        - python3.10
+      RetentionPolicy: Retain
+
   BattlesApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -164,6 +178,59 @@ Resources:
             Path: /v1/battles/{battleId}
             Method: DELETE
 
+  # POST /battles/{battleId}/cover-upload-url - Presigned URL per upload copertina custom (solo host)
+  RequestCoverUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-request-cover-upload-url
+      CodeUri: ../../../src/lambdas/services/battles/request-cover-upload-url/
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLE_COVERS_BUCKET: !Ref BattleCoversBucketName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/uploads/*'
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}/cover-upload-url
+            Method: POST
+
+  # Triggerata da S3 (uploads/*): ridimensiona a 1200x675 e pubblica su covers/{battleId}.jpg
+  # L'evento S3 viene collegato manualmente dopo il deploy (vedi deploy-*-aurabattle.ps1),
+  # perché il bucket vive in uno stack separato (infra/data/battle-covers).
+  ProcessCoverUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-process-cover-upload
+      CodeUri: ../../../src/lambdas/services/battles/process-cover-upload/
+      Handler: app.handler
+      Timeout: 60
+      MemorySize: 512
+      Layers:
+        - !Ref PillowLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:DeleteObject
+              Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/uploads/*'
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/covers/*'
+
   # CORS su risposte di errore API Gateway
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
@@ -188,3 +255,8 @@ Outputs:
     Value: !Sub 'https://${BattlesApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
   ApiId:
     Value: !Ref BattlesApi
+  ProcessCoverUploadFunctionArn:
+    Description: ARN of the S3-triggered cover resize Lambda (wired to the bucket post-deploy)
+    Value: !GetAtt ProcessCoverUploadFunction.Arn
+  ProcessCoverUploadFunctionName:
+    Value: !Ref ProcessCoverUploadFunction

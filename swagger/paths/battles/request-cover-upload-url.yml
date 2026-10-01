@@ -1,0 +1,80 @@
+post:
+  tags:
+    - Battles
+  summary: Richiedi una presigned URL per caricare una copertina custom
+  description: |
+    Solo l'host della battle può richiederla. Il file va caricato con **PUT**
+    direttamente su `upload_url` (stesso `Content-Type` dichiarato in questa
+    richiesta) — il backend non vede mai i byte in transito.
+
+    Dopo l'upload, una lambda triggerata da S3 ridimensiona/comprime
+    automaticamente l'immagine a **1200x675** (object-fit: cover, JPEG qualità 82)
+    e pubblica il risultato su `cover_url`. L'elaborazione è asincrona:
+    interroga **GET /battles/{battleId}** finché `cover_url` non compare
+    (in genere entro pochi secondi). L'originale caricato viene sempre
+    eliminato, indipendentemente dall'esito.
+
+    Impostare una cover custom rimuove automaticamente `cover` (di repertorio),
+    se presente.
+  operationId: requestCoverUploadUrl
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - content_type
+          properties:
+            content_type:
+              type: string
+              enum: [image/jpeg, image/png, image/webp]
+              example: "image/jpeg"
+  responses:
+    '200':
+      description: Presigned URL generata
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              upload_url:
+                type: string
+                format: uri
+                description: URL su cui fare PUT del file (valida 5 minuti)
+              upload_key:
+                type: string
+                description: Chiave S3 dell'oggetto caricato (informativo)
+              expires_in:
+                type: integer
+                example: 300
+              max_upload_bytes:
+                type: integer
+                description: Dimensione massima accettata per il file originale
+                example: 10485760
+              message:
+                type: string
+    '400':
+      description: content_type non valido
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '403':
+      description: Solo l'host può caricare una copertina per questa battle
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

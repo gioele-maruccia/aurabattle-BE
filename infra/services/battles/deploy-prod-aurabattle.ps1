@@ -22,6 +22,7 @@ $S3Bucket              = $ProdAuraBattle_ArtifactsBucket
 $UserPoolArn           = $ProdAuraBattle_UserPoolArn
 $BattlesTableName      = $ProdAuraBattle_BattlesTable
 $UserProfilesTableName = $ProdAuraBattle_UserProfilesTable
+$BattleCoversBucketName = "$Environment-battle-covers"
 
 if ($UserPoolArn -eq "PLACEHOLDER_RUN_PREREQS") {
     Write-Host "[ERROR] Cognito non configurato! Esegui: scripts\create-aurabattle-prereqs.ps1 -Environment prod-aurabattle" -ForegroundColor Red
@@ -84,6 +85,7 @@ aws cloudformation deploy `
         "UserPoolArn=$UserPoolArn" `
         "BattlesTableName=$BattlesTableName" `
         "UserProfilesTableName=$UserProfilesTableName" `
+        "BattleCoversBucketName=$BattleCoversBucketName" `
     --no-fail-on-empty-changeset 2>&1 | Out-Host
 
 if ($LASTEXITCODE -ne 0) {
@@ -96,10 +98,68 @@ if ($LASTEXITCODE -ne 0) {
             "ParameterKey=UserPoolArn,ParameterValue=$UserPoolArn" `
             "ParameterKey=BattlesTableName,ParameterValue=$BattlesTableName" `
             "ParameterKey=UserProfilesTableName,ParameterValue=$UserProfilesTableName" `
+            "ParameterKey=BattleCoversBucketName,ParameterValue=$BattleCoversBucketName" `
         --disable-rollback 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DEPLOY FALLITO!" -ForegroundColor Red; exit 1 }
     aws cloudformation wait stack-create-complete --stack-name $StackName --region $Region
 }
+
+# ====================
+# Collega l'evento S3 (uploads/*) alla lambda di resize
+# ====================
+Write-Host ""
+Write-Host "Collegamento evento S3 -> lambda di resize copertine..." -ForegroundColor Cyan
+
+$ProcessFunctionArn = aws cloudformation describe-stacks --stack-name $StackName --region $Region `
+    --query "Stacks[0].Outputs[?OutputKey=='ProcessCoverUploadFunctionArn'].OutputValue" --output text
+$ProcessFunctionName = aws cloudformation describe-stacks --stack-name $StackName --region $Region `
+    --query "Stacks[0].Outputs[?OutputKey=='ProcessCoverUploadFunctionName'].OutputValue" --output text
+
+if (-not $ProcessFunctionArn -or $ProcessFunctionArn -eq "None") {
+    Write-Host "   [ERROR] Impossibile ottenere l'ARN della lambda di processing!" -ForegroundColor Red
+    exit 1
+}
+
+$AccountId = aws sts get-caller-identity --query Account --output text
+
+aws lambda add-permission `
+    --function-name $ProcessFunctionName `
+    --statement-id "s3-battle-covers-invoke" `
+    --action "lambda:InvokeFunction" `
+    --principal "s3.amazonaws.com" `
+    --source-arn "arn:aws:s3:::$BattleCoversBucketName" `
+    --source-account $AccountId `
+    --region $Region 2>&1 | Out-Null
+
+$NotificationConfig = @{
+    LambdaFunctionConfigurations = @(
+        @{
+            LambdaFunctionArn = $ProcessFunctionArn
+            Events = @("s3:ObjectCreated:*")
+            Filter = @{
+                Key = @{
+                    FilterRules = @(
+                        @{ Name = "prefix"; Value = "uploads/" }
+                    )
+                }
+            }
+        }
+    )
+} | ConvertTo-Json -Depth 10
+
+$NotificationConfigFile = Join-Path $env:TEMP "battle-covers-notification-$Environment.json"
+[System.IO.File]::WriteAllText($NotificationConfigFile, $NotificationConfig, (New-Object System.Text.UTF8Encoding $false))
+
+aws s3api put-bucket-notification-configuration `
+    --bucket $BattleCoversBucketName `
+    --notification-configuration "file://$NotificationConfigFile" `
+    --region $Region
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   [ERROR] Impossibile configurare la notifica S3!" -ForegroundColor Red
+    exit 1
+}
+Write-Host "   [OK] Evento S3 collegato a $ProcessFunctionName" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green

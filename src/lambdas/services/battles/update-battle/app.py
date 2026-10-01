@@ -102,6 +102,12 @@ def handler(event, context):
             update_parts.append(f'#{field} = :{field}')
             expr_values[f':{field}'] = body[field]
 
+            # cover (di repertorio) e cover_url (upload custom) sono mutuamente esclusivi:
+            # impostare l'una azzera l'altra.
+            if field == 'cover':
+                expr_names['#cover_url'] = 'cover_url'
+                remove_parts.append('#cover_url')
+
         if not update_parts and not remove_parts:
             return _cors_response(400, {'error': 'Bad Request', 'message': 'No fields to update'})
 

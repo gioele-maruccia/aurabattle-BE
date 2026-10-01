@@ -82,6 +82,10 @@ paths:
   /battles/my:
     $ref: './paths/battles/get-my-battles.yml'
 
+  /battles/{battleId}/cover-upload-url:
+    post:
+      $ref: './paths/battles/request-cover-upload-url.yml#/post'
+
   /battles/{battleId}:
     get:
       $ref: './paths/battles/get-battle.yml#/get'

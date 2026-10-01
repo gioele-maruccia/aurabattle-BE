@@ -24,8 +24,20 @@ properties:
     description: >
       Chiave della copertina di repertorio. L'immagine è inclusa nel bundle
       dell'app e risolta localmente da questa chiave: il backend non la
-      ospita né la serve. Assente se la battle non ha copertina.
+      ospita né la serve. Mutuamente esclusivo con cover_url. Assente se la
+      battle non ha copertina.
     example: "arena"
+  cover_url:
+    type: string
+    format: uri
+    readOnly: true
+    description: >
+      URL pubblico della copertina custom caricata dall'host (già
+      ridimensionata/compressa a 1200x675). Impostato in automatico dal
+      backend dopo l'elaborazione di un upload — non scrivibile direttamente.
+      Mutuamente esclusivo con cover. Assente se la battle non ha una cover
+      custom.
+    example: "https://dev-aurabattle-battle-covers.s3.eu-south-1.amazonaws.com/covers/a6d66a62-4bcd-4069-9ba5-6eeff473264f.jpg?v=1790600000"
   latitude:
     type: number
     format: double
