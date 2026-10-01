@@ -11,8 +11,13 @@ from decimal import Decimal, InvalidOperation
 dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 
-UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status']
+UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status', 'cover']
 ALLOWED_STATUSES = ['published', 'closed']
+
+ALLOWED_COVERS = {
+    'arena', 'crowd', 'soundwave', 'turntable', 'mic',
+    'versus', 'city', 'street', 'spark', 'aura',
+}
 
 
 def _cors_response(status_code, body):
@@ -69,33 +74,51 @@ def handler(event, context):
                 return _cors_response(400, {'error': 'Bad Request', 'message': 'longitude must be a number between -180 and 180'})
             body['longitude'] = longitude
 
+        # cover: null (o stringa vuota) e' gestito piu' sotto come REMOVE.
+        # Qui valido solo un valore non vuoto contro la whitelist.
+        if 'cover' in body and body['cover'] not in (None, ''):
+            if not isinstance(body['cover'], str) or body['cover'] not in ALLOWED_COVERS:
+                return _cors_response(400, {
+                    'error': 'Bad Request',
+                    'message': f'cover must be one of: {", ".join(sorted(ALLOWED_COVERS))}'
+                })
+
         update_parts = []
+        remove_parts = []
         expr_values = {':now': datetime.utcnow().isoformat() + 'Z'}
         expr_names = {}
 
         for field in UPDATABLE_FIELDS:
-            if field in body:
-                placeholder = f'#{field}' if field == 'status' else field
-                if field == 'status':
-                    expr_names['#status'] = 'status'
-                update_parts.append(f'{placeholder} = :{field}')
-                expr_values[f':{field}'] = body[field]
+            if field not in body:
+                continue
 
-        if not update_parts:
+            # `cover: null` (o stringa vuota) significa "togli la copertina".
+            if field == 'cover' and (body[field] is None or body[field] == ''):
+                expr_names['#cover'] = 'cover'
+                remove_parts.append('#cover')
+                continue
+
+            expr_names[f'#{field}'] = field
+            update_parts.append(f'#{field} = :{field}')
+            expr_values[f':{field}'] = body[field]
+
+        if not update_parts and not remove_parts:
             return _cors_response(400, {'error': 'Bad Request', 'message': 'No fields to update'})
 
-        update_parts.append('updated_at = :now')
+        expr_names['#updated_at'] = 'updated_at'
+        update_parts.append('#updated_at = :now')
 
-        kwargs = {
-            'Key': {'battle_id': battle_id},
-            'UpdateExpression': 'SET ' + ', '.join(update_parts),
-            'ExpressionAttributeValues': expr_values,
-            'ReturnValues': 'ALL_NEW',
-        }
-        if expr_names:
-            kwargs['ExpressionAttributeNames'] = expr_names
+        update_expression = 'SET ' + ', '.join(update_parts)
+        if remove_parts:
+            update_expression += ' REMOVE ' + ', '.join(remove_parts)
 
-        result = battles_table.update_item(**kwargs)
+        result = battles_table.update_item(
+            Key={'battle_id': battle_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expr_values,
+            ExpressionAttributeNames=expr_names,
+            ReturnValues='ALL_NEW',
+        )
 
         return _cors_response(200, result['Attributes'])
 

@@ -25,6 +25,11 @@ put:
               type: string
             location:
               type: string
+            cover:
+              type: string
+              nullable: true
+              enum: [arena, crowd, soundwave, turntable, mic, versus, city, street, spark, aura]
+              description: "`null` rimuove la copertina. Campo assente = invariata."
             latitude:
               type: number
               format: double

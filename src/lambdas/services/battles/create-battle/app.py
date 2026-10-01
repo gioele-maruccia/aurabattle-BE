@@ -15,6 +15,11 @@ user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
 
 REQUIRED_FIELDS = ['title', 'event_datetime', 'location', 'latitude', 'longitude']
 
+ALLOWED_COVERS = {
+    'arena', 'crowd', 'soundwave', 'turntable', 'mic',
+    'versus', 'city', 'street', 'spark', 'aura',
+}
+
 
 def _cors_response(status_code, body):
     return {
@@ -39,6 +44,19 @@ def _parse_coordinate(value, min_value, max_value):
     return decimal_value
 
 
+def _parse_cover(value):
+    """Valida la chiave della cover di repertorio.
+
+    Ritorna (cover, errore). `(None, None)` significa "nessuna copertina":
+    l'attributo non va scritto affatto.
+    """
+    if value is None or value == '':
+        return None, None
+    if not isinstance(value, str) or value not in ALLOWED_COVERS:
+        return None, f'cover must be one of: {", ".join(sorted(ALLOWED_COVERS))}'
+    return value, None
+
+
 def handler(event, context):
     try:
         user_id = event['requestContext']['authorizer']['claims']['sub']
@@ -59,6 +77,10 @@ def handler(event, context):
         if longitude is None:
             return _cors_response(400, {'error': 'Bad Request', 'message': 'longitude must be a number between -180 and 180'})
 
+        cover, cover_error = _parse_cover(body.get('cover'))
+        if cover_error:
+            return _cors_response(400, {'error': 'Bad Request', 'message': cover_error})
+
         now = datetime.utcnow().isoformat() + 'Z'
         battle_id = str(uuid.uuid4())
 
@@ -75,6 +97,9 @@ def handler(event, context):
             'created_at': now,
             'updated_at': now,
         }
+
+        if cover:
+            battle['cover'] = cover
 
         battles_table.put_item(Item=battle)
 

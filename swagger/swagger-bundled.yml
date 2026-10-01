@@ -1142,6 +1142,21 @@ paths:
                 location:
                   type: string
                   example: 'Milano, Parco Sempione'
+                cover:
+                  type: string
+                  enum:
+                    - arena
+                    - crowd
+                    - soundwave
+                    - turntable
+                    - mic
+                    - versus
+                    - city
+                    - street
+                    - spark
+                    - aura
+                  description: 'Chiave della copertina di repertorio (opzionale). Se assente, l''app mostra un gradiente generato dal battle_id.'
+                  example: arena
                 latitude:
                   type: number
                   format: double
@@ -1184,6 +1199,22 @@ paths:
                   location:
                     type: string
                     example: 'Milano, Parco Sempione'
+                  cover:
+                    type: string
+                    enum:
+                      - arena
+                      - crowd
+                      - soundwave
+                      - turntable
+                      - mic
+                      - versus
+                      - city
+                      - street
+                      - spark
+                      - aura
+                    description: |
+                      Chiave della copertina di repertorio. L'immagine è inclusa nel bundle dell'app e risolta localmente da questa chiave: il backend non la ospita né la serve. Assente se la battle non ha copertina.
+                    example: arena
                   latitude:
                     type: number
                     format: double
@@ -1339,6 +1370,21 @@ paths:
                   type: string
                 location:
                   type: string
+                cover:
+                  type: string
+                  nullable: true
+                  enum:
+                    - arena
+                    - crowd
+                    - soundwave
+                    - turntable
+                    - mic
+                    - versus
+                    - city
+                    - street
+                    - spark
+                    - aura
+                  description: '`null` rimuove la copertina. Campo assente = invariata.'
                 latitude:
                   type: number
                   format: double

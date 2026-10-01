@@ -28,6 +28,11 @@ post:
             location:
               type: string
               example: "Milano, Parco Sempione"
+            cover:
+              type: string
+              enum: [arena, crowd, soundwave, turntable, mic, versus, city, street, spark, aura]
+              description: Chiave della copertina di repertorio (opzionale). Se assente, l'app mostra un gradiente generato dal battle_id.
+              example: "arena"
             latitude:
               type: number
               format: double
