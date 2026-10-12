@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Matchup Votes Data - DynamoDB table (rate-limit state + time-bucketed vote counts per matchup)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
+
+Resources:
+  MatchupVotesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-MatchupVotes'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: matchup_id
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: matchup_id
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+      # sk = "RATE#{voter_id}" (stato rate-limit per votante) oppure
+      #      "BUCKET#{epoch_bucket}" (conteggio voti aggregato per bucket temporale)
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  TableName:
+    Value: !Ref MatchupVotesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt MatchupVotesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'

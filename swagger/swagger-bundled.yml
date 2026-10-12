@@ -37,10 +37,14 @@ servers:
     description: '[DEV-AURABATTLE] User API (Direct)'
   - url: 'https://ln6a4z3lp4.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1'
     description: '[DEV-AURABATTLE] Battles API (Direct)'
+  - url: 'https://bvgad4lhi3.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1'
+    description: '[DEV-AURABATTLE] Matchups API (Direct)'
   - url: 'https://ytgs3hvtrh.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1'
     description: '[PROD-AURABATTLE] User API (Direct)'
   - url: 'https://f07ziuaot5.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1'
     description: '[PROD-AURABATTLE] Battles API (Direct)'
+  - url: 'https://u81h12q97l.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1'
+    description: '[PROD-AURABATTLE] Matchups API (Direct)'
 tags:
   - name: Authentication
     description: Cognito authentication endpoints
@@ -48,6 +52,8 @@ tags:
     description: User profile management and preferences
   - name: Battles
     description: Creazione e gestione delle aura battle
+  - name: Matchups
+    description: 'Sfide dentro una battle, voto e aggiornamento punteggio'
 components:
   securitySchemes:
     CognitoAuth:
@@ -1249,7 +1255,7 @@ paths:
                       - published
                       - live
                       - closed
-                    description: '''live'' abilita il voto (POST .../vote) e mostra lo stream, se presente'
+                    description: '''live'' mostra la battle come in corso (abilita i matchup live al suo interno)'
                     example: published
                   stream_url:
                     type: string
@@ -1257,16 +1263,6 @@ paths:
                     description: |
                       Link allo streaming live (YouTube, Twitch, o altro) scelto dall'host. Il backend salva solo l'URL: niente integrazione OAuth, nessun embedding lato server. Assente se la battle non ha uno streaming.
                     example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-                  votes_a:
-                    type: integer
-                    readOnly: true
-                    description: Totale voti per il side A. Si aggiorna in automatico con ogni voto.
-                    example: 42
-                  votes_b:
-                    type: integer
-                    readOnly: true
-                    description: Totale voti per il side B. Si aggiorna in automatico con ogni voto.
-                    example: 37
                   created_at:
                     type: string
                     format: date-time
@@ -1577,11 +1573,269 @@ paths:
                 $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
         '404':
           $ref: '#/paths/~1profile/get/responses/404'
-  '/battles/{battleId}/vote':
+  '/battles/{battleId}/matchups':
     post:
       tags:
-        - Battles
-      summary: Vota per il side A o B
+        - Matchups
+      summary: Crea un matchup dentro una battle
+      description: |
+        Solo l'host della battle può crearne. Ogni partecipante è o un utente
+        registrato (`user_id`) o un ospite (`guest_name`) — esattamente uno dei
+        due per slot. Solo i partecipanti registrati ricevono aggiornamenti di
+        `aura_stats` alla chiusura del matchup.
+      operationId: createMatchup
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - participant_a
+                - participant_b
+              properties:
+                participant_a:
+                  $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
+                participant_b:
+                  $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
+      responses:
+        '201':
+          description: Matchup creato
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1matchups~1%7BmatchupId%7D/get/responses/200/content/application~1json/schema'
+        '400':
+          description: 'Partecipante non valido (manca user_id/guest_name, o entrambi presenti, o user_id inesistente)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '401':
+          $ref: '#/paths/~1profile/get/responses/401'
+        '403':
+          description: Solo l'host della battle può creare matchup
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+    get:
+      tags:
+        - Matchups
+      summary: Lista i matchup di una battle
+      description: Endpoint pubblico. Ordinati per data di creazione.
+      operationId: listMatchups
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista matchup
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/paths/~1matchups~1%7BmatchupId%7D/get/responses/200/content/application~1json/schema'
+                  count:
+                    type: integer
+  '/matchups/{matchupId}':
+    get:
+      tags:
+        - Matchups
+      summary: Dettaglio matchup
+      description: Endpoint pubblico.
+      operationId: getMatchup
+      parameters:
+        - name: matchupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matchup trovato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matchup_id:
+                    type: string
+                    format: uuid
+                    example: e1a2b3c4-5d6e-7f80-9a1b-2c3d4e5f6a7b
+                  battle_id:
+                    type: string
+                    format: uuid
+                    example: a6d66a62-4bcd-4069-9ba5-6eeff473264f
+                  participant_a:
+                    $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
+                  participant_b:
+                    $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
+                  votes_a:
+                    type: integer
+                    readOnly: true
+                    example: 12
+                  votes_b:
+                    type: integer
+                    readOnly: true
+                    example: 9
+                  status:
+                    type: string
+                    enum:
+                      - published
+                      - live
+                      - closed
+                    description: '''live'' abilita il voto; ''closed'' calcola il winner e aggiorna aura_stats (solo partecipanti registrati)'
+                    example: published
+                  winner:
+                    type: string
+                    enum:
+                      - A
+                      - B
+                      - tie
+                    nullable: true
+                    readOnly: true
+                    description: 'Impostato in automatico alla chiusura, in base ai voti. null finché il matchup non è closed.'
+                    example: null
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+    put:
+      tags:
+        - Matchups
+      summary: Aggiorna un matchup
+      description: |
+        Solo l'host della battle può modificarlo.
+
+        Alla transizione verso `status: closed` (solo la prima volta), il
+        vincitore viene calcolato automaticamente dai voti correnti: più voti A
+        → `A`, più voti B → `B`, pari → `tie` (nessun winner/loser). Per ogni
+        partecipante **registrato** coinvolto, aggiorna `aura_stats.wins` /
+        `aura_stats.losses` sul suo profilo. I partecipanti guest non vengono
+        toccati.
+      operationId: updateMatchup
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: matchupId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participant_a:
+                  type: object
+                  description: Esattamente uno fra user_id e guest_name.
+                  properties:
+                    user_id:
+                      type: string
+                      format: uuid
+                      description: Utente registrato — a fine matchup aggiorna aura_stats.wins/losses
+                    guest_name:
+                      type: string
+                      description: Partecipante non registrato — nessun aggiornamento storico
+                  example:
+                    user_id: 864eb230-a071-708c-ec7e-a1c6446c9cbe
+                participant_b:
+                  $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
+                status:
+                  type: string
+                  enum:
+                    - published
+                    - live
+                    - closed
+      responses:
+        '200':
+          description: Matchup aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1matchups~1%7BmatchupId%7D/get/responses/200/content/application~1json/schema'
+        '400':
+          description: Partecipante o status non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '401':
+          $ref: '#/paths/~1profile/get/responses/401'
+        '403':
+          description: Solo l'host della battle può modificare il matchup
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+    delete:
+      tags:
+        - Matchups
+      summary: Elimina un matchup
+      description: Solo l'host della battle può eliminarlo.
+      operationId: deleteMatchup
+      security:
+        - CognitoAuth: []
+      parameters:
+        - name: matchupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matchup eliminato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/paths/~1profile/get/responses/401'
+        '403':
+          description: Solo l'host della battle può eliminare il matchup
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+  '/matchups/{matchupId}/vote':
+    post:
+      tags:
+        - Matchups
+      summary: Vota per il side A o B di un matchup
       description: |
         Endpoint pubblico — niente autenticazione Cognito obbligatoria. Il
         chiamante indica un `voter_id`: usa il `sub` dell'utente se loggato,
@@ -1592,15 +1846,14 @@ paths:
         serve solo a far rispettare il cooldown fra un voto e l'altro. È una
         misura debole ma intenzionale per questa fase (MVP): permette il voto
         anche a chi non si è registrato, aumentando la partecipazione, al costo
-        di essere aggirabile da chi genera ID falsi. Da rinforzare se diventa un
-        problema concreto.
+        di essere aggirabile da chi genera ID falsi.
 
-        Si può votare solo mentre la battle è `live` (409 altrimenti). Rate
-        limit: un voto ogni 10 secondi per `voter_id` + battle (429 se troppo
+        Si può votare solo mentre il matchup è `live` (409 altrimenti). Rate
+        limit: un voto ogni 10 secondi per `voter_id` + matchup (429 se troppo
         presto).
-      operationId: castVote
+      operationId: castMatchupVote
       parameters:
-        - name: battleId
+        - name: matchupId
           in: path
           required: true
           schema:
@@ -1647,7 +1900,7 @@ paths:
         '404':
           $ref: '#/paths/~1profile/get/responses/404'
         '409':
-          description: La battle non è live
+          description: Il matchup non è live
           content:
             application/json:
               schema:
@@ -1658,25 +1911,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
-  '/battles/{battleId}/votes':
+  '/matchups/{matchupId}/votes':
     get:
       tags:
-        - Battles
-      summary: Totali voto e storico (grafico highlights)
+        - Matchups
+      summary: Totali voto e storico (grafico highlights) di un matchup
       description: |
         Endpoint pubblico. Ritorna i totali correnti e una serie temporale a
         bucket di 15 secondi, utile per un grafico "andamento hype" nel tempo
-        (sia live che a battle conclusa, come replay).
-      operationId: getVotes
+        (sia live che a matchup concluso, come replay).
+      operationId: getMatchupVotes
       parameters:
-        - name: battleId
+        - name: matchupId
           in: path
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Voti della battle
+          description: Voti del matchup
           content:
             application/json:
               schema:

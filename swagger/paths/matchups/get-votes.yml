@@ -1,21 +1,21 @@
 get:
   tags:
-    - Battles
-  summary: Totali voto e storico (grafico highlights)
+    - Matchups
+  summary: Totali voto e storico (grafico highlights) di un matchup
   description: |
     Endpoint pubblico. Ritorna i totali correnti e una serie temporale a
     bucket di 15 secondi, utile per un grafico "andamento hype" nel tempo
-    (sia live che a battle conclusa, come replay).
-  operationId: getVotes
+    (sia live che a matchup concluso, come replay).
+  operationId: getMatchupVotes
   parameters:
-    - name: battleId
+    - name: matchupId
       in: path
       required: true
       schema:
         type: string
   responses:
     '200':
-      description: Voti della battle
+      description: Voti del matchup
       content:
         application/json:
           schema:

@@ -12,6 +12,8 @@ tags:
     description: User profile management and preferences
   - name: Battles
     description: Creazione e gestione delle aura battle
+  - name: Matchups
+    description: Sfide dentro una battle, voto e aggiornamento punteggio
 
 components:
   securitySchemes:
@@ -94,13 +96,31 @@ paths:
     delete:
       $ref: './paths/battles/delete-battle.yml#/delete'
 
-  /battles/{battleId}/vote:
-    post:
-      $ref: './paths/battles/cast-vote.yml#/post'
+  # ============================================================================
+  # MATCHUPS
+  # ============================================================================
 
-  /battles/{battleId}/votes:
+  /battles/{battleId}/matchups:
+    post:
+      $ref: './paths/matchups/create-matchup.yml#/post'
     get:
-      $ref: './paths/battles/get-votes.yml#/get'
+      $ref: './paths/matchups/list-matchups.yml#/get'
+
+  /matchups/{matchupId}:
+    get:
+      $ref: './paths/matchups/get-matchup.yml#/get'
+    put:
+      $ref: './paths/matchups/update-matchup.yml#/put'
+    delete:
+      $ref: './paths/matchups/delete-matchup.yml#/delete'
+
+  /matchups/{matchupId}/vote:
+    post:
+      $ref: './paths/matchups/cast-vote.yml#/post'
+
+  /matchups/{matchupId}/votes:
+    get:
+      $ref: './paths/matchups/get-votes.yml#/get'
 
   # ============================================================================
   # DA SBLOCCARE MAN MANO CHE DEPLOYIAMO I PROSSIMI SERVIZI:

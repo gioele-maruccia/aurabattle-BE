@@ -1,0 +1,12 @@
+type: object
+description: Esattamente uno fra user_id e guest_name.
+properties:
+  user_id:
+    type: string
+    format: uuid
+    description: Utente registrato — a fine matchup aggiorna aura_stats.wins/losses
+  guest_name:
+    type: string
+    description: Partecipante non registrato — nessun aggiornamento storico
+example:
+  user_id: "864eb230-a071-708c-ec7e-a1c6446c9cbe"

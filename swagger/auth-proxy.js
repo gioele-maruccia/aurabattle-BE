@@ -30,6 +30,7 @@ const ENVIRONMENTS = {
       userApi: 'https://hk3y2bs3ph.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1',
       backoffice: '',
       battles: 'https://ln6a4z3lp4.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1',
+      matchups: 'https://bvgad4lhi3.execute-api.eu-south-1.amazonaws.com/dev-aurabattle/v1',
       participations: '',
     }
   },
@@ -45,6 +46,7 @@ const ENVIRONMENTS = {
       userApi: 'https://ytgs3hvtrh.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1',
       backoffice: '',
       battles: 'https://f07ziuaot5.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1',
+      matchups: 'https://u81h12q97l.execute-api.eu-south-1.amazonaws.com/prod-aurabattle/v1',
       participations: '',
     }
   }
@@ -67,9 +69,12 @@ const CONFIG = {
     '/users/[^/]+/fcm-token': 'userApi',
     '/bookmarks/battles': 'userApi',
 
+    // Matchups (controllare PRIMA di /battles, perché più specifico)
+    '/battles/[^/]+/matchups': 'matchups',
+    '/matchups': 'matchups',
+
     // Battles
     '/battles': 'battles',
-    '/battles/': 'battles',
   }
 };
 

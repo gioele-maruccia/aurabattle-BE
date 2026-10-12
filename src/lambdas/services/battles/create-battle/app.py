@@ -112,8 +112,6 @@ def handler(event, context):
             'longitude': longitude,
             'event_datetime': body['event_datetime'],
             'status': 'published',
-            'votes_a': 0,
-            'votes_b': 0,
             'created_at': now,
             'updated_at': now,
         }

@@ -1,0 +1,59 @@
+put:
+  tags:
+    - Matchups
+  summary: Aggiorna un matchup
+  description: |
+    Solo l'host della battle può modificarlo.
+
+    Alla transizione verso `status: closed` (solo la prima volta), il
+    vincitore viene calcolato automaticamente dai voti correnti: più voti A
+    → `A`, più voti B → `B`, pari → `tie` (nessun winner/loser). Per ogni
+    partecipante **registrato** coinvolto, aggiorna `aura_stats.wins` /
+    `aura_stats.losses` sul suo profilo. I partecipanti guest non vengono
+    toccati.
+  operationId: updateMatchup
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: matchupId
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            participant_a:
+              $ref: '../../components/schemas/matchups/Participant.yml'
+            participant_b:
+              $ref: '../../components/schemas/matchups/Participant.yml'
+            status:
+              type: string
+              enum: [published, live, closed]
+  responses:
+    '200':
+      description: Matchup aggiornato
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/matchups/Matchup.yml'
+    '400':
+      description: Partecipante o status non validi
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '403':
+      description: Solo l'host della battle può modificare il matchup
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

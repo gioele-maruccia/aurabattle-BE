@@ -1,0 +1,26 @@
+get:
+  tags:
+    - Matchups
+  summary: Lista i matchup di una battle
+  description: Endpoint pubblico. Ordinati per data di creazione.
+  operationId: listMatchups
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Lista matchup
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              items:
+                type: array
+                items:
+                  $ref: '../../components/schemas/matchups/Matchup.yml'
+              count:
+                type: integer

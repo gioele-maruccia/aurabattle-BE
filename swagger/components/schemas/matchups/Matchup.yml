@@ -1,0 +1,40 @@
+type: object
+properties:
+  matchup_id:
+    type: string
+    format: uuid
+    example: "e1a2b3c4-5d6e-7f80-9a1b-2c3d4e5f6a7b"
+  battle_id:
+    type: string
+    format: uuid
+    example: "a6d66a62-4bcd-4069-9ba5-6eeff473264f"
+  participant_a:
+    $ref: './Participant.yml'
+  participant_b:
+    $ref: './Participant.yml'
+  votes_a:
+    type: integer
+    readOnly: true
+    example: 12
+  votes_b:
+    type: integer
+    readOnly: true
+    example: 9
+  status:
+    type: string
+    enum: [published, live, closed]
+    description: "'live' abilita il voto; 'closed' calcola il winner e aggiorna aura_stats (solo partecipanti registrati)"
+    example: "published"
+  winner:
+    type: string
+    enum: [A, B, tie]
+    nullable: true
+    readOnly: true
+    description: Impostato in automatico alla chiusura, in base ai voti. null finché il matchup non è closed.
+    example: null
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time

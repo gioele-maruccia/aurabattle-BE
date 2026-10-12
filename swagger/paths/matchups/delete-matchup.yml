@@ -1,0 +1,36 @@
+delete:
+  tags:
+    - Matchups
+  summary: Elimina un matchup
+  description: Solo l'host della battle può eliminarlo.
+  operationId: deleteMatchup
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: matchupId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Matchup eliminato
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+    '403':
+      description: Solo l'host della battle può eliminare il matchup
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

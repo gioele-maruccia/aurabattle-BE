@@ -1,0 +1,277 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Matchups API - Sfide dentro una battle, voto e scoring
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+    - dev-aurabattle
+    - prod-aurabattle
+  UserPoolArn:
+    Type: String
+    Description: Cognito User Pool ARN
+  BattlesTableName:
+    Type: String
+    Description: DynamoDB Battles table name
+  MatchupsTableName:
+    Type: String
+    Description: DynamoDB Matchups table name
+  MatchupVotesTableName:
+    Type: String
+    Description: DynamoDB Matchup Votes table name
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 30
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        BATTLES_TABLE:
+          Ref: BattlesTableName
+        MATCHUPS_TABLE:
+          Ref: MatchupsTableName
+        USER_PROFILES_TABLE:
+          Ref: UserProfilesTableName
+Resources:
+  MatchupsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: Environment
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn:
+              Ref: UserPoolArn
+      Cors:
+        AllowMethods: '''*'''
+        AllowHeaders: '''Content-Type,Authorization'''
+        AllowOrigin: '''*'''
+    Metadata:
+      SamResourceId: MatchupsApi
+  CreateMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-create
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/ce1b41e4c38c9be0cee56048d1e76f12
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/battles/{battleId}/matchups
+            Method: POST
+    Metadata:
+      SamResourceId: CreateMatchupFunction
+  ListMatchupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-list
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/cc2481d6a8c881462a8ccc31f04716c7
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/battles/{battleId}/matchups
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ListMatchupsFunction
+  GetMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-get
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/e498b0c71ea84029de8352a66edadfa7
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: GetMatchupFunction
+  UpdateMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-update
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/ec30223bc5846d6f126f222069363de2
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: PUT
+    Metadata:
+      SamResourceId: UpdateMatchupFunction
+  DeleteMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-delete
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/c974cb6d63414cec63cfe92d0d506420
+      Handler: app.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: DELETE
+    Metadata:
+      SamResourceId: DeleteMatchupFunction
+  CastVoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-cast-vote
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/d23df2e80a6836ccfbdbf5add98c4337
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_VOTES_TABLE:
+            Ref: MatchupVotesTableName
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:UpdateItem
+          Resource:
+            Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupsTableName}
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupVotesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/matchups/{matchupId}/vote
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: CastVoteFunction
+  GetVotesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-get-votes
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/95d7fee85ba97f356e14b321abea4c5d
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_VOTES_TABLE:
+            Ref: MatchupVotesTableName
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupVotesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MatchupsApi
+            Path: /v1/matchups/{matchupId}/votes
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: GetVotesFunction
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId:
+        Ref: MatchupsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault4XX
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId:
+        Ref: MatchupsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+    Metadata:
+      SamResourceId: GatewayResponseDefault5XX
+Outputs:
+  ApiEndpoint:
+    Value:
+      Fn::Sub: https://${MatchupsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  ApiId:
+    Value:
+      Ref: MatchupsApi

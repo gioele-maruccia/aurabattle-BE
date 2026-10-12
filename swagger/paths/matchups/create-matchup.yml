@@ -1,0 +1,55 @@
+post:
+  tags:
+    - Matchups
+  summary: Crea un matchup dentro una battle
+  description: |
+    Solo l'host della battle può crearne. Ogni partecipante è o un utente
+    registrato (`user_id`) o un ospite (`guest_name`) — esattamente uno dei
+    due per slot. Solo i partecipanti registrati ricevono aggiornamenti di
+    `aura_stats` alla chiusura del matchup.
+  operationId: createMatchup
+  security:
+    - CognitoAuth: []
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - participant_a
+            - participant_b
+          properties:
+            participant_a:
+              $ref: '../../components/schemas/matchups/Participant.yml'
+            participant_b:
+              $ref: '../../components/schemas/matchups/Participant.yml'
+  responses:
+    '201':
+      description: Matchup creato
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/matchups/Matchup.yml'
+    '400':
+      description: Partecipante non valido (manca user_id/guest_name, o entrambi presenti, o user_id inesistente)
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '403':
+      description: Solo l'host della battle può creare matchup
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '401':
+      $ref: '../../components/responses/Unauthorized.yml'

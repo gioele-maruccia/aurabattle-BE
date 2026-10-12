@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Matchups Data - DynamoDB table (singole sfide dentro una Battle)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
+
+Resources:
+  MatchupsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Matchups'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: matchup_id
+          AttributeType: S
+        - AttributeName: battle_id
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: matchup_id
+          KeyType: HASH
+
+      GlobalSecondaryIndexes:
+        - IndexName: battle_id-index
+          KeySchema:
+            - AttributeName: battle_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  TableName:
+    Value: !Ref MatchupsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt MatchupsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'

@@ -1,0 +1,21 @@
+get:
+  tags:
+    - Matchups
+  summary: Dettaglio matchup
+  description: Endpoint pubblico.
+  operationId: getMatchup
+  parameters:
+    - name: matchupId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Matchup trovato
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/matchups/Matchup.yml'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'

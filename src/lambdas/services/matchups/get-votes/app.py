@@ -1,7 +1,7 @@
 """
-Battles API - Get Votes
+Matchups API - Get Votes
 Ritorna i totali voto correnti e lo storico a bucket temporali (per il
-grafico "highlights"). Endpoint pubblico.
+grafico "highlights") di un matchup. Endpoint pubblico.
 """
 import json
 import os
@@ -9,8 +9,8 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb')
-battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
-votes_table = dynamodb.Table(os.environ['BATTLE_VOTES_TABLE'])
+matchups_table = dynamodb.Table(os.environ['MATCHUPS_TABLE'])
+votes_table = dynamodb.Table(os.environ['MATCHUP_VOTES_TABLE'])
 
 
 def _cors_response(status_code, body):
@@ -28,14 +28,14 @@ def _cors_response(status_code, body):
 
 def handler(event, context):
     try:
-        battle_id = event['pathParameters']['battleId']
+        matchup_id = event['pathParameters']['matchupId']
 
-        battle = battles_table.get_item(Key={'battle_id': battle_id}).get('Item')
-        if not battle:
-            return _cors_response(404, {'error': 'Not Found', 'message': 'Battle not found'})
+        matchup = matchups_table.get_item(Key={'matchup_id': matchup_id}).get('Item')
+        if not matchup:
+            return _cors_response(404, {'error': 'Not Found', 'message': 'Matchup not found'})
 
         response = votes_table.query(
-            KeyConditionExpression=Key('battle_id').eq(battle_id) & Key('sk').begins_with('BUCKET#')
+            KeyConditionExpression=Key('matchup_id').eq(matchup_id) & Key('sk').begins_with('BUCKET#')
         )
 
         timeseries = [
@@ -49,8 +49,8 @@ def handler(event, context):
         timeseries.sort(key=lambda b: b['bucket_ts'])
 
         return _cors_response(200, {
-            'votes_a': int(battle.get('votes_a', 0)),
-            'votes_b': int(battle.get('votes_b', 0)),
+            'votes_a': int(matchup.get('votes_a', 0)),
+            'votes_b': int(matchup.get('votes_b', 0)),
             'timeseries': timeseries,
         })
 

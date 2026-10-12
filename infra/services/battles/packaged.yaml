@@ -20,9 +20,6 @@ Parameters:
   BattleCoversBucketName:
     Type: String
     Description: S3 bucket name for battle cover uploads
-  BattleVotesTableName:
-    Type: String
-    Description: DynamoDB Battle Votes table name
 Globals:
   Function:
     Runtime: python3.10
@@ -42,7 +39,7 @@ Resources:
       LayerName:
         Fn::Sub: ${Environment}-pillow-layer
       Description: Pillow (image processing) for battle cover resize
-      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/52a64ecf6d7d9ff9c0348a7734758eeb
+      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/52a64ecf6d7d9ff9c0348a7734758eeb
       CompatibleRuntimes:
       - python3.10
       RetentionPolicy: Retain
@@ -71,7 +68,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-create
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/22720f1efbc8109e934f0fff2db182ee
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/909f50bab4fb6397f3524a5a7445cc2c
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -95,7 +92,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-list
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/6b0b3748668e2029fedfa7102f05471b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/6b0b3748668e2029fedfa7102f05471b
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -118,7 +115,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get-my
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/1abbff270f9c2ba69b2f86bbbdb96bb1
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/1abbff270f9c2ba69b2f86bbbdb96bb1
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -139,7 +136,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/b7122822f808c08f08ebab7ecd190d74
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/b7122822f808c08f08ebab7ecd190d74
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -162,7 +159,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-update
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/c24981ce5f4992f6c3c0a7dc5d1b3325
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/c24981ce5f4992f6c3c0a7dc5d1b3325
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -183,7 +180,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-delete
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/a328deb10dd03548065d6e6535f859e9
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/a328deb10dd03548065d6e6535f859e9
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:
@@ -207,7 +204,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-request-cover-upload-url
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/4b4197f798e9aebcff9c1b6701bfe55d
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/4b4197f798e9aebcff9c1b6701bfe55d
       Handler: app.handler
       Environment:
         Variables:
@@ -238,7 +235,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-process-cover-upload
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/a91b3561ae204dfed0e75a66f677984b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/a91b3561ae204dfed0e75a66f677984b
       Handler: app.handler
       Timeout: 60
       MemorySize: 512
@@ -262,72 +259,6 @@ Resources:
             Fn::Sub: arn:aws:s3:::${BattleCoversBucketName}/covers/*
     Metadata:
       SamResourceId: ProcessCoverUploadFunction
-  CastVoteFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-battles-cast-vote
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/fa8fe3450792a3a9a4778856aad2ce76
-      Handler: app.handler
-      Environment:
-        Variables:
-          BATTLE_VOTES_TABLE:
-            Ref: BattleVotesTableName
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: BattlesTableName
-      - Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:UpdateItem
-          Resource:
-            Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${BattlesTableName}
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: BattleVotesTableName
-      Events:
-        Post:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: BattlesApi
-            Path: /v1/battles/{battleId}/vote
-            Method: POST
-            Auth:
-              Authorizer: NONE
-    Metadata:
-      SamResourceId: CastVoteFunction
-  GetVotesFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${Environment}-battles-get-votes
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-133033/2a7ac79753529f492336893906883114
-      Handler: app.handler
-      Environment:
-        Variables:
-          BATTLE_VOTES_TABLE:
-            Ref: BattleVotesTableName
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: BattlesTableName
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: BattleVotesTableName
-      Events:
-        Get:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: BattlesApi
-            Path: /v1/battles/{battleId}/votes
-            Method: GET
-            Auth:
-              Authorizer: NONE
-    Metadata:
-      SamResourceId: GetVotesFunction
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:

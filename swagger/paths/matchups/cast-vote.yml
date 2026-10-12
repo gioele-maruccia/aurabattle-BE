@@ -1,7 +1,7 @@
 post:
   tags:
-    - Battles
-  summary: Vota per il side A o B
+    - Matchups
+  summary: Vota per il side A o B di un matchup
   description: |
     Endpoint pubblico — niente autenticazione Cognito obbligatoria. Il
     chiamante indica un `voter_id`: usa il `sub` dell'utente se loggato,
@@ -12,15 +12,14 @@ post:
     serve solo a far rispettare il cooldown fra un voto e l'altro. È una
     misura debole ma intenzionale per questa fase (MVP): permette il voto
     anche a chi non si è registrato, aumentando la partecipazione, al costo
-    di essere aggirabile da chi genera ID falsi. Da rinforzare se diventa un
-    problema concreto.
+    di essere aggirabile da chi genera ID falsi.
 
-    Si può votare solo mentre la battle è `live` (409 altrimenti). Rate
-    limit: un voto ogni 10 secondi per `voter_id` + battle (429 se troppo
+    Si può votare solo mentre il matchup è `live` (409 altrimenti). Rate
+    limit: un voto ogni 10 secondi per `voter_id` + matchup (429 se troppo
     presto).
-  operationId: castVote
+  operationId: castMatchupVote
   parameters:
-    - name: battleId
+    - name: matchupId
       in: path
       required: true
       schema:
@@ -65,7 +64,7 @@ post:
     '404':
       $ref: '../../components/responses/NotFound.yml'
     '409':
-      description: La battle non è live
+      description: Il matchup non è live
       content:
         application/json:
           schema:

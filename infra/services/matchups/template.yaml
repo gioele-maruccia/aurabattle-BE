@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Matchups API - Sfide dentro una battle, voto e scoring
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+  UserPoolArn:
+    Type: String
+    Description: Cognito User Pool ARN
+
+  BattlesTableName:
+    Type: String
+    Description: DynamoDB Battles table name
+
+  MatchupsTableName:
+    Type: String
+    Description: DynamoDB Matchups table name
+
+  MatchupVotesTableName:
+    Type: String
+    Description: DynamoDB Matchup Votes table name
+
+  UserProfilesTableName:
+    Type: String
+    Description: DynamoDB User Profiles table name
+
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 30
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        BATTLES_TABLE: !Ref BattlesTableName
+        MATCHUPS_TABLE: !Ref MatchupsTableName
+        USER_PROFILES_TABLE: !Ref UserProfilesTableName
+
+Resources:
+  MatchupsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !Ref UserPoolArn
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  # POST /battles/{battleId}/matchups - Crea un matchup (solo host della battle)
+  CreateMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-create
+      CodeUri: ../../../src/lambdas/services/matchups/create-matchup/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupsTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/battles/{battleId}/matchups
+            Method: POST
+
+  # GET /battles/{battleId}/matchups - Lista i matchup di una battle (no auth)
+  ListMatchupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-list
+      CodeUri: ../../../src/lambdas/services/matchups/list-matchups/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupsTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/battles/{battleId}/matchups
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  # GET /matchups/{matchupId} - Dettaglio matchup (no auth)
+  GetMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-get
+      CodeUri: ../../../src/lambdas/services/matchups/get-matchup/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupsTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  # PUT /matchups/{matchupId} - Aggiorna matchup (solo host della battle); calcola il winner alla chiusura
+  UpdateMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-update
+      CodeUri: ../../../src/lambdas/services/matchups/update-matchup/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupsTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: PUT
+
+  # DELETE /matchups/{matchupId} - Elimina matchup (solo host della battle)
+  DeleteMatchupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-delete
+      CodeUri: ../../../src/lambdas/services/matchups/delete-matchup/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupsTableName
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/matchups/{matchupId}
+            Method: DELETE
+
+  # POST /matchups/{matchupId}/vote - Vota side A/B (pubblico: voter_id nel body)
+  CastVoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-cast-vote
+      CodeUri: ../../../src/lambdas/services/matchups/cast-vote/
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_VOTES_TABLE: !Ref MatchupVotesTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupsTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupsTableName}'
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupVotesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/matchups/{matchupId}/vote
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  # GET /matchups/{matchupId}/votes - Totali + storico a bucket (no auth)
+  GetVotesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-get-votes
+      CodeUri: ../../../src/lambdas/services/matchups/get-votes/
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_VOTES_TABLE: !Ref MatchupVotesTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupsTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupVotesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MatchupsApi
+            Path: /v1/matchups/{matchupId}/votes
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  # CORS su risposte di errore API Gateway
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref MatchupsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref MatchupsApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub 'https://${MatchupsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+  ApiId:
+    Value: !Ref MatchupsApi

@@ -57,7 +57,7 @@ properties:
   status:
     type: string
     enum: [published, live, closed]
-    description: "'live' abilita il voto (POST .../vote) e mostra lo stream, se presente"
+    description: "'live' mostra la battle come in corso (abilita i matchup live al suo interno)"
     example: "published"
   stream_url:
     type: string
@@ -67,16 +67,6 @@ properties:
       Il backend salva solo l'URL: niente integrazione OAuth, nessun embedding
       lato server. Assente se la battle non ha uno streaming.
     example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-  votes_a:
-    type: integer
-    readOnly: true
-    description: Totale voti per il side A. Si aggiorna in automatico con ogni voto.
-    example: 42
-  votes_b:
-    type: integer
-    readOnly: true
-    description: Totale voti per il side B. Si aggiorna in automatico con ogni voto.
-    example: 37
   created_at:
     type: string
     format: date-time
