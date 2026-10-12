@@ -59,10 +59,13 @@ def handler(event, context):
             update_parts.append('address = :address')
             expr_values[':address'] = address
 
-        # Aggiorna display_name (nome pubblico)
+        # Aggiorna display_name (nome pubblico) + la sua versione lowercase,
+        # usata dall'indice di ricerca utenti (picker partecipanti)
         if 'display_name' in body:
             update_parts.append('display_name = :display_name')
             expr_values[':display_name'] = body['display_name']
+            update_parts.append('display_name_lower = :display_name_lower')
+            expr_values[':display_name_lower'] = body['display_name'].lower()
 
         # Aggiorna avatar_url
         if 'avatar_url' in body:

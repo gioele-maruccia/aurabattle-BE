@@ -210,6 +210,24 @@ Resources:
             Path: /v1/bookmarks/battles
             Method: GET
 
+  # GET /users/search?q=... - Cerca utenti registrati per display_name (picker partecipanti)
+  SearchUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-search-users
+      CodeUri: ../../../src/lambdas/services/user-api/search-users/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/users/search
+            Method: GET
+
   # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse

@@ -24,6 +24,10 @@ Resources:
           AttributeType: S
         - AttributeName: email
           AttributeType: S
+        - AttributeName: search_bucket
+          AttributeType: S
+        - AttributeName: display_name_lower
+          AttributeType: S
 
       KeySchema:
         - AttributeName: user_id
@@ -36,6 +40,23 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+        # search_bucket e' sempre "ALL": indice globale per il prefix-match su
+        # display_name (picker partecipanti). Scelta semplice per l'MVP: tutte
+        # le query cadono sulla stessa partizione, adeguato fino a qualche
+        # migliaio di utenti attivi; da rivedere (es. sharding per iniziale)
+        # se la base utenti cresce molto.
+        - IndexName: search_bucket-display_name_lower-index
+          KeySchema:
+            - AttributeName: search_bucket
+              KeyType: HASH
+            - AttributeName: display_name_lower
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - display_name
+              - avatar_url
       
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES

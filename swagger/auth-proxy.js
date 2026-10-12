@@ -67,6 +67,7 @@ const CONFIG = {
     '/profile': 'userApi',
     '/settings': 'userApi',
     '/users/[^/]+/fcm-token': 'userApi',
+    '/users/search': 'userApi',
     '/bookmarks/battles': 'userApi',
 
     // Matchups (controllare PRIMA di /battles, perché più specifico)

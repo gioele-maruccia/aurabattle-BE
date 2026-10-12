@@ -71,6 +71,10 @@ paths:
     delete:
       $ref: './paths/user-api/remove-bookmark.yml#/delete'
 
+  /users/search:
+    get:
+      $ref: './paths/user-api/search-users.yml#/get'
+
   # ============================================================================
   # BATTLES
   # ============================================================================
