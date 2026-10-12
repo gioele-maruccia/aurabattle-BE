@@ -26,6 +26,10 @@ Parameters:
     Type: String
     Description: S3 bucket name for battle cover uploads
 
+  BattleVotesTableName:
+    Type: String
+    Description: DynamoDB Battle Votes table name
+
 Globals:
   Function:
     Runtime: python3.10
@@ -230,6 +234,61 @@ Resources:
               Action:
                 - s3:PutObject
               Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/covers/*'
+
+  # POST /battles/{battleId}/vote - Vota side A/B (pubblico: voter_id nel body, vedi app.py)
+  CastVoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-cast-vote
+      CodeUri: ../../../src/lambdas/services/battles/cast-vote/
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLE_VOTES_TABLE: !Ref BattleVotesTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${BattlesTableName}'
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattleVotesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}/vote
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  # GET /battles/{battleId}/votes - Totali + storico a bucket (grafico highlights, no auth)
+  GetVotesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-get-votes
+      CodeUri: ../../../src/lambdas/services/battles/get-votes/
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLE_VOTES_TABLE: !Ref BattleVotesTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattleVotesTableName
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BattlesApi
+            Path: /v1/battles/{battleId}/votes
+            Method: GET
+            Auth:
+              Authorizer: NONE
 
   # CORS su risposte di errore API Gateway
   GatewayResponseDefault4XX:

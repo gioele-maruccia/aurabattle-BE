@@ -30,6 +30,11 @@ put:
               nullable: true
               enum: [arena, crowd, soundwave, turntable, mic, versus, city, street, spark, aura]
               description: "`null` rimuove la copertina. Campo assente = invariata."
+            stream_url:
+              type: string
+              nullable: true
+              format: uri
+              description: "`null` rimuove lo stream. Campo assente = invariato."
             latitude:
               type: number
               format: double
@@ -45,8 +50,8 @@ put:
               format: date-time
             status:
               type: string
-              enum: [published, closed]
-              description: "'closed' per chiudere la battle (es. tutti i posti coperti, evento annullato)"
+              enum: [published, live, closed]
+              description: "'live' abilita il voto e lo stream; 'closed' per chiudere la battle"
   responses:
     '200':
       description: Battle aggiornata

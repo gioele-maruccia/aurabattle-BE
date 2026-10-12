@@ -94,6 +94,14 @@ paths:
     delete:
       $ref: './paths/battles/delete-battle.yml#/delete'
 
+  /battles/{battleId}/vote:
+    post:
+      $ref: './paths/battles/cast-vote.yml#/post'
+
+  /battles/{battleId}/votes:
+    get:
+      $ref: './paths/battles/get-votes.yml#/get'
+
   # ============================================================================
   # DA SBLOCCARE MAN MANO CHE DEPLOYIAMO I PROSSIMI SERVIZI:
   # - Backoffice (search-users) — pronto, non ancora deployato

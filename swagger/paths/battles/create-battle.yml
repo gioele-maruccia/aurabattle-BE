@@ -33,6 +33,11 @@ post:
               enum: [arena, crowd, soundwave, turntable, mic, versus, city, street, spark, aura]
               description: Chiave della copertina di repertorio (opzionale). Se assente, l'app mostra un gradiente generato dal battle_id.
               example: "arena"
+            stream_url:
+              type: string
+              format: uri
+              description: Link allo streaming live (YouTube, Twitch, ecc.), opzionale.
+              example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
             latitude:
               type: number
               format: double

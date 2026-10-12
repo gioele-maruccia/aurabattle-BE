@@ -44,6 +44,20 @@ def _parse_coordinate(value, min_value, max_value):
     return decimal_value
 
 
+def _parse_stream_url(value):
+    """Valida l'URL dello stream (YouTube/Twitch/altro). Nessuna verifica di
+    dominio stretta: basta che sia un link http(s) valido, per non accoppiare
+    il backend a un elenco di piattaforme supportate.
+
+    Ritorna (stream_url, errore). `(None, None)` significa "nessuno stream".
+    """
+    if value is None or value == '':
+        return None, None
+    if not isinstance(value, str) or not value.startswith(('http://', 'https://')):
+        return None, 'stream_url must be a valid http(s) URL'
+    return value, None
+
+
 def _parse_cover(value):
     """Valida la chiave della cover di repertorio.
 
@@ -81,6 +95,10 @@ def handler(event, context):
         if cover_error:
             return _cors_response(400, {'error': 'Bad Request', 'message': cover_error})
 
+        stream_url, stream_url_error = _parse_stream_url(body.get('stream_url'))
+        if stream_url_error:
+            return _cors_response(400, {'error': 'Bad Request', 'message': stream_url_error})
+
         now = datetime.utcnow().isoformat() + 'Z'
         battle_id = str(uuid.uuid4())
 
@@ -94,12 +112,17 @@ def handler(event, context):
             'longitude': longitude,
             'event_datetime': body['event_datetime'],
             'status': 'published',
+            'votes_a': 0,
+            'votes_b': 0,
             'created_at': now,
             'updated_at': now,
         }
 
         if cover:
             battle['cover'] = cover
+
+        if stream_url:
+            battle['stream_url'] = stream_url
 
         battles_table.put_item(Item=battle)
 

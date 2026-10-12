@@ -1,0 +1,46 @@
+get:
+  tags:
+    - Battles
+  summary: Totali voto e storico (grafico highlights)
+  description: |
+    Endpoint pubblico. Ritorna i totali correnti e una serie temporale a
+    bucket di 15 secondi, utile per un grafico "andamento hype" nel tempo
+    (sia live che a battle conclusa, come replay).
+  operationId: getVotes
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Voti della battle
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              votes_a:
+                type: integer
+                example: 42
+              votes_b:
+                type: integer
+                example: 37
+              timeseries:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    bucket_ts:
+                      type: integer
+                      description: Timestamp Unix (secondi) di inizio bucket
+                      example: 1790869320
+                    votes_a:
+                      type: integer
+                      example: 5
+                    votes_b:
+                      type: integer
+                      example: 3
+    '404':
+      $ref: '../../components/responses/NotFound.yml'

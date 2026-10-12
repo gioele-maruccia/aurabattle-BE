@@ -56,8 +56,27 @@ properties:
     example: "2026-10-15T18:00:00Z"
   status:
     type: string
-    enum: [published, closed]
+    enum: [published, live, closed]
+    description: "'live' abilita il voto (POST .../vote) e mostra lo stream, se presente"
     example: "published"
+  stream_url:
+    type: string
+    format: uri
+    description: >
+      Link allo streaming live (YouTube, Twitch, o altro) scelto dall'host.
+      Il backend salva solo l'URL: niente integrazione OAuth, nessun embedding
+      lato server. Assente se la battle non ha uno streaming.
+    example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  votes_a:
+    type: integer
+    readOnly: true
+    description: Totale voti per il side A. Si aggiorna in automatico con ogni voto.
+    example: 42
+  votes_b:
+    type: integer
+    readOnly: true
+    description: Totale voti per il side B. Si aggiorna in automatico con ogni voto.
+    example: 37
   created_at:
     type: string
     format: date-time

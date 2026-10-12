@@ -1,0 +1,78 @@
+post:
+  tags:
+    - Battles
+  summary: Vota per il side A o B
+  description: |
+    Endpoint pubblico — niente autenticazione Cognito obbligatoria. Il
+    chiamante indica un `voter_id`: usa il `sub` dell'utente se loggato,
+    altrimenti un ID anonimo generato e persistito dal client (es. UUID
+    salvato localmente sul device).
+
+    **Nota anti-abuso**: `voter_id` non viene verificato crittograficamente —
+    serve solo a far rispettare il cooldown fra un voto e l'altro. È una
+    misura debole ma intenzionale per questa fase (MVP): permette il voto
+    anche a chi non si è registrato, aumentando la partecipazione, al costo
+    di essere aggirabile da chi genera ID falsi. Da rinforzare se diventa un
+    problema concreto.
+
+    Si può votare solo mentre la battle è `live` (409 altrimenti). Rate
+    limit: un voto ogni 10 secondi per `voter_id` + battle (429 se troppo
+    presto).
+  operationId: castVote
+  parameters:
+    - name: battleId
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - side
+            - voter_id
+          properties:
+            side:
+              type: string
+              enum: [A, B]
+              example: "A"
+            voter_id:
+              type: string
+              description: user_id Cognito (se loggato) o ID anonimo persistito dal client
+              example: "864eb230-a071-708c-ec7e-a1c6446c9cbe"
+  responses:
+    '200':
+      description: Voto registrato
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              side:
+                type: string
+                example: "A"
+    '400':
+      description: side o voter_id mancanti/non validi
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '404':
+      $ref: '../../components/responses/NotFound.yml'
+    '409':
+      description: La battle non è live
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'
+    '429':
+      description: Cooldown attivo, troppo presto per un nuovo voto
+      content:
+        application/json:
+          schema:
+            $ref: '../../components/schemas/common.yml#/Error'

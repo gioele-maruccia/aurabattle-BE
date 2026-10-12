@@ -11,8 +11,8 @@ from decimal import Decimal, InvalidOperation
 dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 
-UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status', 'cover']
-ALLOWED_STATUSES = ['published', 'closed']
+UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status', 'cover', 'stream_url']
+ALLOWED_STATUSES = ['published', 'live', 'closed']
 
 ALLOWED_COVERS = {
     'arena', 'crowd', 'soundwave', 'turntable', 'mic',
@@ -83,6 +83,11 @@ def handler(event, context):
                     'message': f'cover must be one of: {", ".join(sorted(ALLOWED_COVERS))}'
                 })
 
+        # stream_url: null (o stringa vuota) e' gestito piu' sotto come REMOVE.
+        if 'stream_url' in body and body['stream_url'] not in (None, ''):
+            if not isinstance(body['stream_url'], str) or not body['stream_url'].startswith(('http://', 'https://')):
+                return _cors_response(400, {'error': 'Bad Request', 'message': 'stream_url must be a valid http(s) URL'})
+
         update_parts = []
         remove_parts = []
         expr_values = {':now': datetime.utcnow().isoformat() + 'Z'}
@@ -96,6 +101,12 @@ def handler(event, context):
             if field == 'cover' and (body[field] is None or body[field] == ''):
                 expr_names['#cover'] = 'cover'
                 remove_parts.append('#cover')
+                continue
+
+            # `stream_url: null` (o stringa vuota) significa "togli lo stream".
+            if field == 'stream_url' and (body[field] is None or body[field] == ''):
+                expr_names['#stream_url'] = 'stream_url'
+                remove_parts.append('#stream_url')
                 continue
 
             expr_names[f'#{field}'] = field

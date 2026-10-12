@@ -1157,6 +1157,11 @@ paths:
                     - aura
                   description: 'Chiave della copertina di repertorio (opzionale). Se assente, l''app mostra un gradiente generato dal battle_id.'
                   example: arena
+                stream_url:
+                  type: string
+                  format: uri
+                  description: 'Link allo streaming live (YouTube, Twitch, ecc.), opzionale.'
+                  example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
                 latitude:
                   type: number
                   format: double
@@ -1242,8 +1247,26 @@ paths:
                     type: string
                     enum:
                       - published
+                      - live
                       - closed
+                    description: '''live'' abilita il voto (POST .../vote) e mostra lo stream, se presente'
                     example: published
+                  stream_url:
+                    type: string
+                    format: uri
+                    description: |
+                      Link allo streaming live (YouTube, Twitch, o altro) scelto dall'host. Il backend salva solo l'URL: niente integrazione OAuth, nessun embedding lato server. Assente se la battle non ha uno streaming.
+                    example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+                  votes_a:
+                    type: integer
+                    readOnly: true
+                    description: Totale voti per il side A. Si aggiorna in automatico con ogni voto.
+                    example: 42
+                  votes_b:
+                    type: integer
+                    readOnly: true
+                    description: Totale voti per il side B. Si aggiorna in automatico con ogni voto.
+                    example: 37
                   created_at:
                     type: string
                     format: date-time
@@ -1476,6 +1499,11 @@ paths:
                     - spark
                     - aura
                   description: '`null` rimuove la copertina. Campo assente = invariata.'
+                stream_url:
+                  type: string
+                  nullable: true
+                  format: uri
+                  description: '`null` rimuove lo stream. Campo assente = invariato.'
                 latitude:
                   type: number
                   format: double
@@ -1493,8 +1521,9 @@ paths:
                   type: string
                   enum:
                     - published
+                    - live
                     - closed
-                  description: '''closed'' per chiudere la battle (es. tutti i posti coperti, evento annullato)'
+                  description: '''live'' abilita il voto e lo stream; ''closed'' per chiudere la battle'
       responses:
         '200':
           description: Battle aggiornata
@@ -1546,5 +1575,133 @@ paths:
             application/json:
               schema:
                 $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+  '/battles/{battleId}/vote':
+    post:
+      tags:
+        - Battles
+      summary: Vota per il side A o B
+      description: |
+        Endpoint pubblico — niente autenticazione Cognito obbligatoria. Il
+        chiamante indica un `voter_id`: usa il `sub` dell'utente se loggato,
+        altrimenti un ID anonimo generato e persistito dal client (es. UUID
+        salvato localmente sul device).
+
+        **Nota anti-abuso**: `voter_id` non viene verificato crittograficamente —
+        serve solo a far rispettare il cooldown fra un voto e l'altro. È una
+        misura debole ma intenzionale per questa fase (MVP): permette il voto
+        anche a chi non si è registrato, aumentando la partecipazione, al costo
+        di essere aggirabile da chi genera ID falsi. Da rinforzare se diventa un
+        problema concreto.
+
+        Si può votare solo mentre la battle è `live` (409 altrimenti). Rate
+        limit: un voto ogni 10 secondi per `voter_id` + battle (429 se troppo
+        presto).
+      operationId: castVote
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - side
+                - voter_id
+              properties:
+                side:
+                  type: string
+                  enum:
+                    - A
+                    - B
+                  example: A
+                voter_id:
+                  type: string
+                  description: user_id Cognito (se loggato) o ID anonimo persistito dal client
+                  example: 864eb230-a071-708c-ec7e-a1c6446c9cbe
+      responses:
+        '200':
+          description: Voto registrato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  side:
+                    type: string
+                    example: A
+        '400':
+          description: side o voter_id mancanti/non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '404':
+          $ref: '#/paths/~1profile/get/responses/404'
+        '409':
+          description: La battle non è live
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+        '429':
+          description: 'Cooldown attivo, troppo presto per un nuovo voto'
+          content:
+            application/json:
+              schema:
+                $ref: '#/paths/~1battles/post/responses/400/content/application~1json/schema'
+  '/battles/{battleId}/votes':
+    get:
+      tags:
+        - Battles
+      summary: Totali voto e storico (grafico highlights)
+      description: |
+        Endpoint pubblico. Ritorna i totali correnti e una serie temporale a
+        bucket di 15 secondi, utile per un grafico "andamento hype" nel tempo
+        (sia live che a battle conclusa, come replay).
+      operationId: getVotes
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Voti della battle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  votes_a:
+                    type: integer
+                    example: 42
+                  votes_b:
+                    type: integer
+                    example: 37
+                  timeseries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bucket_ts:
+                          type: integer
+                          description: Timestamp Unix (secondi) di inizio bucket
+                          example: 1790869320
+                        votes_a:
+                          type: integer
+                          example: 5
+                        votes_b:
+                          type: integer
+                          example: 3
         '404':
           $ref: '#/paths/~1profile/get/responses/404'

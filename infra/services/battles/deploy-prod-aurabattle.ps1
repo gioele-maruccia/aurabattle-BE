@@ -23,6 +23,7 @@ $UserPoolArn           = $ProdAuraBattle_UserPoolArn
 $BattlesTableName      = $ProdAuraBattle_BattlesTable
 $UserProfilesTableName = $ProdAuraBattle_UserProfilesTable
 $BattleCoversBucketName = "$Environment-battle-covers"
+$BattleVotesTableName   = "$Environment-BattleVotes"
 
 if ($UserPoolArn -eq "PLACEHOLDER_RUN_PREREQS") {
     Write-Host "[ERROR] Cognito non configurato! Esegui: scripts\create-aurabattle-prereqs.ps1 -Environment prod-aurabattle" -ForegroundColor Red
@@ -86,6 +87,7 @@ aws cloudformation deploy `
         "BattlesTableName=$BattlesTableName" `
         "UserProfilesTableName=$UserProfilesTableName" `
         "BattleCoversBucketName=$BattleCoversBucketName" `
+        "BattleVotesTableName=$BattleVotesTableName" `
     --no-fail-on-empty-changeset 2>&1 | Out-Host
 
 if ($LASTEXITCODE -ne 0) {
@@ -99,6 +101,7 @@ if ($LASTEXITCODE -ne 0) {
             "ParameterKey=BattlesTableName,ParameterValue=$BattlesTableName" `
             "ParameterKey=UserProfilesTableName,ParameterValue=$UserProfilesTableName" `
             "ParameterKey=BattleCoversBucketName,ParameterValue=$BattleCoversBucketName" `
+            "ParameterKey=BattleVotesTableName,ParameterValue=$BattleVotesTableName" `
         --disable-rollback 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DEPLOY FALLITO!" -ForegroundColor Red; exit 1 }
     aws cloudformation wait stack-create-complete --stack-name $StackName --region $Region
