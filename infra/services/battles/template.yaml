@@ -26,6 +26,23 @@ Parameters:
     Type: String
     Description: S3 bucket name for battle cover uploads
 
+  MatchupsTableName:
+    Type: String
+    Description: DynamoDB Matchups table name (opened/closed together with the battle)
+
+  MatchupConnectionsTableName:
+    Type: String
+    Description: DynamoDB table of the matchups WebSocket connections
+
+  MatchupsWebSocketApiEndpoint:
+    Type: String
+    Default: ''
+    Description: >
+      https:// management endpoint of the matchups WebSocket API
+      (https://{apiId}.execute-api.{region}.amazonaws.com/{stage}).
+      Empty until the matchups stack exists: matchups are still opened/closed,
+      connected clients just are not pushed a matchup_update.
+
 Globals:
   Function:
     Runtime: python3.10
@@ -49,9 +66,10 @@ Resources:
 
   # ============================================================
   # IAM Role - EventBridge Scheduler -> Lambda invocation
-  # Usato dagli schedule one-time "battle-live-{battle_id}" che fanno
-  # scattare automaticamente il passaggio published -> live all'orario
-  # dell'evento (vedi create/update/delete-battle).
+  # Usato dagli schedule one-time "battle-live-{battle_id}" e
+  # "battle-close-{battle_id}": fanno scattare il passaggio published -> live
+  # all'orario di inizio e live -> closed a quello di fine, insieme ai matchup
+  # (vedi create/update/delete-battle).
   # ============================================================
   BattleLiveSchedulerExecutionRole:
     Type: AWS::IAM::Role
@@ -71,7 +89,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !GetAtt SetBattleLiveFunction.Arn
+                Resource:
+                  - !GetAtt SetBattleLiveFunction.Arn
+                  - !GetAtt SetBattleClosedFunction.Arn
 
   BattlesApi:
     Type: AWS::Serverless::Api
@@ -99,6 +119,7 @@ Resources:
         Variables:
           SCHEDULER_ROLE_ARN: !GetAtt BattleLiveSchedulerExecutionRole.Arn
           SET_BATTLE_LIVE_FUNCTION_ARN: !GetAtt SetBattleLiveFunction.Arn
+          SET_BATTLE_CLOSED_FUNCTION_ARN: !GetAtt SetBattleClosedFunction.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
@@ -108,7 +129,9 @@ Resources:
             - Effect: Allow
               Action:
                 - scheduler:CreateSchedule
-              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+              Resource:
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*'
             - Effect: Allow
               Action: iam:PassRole
               Resource: !GetAtt BattleLiveSchedulerExecutionRole.Arn
@@ -189,6 +212,7 @@ Resources:
         Variables:
           SCHEDULER_ROLE_ARN: !GetAtt BattleLiveSchedulerExecutionRole.Arn
           SET_BATTLE_LIVE_FUNCTION_ARN: !GetAtt SetBattleLiveFunction.Arn
+          SET_BATTLE_CLOSED_FUNCTION_ARN: !GetAtt SetBattleClosedFunction.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
@@ -199,7 +223,16 @@ Resources:
                 - scheduler:UpdateSchedule
                 - scheduler:DeleteSchedule
                 - scheduler:GetSchedule
-              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+              Resource:
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*'
+            # Transizione manuale (host): set-battle-live / set-battle-closed
+            # aprono e chiudono i matchup, in asincrono.
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                - !GetAtt SetBattleLiveFunction.Arn
+                - !GetAtt SetBattleClosedFunction.Arn
             - Effect: Allow
               Action: iam:PassRole
               Resource: !GetAtt BattleLiveSchedulerExecutionRole.Arn
@@ -230,7 +263,9 @@ Resources:
             - Effect: Allow
               Action:
                 - scheduler:DeleteSchedule
-              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+              Resource:
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+                - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*'
       Events:
         Delete:
           Type: Api
@@ -292,17 +327,61 @@ Resources:
                 - s3:PutObject
               Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/covers/*'
 
-  # Triggerata da EventBridge Scheduler all'orario di event_datetime:
-  # passa la battle da 'published' a 'live'. Nessun endpoint HTTP.
+  # Triggerata da EventBridge Scheduler all'orario di event_datetime (o da
+  # update-battle su transizione manuale): passa la battle da 'published' a
+  # 'live' e apre i suoi matchup. Nessun endpoint HTTP.
   SetBattleLiveFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${Environment}-battles-set-live
       CodeUri: ../../../src/lambdas/services/battles/set-battle-live/
       Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUPS_TABLE: !Ref MatchupsTableName
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT: !Ref MatchupsWebSocketApiEndpoint
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupsTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/${Environment}/POST/@connections/*'
+
+  # Triggerata da EventBridge Scheduler all'orario di end_datetime (o da
+  # update-battle su transizione manuale): chiude la battle e tutti i suoi
+  # matchup, calcolando vincitore e aura_stats. Nessun endpoint HTTP.
+  SetBattleClosedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-set-closed
+      CodeUri: ../../../src/lambdas/services/battles/set-battle-closed/
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUPS_TABLE: !Ref MatchupsTableName
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT: !Ref MatchupsWebSocketApiEndpoint
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupsTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/${Environment}/POST/@connections/*'
 
   # CORS su risposte di errore API Gateway
   GatewayResponseDefault4XX:

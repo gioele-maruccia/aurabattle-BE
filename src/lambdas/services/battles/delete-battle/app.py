@@ -39,12 +39,13 @@ def handler(event, context):
 
         battles_table.delete_item(Key={'battle_id': battle_id})
 
-        try:
-            scheduler_client.delete_schedule(Name=f'battle-live-{battle_id}')
-        except scheduler_client.exceptions.ResourceNotFoundException:
-            pass
-        except Exception as e:
-            print(f"[delete-battle] Warning: could not delete live-schedule for {battle_id}: {e}")
+        for schedule in ('battle-live', 'battle-close'):
+            try:
+                scheduler_client.delete_schedule(Name=f'{schedule}-{battle_id}')
+            except scheduler_client.exceptions.ResourceNotFoundException:
+                pass
+            except Exception as e:
+                print(f"[delete-battle] Warning: could not delete {schedule} schedule for {battle_id}: {e}")
 
         try:
             user_profiles_table.update_item(

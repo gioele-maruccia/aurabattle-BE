@@ -51,6 +51,9 @@ Resources:
   # Il client si connette con wss://.../{env}?matchupId={id} e riceve un
   # messaggio {action: "vote_update", matchup_id, votes_a, votes_b} ogni
   # volta che POST /matchups/{id}/vote viene chiamato con successo.
+  # Riceve anche {action: "matchup_update", matchup_id, status, winner,
+  # votes_a, votes_b} quando set-battle-live / set-battle-closed (stack
+  # battles) aprono o chiudono il matchup.
   # ============================================================
   MatchupsWebSocketApi:
     Type: AWS::ApiGatewayV2::Api

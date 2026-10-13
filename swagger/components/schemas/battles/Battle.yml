@@ -54,10 +54,15 @@ properties:
     type: string
     format: date-time
     example: "2026-10-15T18:00:00Z"
+  end_datetime:
+    type: string
+    format: date-time
+    example: "2026-10-15T20:00:00Z"
+    description: "Orario di fine, opzionale. Dopo l'inizio e nel futuro. A quell'ora la battle passa a 'closed' e i suoi matchup vengono chiusi (vincitore e aura_stats calcolati). Senza, nessuna chiusura automatica."
   status:
     type: string
     enum: [published, live, closed]
-    description: "'live' mostra la battle come in corso (abilita i matchup live al suo interno)"
+    description: "'live' mostra la battle come in corso. All'inizio (event_datetime) i matchup 'published' passano a 'live' insieme alla battle; i matchup creati a battle già live nascono 'live'"
     example: "published"
   stream_url:
     type: string

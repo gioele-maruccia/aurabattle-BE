@@ -23,6 +23,21 @@ $UserPoolArn           = $ProdAuraBattle_UserPoolArn
 $BattlesTableName      = $ProdAuraBattle_BattlesTable
 $UserProfilesTableName = $ProdAuraBattle_UserProfilesTable
 $BattleCoversBucketName = "$Environment-battle-covers"
+$MatchupsTableName      = "$Environment-Matchups"
+$MatchupConnectionsTableName = "$Environment-MatchupConnections"
+
+# Endpoint di management del WebSocket dei matchup (stack matchups). Se lo stack
+# non esiste ancora resta vuoto: le sfide si aprono/chiudono comunque, solo che
+# i client collegati non ricevono il matchup_update.
+$MatchupsStackName = "prod-aurabattle-matchups-service"
+$MatchupsWsEndpoint = aws cloudformation describe-stacks --stack-name $MatchupsStackName --region $Region `
+    --query "Stacks[0].Outputs[?OutputKey=='WebSocketEndpoint'].OutputValue" --output text 2>$null
+if (-not $MatchupsWsEndpoint -or $MatchupsWsEndpoint -eq "None") {
+    $MatchupsWsEndpoint = ""
+    Write-Host "   [WARN] Stack $MatchupsStackName non trovato: nessun push WebSocket per apertura/chiusura matchup" -ForegroundColor Yellow
+} else {
+    $MatchupsWsEndpoint = $MatchupsWsEndpoint -replace '^wss://', 'https://'
+}
 
 if ($UserPoolArn -eq "PLACEHOLDER_RUN_PREREQS") {
     Write-Host "[ERROR] Cognito non configurato! Esegui: scripts\create-aurabattle-prereqs.ps1 -Environment prod-aurabattle" -ForegroundColor Red
@@ -86,6 +101,9 @@ aws cloudformation deploy `
         "BattlesTableName=$BattlesTableName" `
         "UserProfilesTableName=$UserProfilesTableName" `
         "BattleCoversBucketName=$BattleCoversBucketName" `
+        "MatchupsTableName=$MatchupsTableName" `
+        "MatchupConnectionsTableName=$MatchupConnectionsTableName" `
+        "MatchupsWebSocketApiEndpoint=$MatchupsWsEndpoint" `
     --no-fail-on-empty-changeset 2>&1 | Out-Host
 
 if ($LASTEXITCODE -ne 0) {
@@ -99,6 +117,9 @@ if ($LASTEXITCODE -ne 0) {
             "ParameterKey=BattlesTableName,ParameterValue=$BattlesTableName" `
             "ParameterKey=UserProfilesTableName,ParameterValue=$UserProfilesTableName" `
             "ParameterKey=BattleCoversBucketName,ParameterValue=$BattleCoversBucketName" `
+            "ParameterKey=MatchupsTableName,ParameterValue=$MatchupsTableName" `
+            "ParameterKey=MatchupConnectionsTableName,ParameterValue=$MatchupConnectionsTableName" `
+            "ParameterKey=MatchupsWebSocketApiEndpoint,ParameterValue=$MatchupsWsEndpoint" `
         --disable-rollback 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DEPLOY FALLITO!" -ForegroundColor Red; exit 1 }
     aws cloudformation wait stack-create-complete --stack-name $StackName --region $Region

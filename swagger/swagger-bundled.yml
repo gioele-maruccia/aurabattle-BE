@@ -1251,6 +1251,11 @@ paths:
                   type: string
                   format: date-time
                   example: '2026-10-15T18:00:00Z'
+                end_datetime:
+                  type: string
+                  format: date-time
+                  example: '2026-10-15T20:00:00Z'
+                  description: "Orario di fine, opzionale. Dopo l'inizio e nel futuro. A quell'ora la battle passa a 'closed' e i suoi matchup vengono chiusi (vincitore e aura_stats calcolati). Senza, nessuna chiusura automatica."
       responses:
         '201':
           description: Battle creata
@@ -1316,6 +1321,11 @@ paths:
                     type: string
                     format: date-time
                     example: '2026-10-15T18:00:00Z'
+                  end_datetime:
+                    type: string
+                    format: date-time
+                    example: '2026-10-15T20:00:00Z'
+                    description: "Orario di fine, opzionale. Dopo l'inizio e nel futuro. A quell'ora la battle passa a 'closed' e i suoi matchup vengono chiusi (vincitore e aura_stats calcolati). Senza, nessuna chiusura automatica."
                   status:
                     type: string
                     enum:
@@ -1580,6 +1590,14 @@ paths:
                 event_datetime:
                   type: string
                   format: date-time
+                end_datetime:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: >-
+                    Orario di fine, opzionale. Dopo l'inizio e nel futuro. A quell'ora la battle passa a
+                    'closed' e i suoi matchup vengono chiusi (vincitore e aura_stats calcolati). Senza,
+                    nessuna chiusura automatica. null (o stringa vuota) la rimuove.
                 status:
                   type: string
                   enum:

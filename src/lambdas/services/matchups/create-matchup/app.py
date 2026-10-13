@@ -88,6 +88,11 @@ def handler(event, context):
         now = datetime.utcnow().isoformat() + 'Z'
         matchup_id = str(uuid.uuid4())
 
+        # Una sfida aggiunta a battle in corso nasce gia' aperta: set-battle-live
+        # ha aperto i matchup esistenti all'inizio, e senza questo il nuovo
+        # resterebbe bloccato fino a un intervento manuale.
+        initial_status = 'live' if battle.get('status') == 'live' else 'published'
+
         matchup = {
             'matchup_id': matchup_id,
             'battle_id': battle_id,
@@ -95,7 +100,7 @@ def handler(event, context):
             'participant_b': participant_b,
             'votes_a': 0,
             'votes_b': 0,
-            'status': 'published',
+            'status': initial_status,
             'winner': None,
             'created_at': now,
             'updated_at': now,

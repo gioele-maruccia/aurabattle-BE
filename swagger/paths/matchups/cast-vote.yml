@@ -24,6 +24,11 @@ post:
     `{"action": "vote_update", "matchup_id", "votes_a", "votes_b"}`). Non è
     necessario pollare `GET /matchups/{matchupId}/votes` per restare
     aggiornati durante la fase live.
+
+    Sullo stesso canale arriva anche `{"action": "matchup_update",
+    "matchup_id", "status", "winner", "votes_a", "votes_b"}` quando il
+    matchup cambia stato in automatico (apertura all'inizio della battle,
+    chiusura alla sua fine). `winner` è 'A', 'B', 'tie' o null.
   operationId: castMatchupVote
   parameters:
     - name: matchupId

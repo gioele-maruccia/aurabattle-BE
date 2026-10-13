@@ -48,6 +48,11 @@ put:
             event_datetime:
               type: string
               format: date-time
+            end_datetime:
+              type: string
+              format: date-time
+              nullable: true
+              description: "Orario di fine, opzionale. Dopo l'inizio e nel futuro. A quell'ora la battle passa a 'closed' e i suoi matchup vengono chiusi (vincitore e aura_stats calcolati). Senza, nessuna chiusura automatica. null (o stringa vuota) la rimuove."
             status:
               type: string
               enum: [published, live, closed]
