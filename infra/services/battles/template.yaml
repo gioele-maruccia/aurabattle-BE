@@ -47,6 +47,32 @@ Resources:
         - python3.10
       RetentionPolicy: Retain
 
+  # ============================================================
+  # IAM Role - EventBridge Scheduler -> Lambda invocation
+  # Usato dagli schedule one-time "battle-live-{battle_id}" che fanno
+  # scattare automaticamente il passaggio published -> live all'orario
+  # dell'evento (vedi create/update/delete-battle).
+  # ============================================================
+  BattleLiveSchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-battle-live-scheduler-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeSetBattleLive
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt SetBattleLiveFunction.Arn
+
   BattlesApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -69,11 +95,23 @@ Resources:
       FunctionName: !Sub ${Environment}-battles-create
       CodeUri: ../../../src/lambdas/services/battles/create-battle/
       Handler: app.handler
+      Environment:
+        Variables:
+          SCHEDULER_ROLE_ARN: !GetAtt BattleLiveSchedulerExecutionRole.Arn
+          SET_BATTLE_LIVE_FUNCTION_ARN: !GetAtt SetBattleLiveFunction.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt BattleLiveSchedulerExecutionRole.Arn
       Events:
         Post:
           Type: Api
@@ -147,9 +185,24 @@ Resources:
       FunctionName: !Sub ${Environment}-battles-update
       CodeUri: ../../../src/lambdas/services/battles/update-battle/
       Handler: app.handler
+      Environment:
+        Variables:
+          SCHEDULER_ROLE_ARN: !GetAtt BattleLiveSchedulerExecutionRole.Arn
+          SET_BATTLE_LIVE_FUNCTION_ARN: !GetAtt SetBattleLiveFunction.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+                - scheduler:UpdateSchedule
+                - scheduler:DeleteSchedule
+                - scheduler:GetSchedule
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt BattleLiveSchedulerExecutionRole.Arn
       Events:
         Put:
           Type: Api
@@ -165,11 +218,19 @@ Resources:
       FunctionName: !Sub ${Environment}-battles-delete
       CodeUri: ../../../src/lambdas/services/battles/delete-battle/
       Handler: app.handler
+      Environment:
+        Variables:
+          SET_BATTLE_LIVE_FUNCTION_ARN: !GetAtt SetBattleLiveFunction.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BattlesTableName
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:DeleteSchedule
+              Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*'
       Events:
         Delete:
           Type: Api
@@ -230,6 +291,18 @@ Resources:
               Action:
                 - s3:PutObject
               Resource: !Sub 'arn:aws:s3:::${BattleCoversBucketName}/covers/*'
+
+  # Triggerata da EventBridge Scheduler all'orario di event_datetime:
+  # passa la battle da 'published' a 'live'. Nessun endpoint HTTP.
+  SetBattleLiveFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-battles-set-live
+      CodeUri: ../../../src/lambdas/services/battles/set-battle-live/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BattlesTableName
 
   # CORS su risposte di errore API Gateway
   GatewayResponseDefault4XX:

@@ -1,5 +1,9 @@
 type: object
-description: Esattamente uno fra user_id e guest_name.
+description: >
+  In richiesta: esattamente uno fra user_id e guest_name. In risposta, se
+  user_id è presente, il backend arricchisce automaticamente l'oggetto con
+  display_name/avatar_url (letti al volo da UserProfiles, mai salvati nel
+  matchup — restano sempre aggiornati anche se l'utente si rinomina dopo).
 properties:
   user_id:
     type: string
@@ -8,5 +12,15 @@ properties:
   guest_name:
     type: string
     description: Partecipante non registrato — nessun aggiornamento storico
+  display_name:
+    type: string
+    readOnly: true
+    description: Presente solo in risposta, solo se user_id è impostato.
+    example: "Marco"
+  avatar_url:
+    type: string
+    nullable: true
+    readOnly: true
+    description: Presente solo in risposta, solo se user_id è impostato.
 example:
-  user_id: "864eb230-a071-708c-ec7e-a1c6446c9cbe"
+  user_id: "864eb230-a071-706c-ec7e-a1c6446c9cbe"

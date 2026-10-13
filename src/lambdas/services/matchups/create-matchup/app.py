@@ -33,24 +33,35 @@ def _cors_response(status_code, body):
 def _parse_participant(value, label):
     """Valida un partecipante: esattamente uno fra user_id e guest_name.
 
-    Ritorna (participant_dict, errore).
+    Ritorna (stored_participant, enriched_participant, errore). `stored_participant`
+    e' cio' che va salvato nel matchup (solo user_id/guest_name, mai il nome
+    risolto, per evitare che diventi stantio se l'utente si rinomina dopo).
+    `enriched_participant` e' la stessa cosa con display_name/avatar_url
+    aggiunti, usata solo per la risposta di questa chiamata.
     """
     if not isinstance(value, dict):
-        return None, f'{label} must be an object with either user_id or guest_name'
+        return None, None, f'{label} must be an object with either user_id or guest_name'
 
     user_id = (value.get('user_id') or '').strip()
     guest_name = (value.get('guest_name') or '').strip()
 
     if bool(user_id) == bool(guest_name):
-        return None, f'{label} must have exactly one of user_id or guest_name'
+        return None, None, f'{label} must have exactly one of user_id or guest_name'
 
     if user_id:
         profile = user_profiles_table.get_item(Key={'user_id': user_id}).get('Item')
         if not profile:
-            return None, f'{label}.user_id does not refer to an existing user'
-        return {'user_id': user_id}, None
+            return None, None, f'{label}.user_id does not refer to an existing user'
+        stored = {'user_id': user_id}
+        enriched = {
+            'user_id': user_id,
+            'display_name': profile.get('display_name', ''),
+            'avatar_url': profile.get('avatar_url'),
+        }
+        return stored, enriched, None
 
-    return {'guest_name': guest_name}, None
+    stored = {'guest_name': guest_name}
+    return stored, stored, None
 
 
 def handler(event, context):
@@ -66,11 +77,11 @@ def handler(event, context):
         if battle['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host can create matchups for this battle'})
 
-        participant_a, error_a = _parse_participant(body.get('participant_a'), 'participant_a')
+        participant_a, enriched_a, error_a = _parse_participant(body.get('participant_a'), 'participant_a')
         if error_a:
             return _cors_response(400, {'error': 'Bad Request', 'message': error_a})
 
-        participant_b, error_b = _parse_participant(body.get('participant_b'), 'participant_b')
+        participant_b, enriched_b, error_b = _parse_participant(body.get('participant_b'), 'participant_b')
         if error_b:
             return _cors_response(400, {'error': 'Bad Request', 'message': error_b})
 
@@ -92,7 +103,8 @@ def handler(event, context):
 
         matchups_table.put_item(Item=matchup)
 
-        return _cors_response(201, matchup)
+        response_matchup = {**matchup, 'participant_a': enriched_a, 'participant_b': enriched_b}
+        return _cors_response(201, response_matchup)
 
     except Exception as e:
         print(f"[create-matchup] Error: {e}")

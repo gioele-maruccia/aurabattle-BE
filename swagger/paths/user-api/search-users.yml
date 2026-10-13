@@ -4,9 +4,15 @@ get:
   summary: Cerca utenti registrati (picker partecipanti)
   description: |
     Richiede autenticazione, ma qualsiasi utente loggato può usarlo — non è
-    un endpoint admin. Prefix match case-insensitive su `display_name`.
-    Ritorna solo dati pubblici (user_id, display_name, avatar_url): mai
-    email, stato account o altri dati sensibili.
+    un endpoint admin. Ritorna solo dati pubblici (user_id, display_name,
+    avatar_url): mai email, stato account o altri dati sensibili.
+
+    Tre modalità, in base al contenuto di `q`:
+    - contiene `@` → match **esatto** sull'email (nessuna enumerazione:
+      digitare `a@` non restituisce nulla, serve l'indirizzo completo)
+    - altrimenti → prefix match case-insensitive su **nome e cognome**,
+      risultati uniti e deduplicati (es. "rossi" trova "Mario Rossi" anche
+      se il suo `display_name` è solo "Mario")
   operationId: searchUsers
   security:
     - CognitoAuth: []

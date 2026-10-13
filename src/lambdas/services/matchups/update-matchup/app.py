@@ -53,6 +53,22 @@ def _parse_participant(value, label):
     return {'guest_name': guest_name}, None
 
 
+def _enrich_participant(participant):
+    if not participant or 'user_id' not in participant:
+        return participant
+    profile = user_profiles_table.get_item(
+        Key={'user_id': participant['user_id']},
+        ProjectionExpression='display_name, avatar_url'
+    ).get('Item')
+    if not profile:
+        return participant
+    return {
+        **participant,
+        'display_name': profile.get('display_name', ''),
+        'avatar_url': profile.get('avatar_url'),
+    }
+
+
 def _apply_stat(user_id, field):
     try:
         user_profiles_table.update_item(
@@ -144,7 +160,11 @@ def handler(event, context):
             ReturnValues='ALL_NEW',
         )
 
-        return _cors_response(200, result['Attributes'])
+        updated = result['Attributes']
+        updated['participant_a'] = _enrich_participant(updated.get('participant_a'))
+        updated['participant_b'] = _enrich_participant(updated.get('participant_b'))
+
+        return _cors_response(200, updated)
 
     except Exception as e:
         print(f"[update-matchup] Error: {e}")

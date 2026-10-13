@@ -1,10 +1,11 @@
 """
 User API - Search Users
-Ricerca utenti registrati per display_name (prefix match, case-insensitive).
-Pensato per il picker partecipanti quando un host crea un matchup — ritorna
-solo dati pubblici (user_id, display_name, avatar_url), mai email o stato
-account. Richiede autenticazione, ma qualsiasi utente loggato può usarlo
-(non è un endpoint admin).
+Ricerca utenti registrati per display_name, family_name (prefix match,
+case-insensitive) o email (match esatto). Pensato per il picker
+partecipanti quando un host crea un matchup — ritorna solo dati pubblici
+(user_id, display_name, avatar_url), mai email o stato account. Richiede
+autenticazione, ma qualsiasi utente loggato può usarlo (non è un endpoint
+admin).
 """
 import json
 import os
@@ -32,6 +33,35 @@ def _cors_response(status_code, body):
     }
 
 
+def _public_fields(item):
+    return {
+        'user_id': item['user_id'],
+        'display_name': item.get('display_name', ''),
+        'avatar_url': item.get('avatar_url'),
+    }
+
+
+def _search_by_email(email, limit):
+    # Match esatto: l'email e' hash key dell'indice, quindi non enumera
+    # digitando un prefisso (es. "a@") e resta un modo corretto di cercare
+    # per email senza mai restituirla in risposta.
+    response = user_profiles_table.query(
+        IndexName='email-index',
+        KeyConditionExpression=Key('email').eq(email),
+        Limit=limit,
+    )
+    return [_public_fields(item) for item in response.get('Items', [])]
+
+
+def _search_by_prefix(index_name, sort_key_name, query_lower, limit):
+    response = user_profiles_table.query(
+        IndexName=index_name,
+        KeyConditionExpression=Key('search_bucket').eq('ALL') & Key(sort_key_name).begins_with(query_lower),
+        Limit=limit,
+    )
+    return [_public_fields(item) for item in response.get('Items', [])]
+
+
 def handler(event, context):
     try:
         params = event.get('queryStringParameters') or {}
@@ -48,22 +78,20 @@ def handler(event, context):
         except (TypeError, ValueError):
             limit = DEFAULT_LIMIT
 
-        query_lower = query.lower()
+        if '@' in query:
+            items = _search_by_email(query, limit)
+        else:
+            query_lower = query.lower()
+            by_name = _search_by_prefix('search_bucket-display_name_lower-index', 'display_name_lower', query_lower, limit)
+            by_surname = _search_by_prefix('search_bucket-family_name_lower-index', 'family_name_lower', query_lower, limit)
 
-        response = user_profiles_table.query(
-            IndexName='search_bucket-display_name_lower-index',
-            KeyConditionExpression=Key('search_bucket').eq('ALL') & Key('display_name_lower').begins_with(query_lower),
-            Limit=limit,
-        )
-
-        items = [
-            {
-                'user_id': item['user_id'],
-                'display_name': item.get('display_name', ''),
-                'avatar_url': item.get('avatar_url'),
-            }
-            for item in response.get('Items', [])
-        ]
+            seen = set()
+            items = []
+            for item in by_name + by_surname:
+                if item['user_id'] not in seen:
+                    seen.add(item['user_id'])
+                    items.append(item)
+            items = items[:limit]
 
         return _cors_response(200, {'items': items, 'count': len(items)})
 

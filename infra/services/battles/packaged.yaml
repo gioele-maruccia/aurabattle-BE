@@ -39,12 +39,37 @@ Resources:
       LayerName:
         Fn::Sub: ${Environment}-pillow-layer
       Description: Pillow (image processing) for battle cover resize
-      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/52a64ecf6d7d9ff9c0348a7734758eeb
+      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/52a64ecf6d7d9ff9c0348a7734758eeb
       CompatibleRuntimes:
       - python3.10
       RetentionPolicy: Retain
     Metadata:
       SamResourceId: PillowLayer
+  BattleLiveSchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: ${Environment}-battle-live-scheduler-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: scheduler.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeSetBattleLive
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource:
+              Fn::GetAtt:
+              - SetBattleLiveFunction
+              - Arn
+    Metadata:
+      SamResourceId: BattleLiveSchedulerExecutionRole
   BattlesApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -68,8 +93,18 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-create
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/909f50bab4fb6397f3524a5a7445cc2c
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/687aec546f20e65e11576e8b99f22255
       Handler: app.handler
+      Environment:
+        Variables:
+          SCHEDULER_ROLE_ARN:
+            Fn::GetAtt:
+            - BattleLiveSchedulerExecutionRole
+            - Arn
+          SET_BATTLE_LIVE_FUNCTION_ARN:
+            Fn::GetAtt:
+            - SetBattleLiveFunction
+            - Arn
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -77,6 +112,18 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - scheduler:CreateSchedule
+          Resource:
+            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+        - Effect: Allow
+          Action: iam:PassRole
+          Resource:
+            Fn::GetAtt:
+            - BattleLiveSchedulerExecutionRole
+            - Arn
       Events:
         Post:
           Type: Api
@@ -92,7 +139,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-list
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/6b0b3748668e2029fedfa7102f05471b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/6b0b3748668e2029fedfa7102f05471b
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -115,7 +162,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get-my
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/1abbff270f9c2ba69b2f86bbbdb96bb1
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/1abbff270f9c2ba69b2f86bbbdb96bb1
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -136,7 +183,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/b7122822f808c08f08ebab7ecd190d74
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/b7122822f808c08f08ebab7ecd190d74
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -159,12 +206,37 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-update
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/c24981ce5f4992f6c3c0a7dc5d1b3325
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/f83abcfe2ca0c21fe876048b02ac058e
       Handler: app.handler
+      Environment:
+        Variables:
+          SCHEDULER_ROLE_ARN:
+            Fn::GetAtt:
+            - BattleLiveSchedulerExecutionRole
+            - Arn
+          SET_BATTLE_LIVE_FUNCTION_ARN:
+            Fn::GetAtt:
+            - SetBattleLiveFunction
+            - Arn
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: BattlesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - scheduler:CreateSchedule
+          - scheduler:UpdateSchedule
+          - scheduler:DeleteSchedule
+          - scheduler:GetSchedule
+          Resource:
+            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+        - Effect: Allow
+          Action: iam:PassRole
+          Resource:
+            Fn::GetAtt:
+            - BattleLiveSchedulerExecutionRole
+            - Arn
       Events:
         Put:
           Type: Api
@@ -180,8 +252,14 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-delete
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/a328deb10dd03548065d6e6535f859e9
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/027a2478c6c683e1dbc7a33ca9102596
       Handler: app.handler
+      Environment:
+        Variables:
+          SET_BATTLE_LIVE_FUNCTION_ARN:
+            Fn::GetAtt:
+            - SetBattleLiveFunction
+            - Arn
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -189,6 +267,12 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: UserProfilesTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - scheduler:DeleteSchedule
+          Resource:
+            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
       Events:
         Delete:
           Type: Api
@@ -204,7 +288,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-request-cover-upload-url
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/4b4197f798e9aebcff9c1b6701bfe55d
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/4b4197f798e9aebcff9c1b6701bfe55d
       Handler: app.handler
       Environment:
         Variables:
@@ -235,7 +319,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-process-cover-upload
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261012-142759/a91b3561ae204dfed0e75a66f677984b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/a91b3561ae204dfed0e75a66f677984b
       Handler: app.handler
       Timeout: 60
       MemorySize: 512
@@ -259,6 +343,19 @@ Resources:
             Fn::Sub: arn:aws:s3:::${BattleCoversBucketName}/covers/*
     Metadata:
       SamResourceId: ProcessCoverUploadFunction
+  SetBattleLiveFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-set-live
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/c45304b4e3ef39a88a52dcddb5093648
+      Handler: app.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+    Metadata:
+      SamResourceId: SetBattleLiveFunction
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:

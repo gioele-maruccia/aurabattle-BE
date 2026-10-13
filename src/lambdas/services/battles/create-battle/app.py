@@ -13,6 +13,10 @@ dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
 
+scheduler_client = boto3.client('scheduler')
+SCHEDULER_ROLE_ARN = os.environ['SCHEDULER_ROLE_ARN']
+SET_BATTLE_LIVE_FUNCTION_ARN = os.environ['SET_BATTLE_LIVE_FUNCTION_ARN']
+
 REQUIRED_FIELDS = ['title', 'event_datetime', 'location', 'latitude', 'longitude']
 
 ALLOWED_COVERS = {
@@ -69,6 +73,30 @@ def _parse_cover(value):
     if not isinstance(value, str) or value not in ALLOWED_COVERS:
         return None, f'cover must be one of: {", ".join(sorted(ALLOWED_COVERS))}'
     return value, None
+
+
+def _schedule_live_transition(battle_id, event_datetime):
+    """Registra uno schedule one-time EventBridge che a event_datetime
+    invoca set-battle-live per passare la battle a 'live'. Best-effort:
+    se event_datetime e' nel passato (o altro errore), la creazione della
+    battle non deve fallire per questo.
+    """
+    try:
+        scheduled_at = datetime.fromisoformat(event_datetime.replace('Z', '+00:00')).strftime('%Y-%m-%dT%H:%M:%S')
+        scheduler_client.create_schedule(
+            Name=f'battle-live-{battle_id}',
+            ScheduleExpression=f'at({scheduled_at})',
+            ScheduleExpressionTimezone='UTC',
+            FlexibleTimeWindow={'Mode': 'OFF'},
+            Target={
+                'Arn': SET_BATTLE_LIVE_FUNCTION_ARN,
+                'RoleArn': SCHEDULER_ROLE_ARN,
+                'Input': json.dumps({'battle_id': battle_id}),
+            },
+            ActionAfterCompletion='DELETE',
+        )
+    except Exception as e:
+        print(f"[create-battle] Warning: could not schedule live-transition for {battle_id}: {e}")
 
 
 def handler(event, context):
@@ -133,6 +161,8 @@ def handler(event, context):
             )
         except Exception as e:
             print(f"[create-battle] Warning: could not update hosted_battles_count: {e}")
+
+        _schedule_live_transition(battle_id, battle['event_datetime'])
 
         return _cors_response(201, battle)
 

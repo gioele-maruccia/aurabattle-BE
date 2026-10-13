@@ -1124,9 +1124,15 @@ paths:
       summary: Cerca utenti registrati (picker partecipanti)
       description: |
         Richiede autenticazione, ma qualsiasi utente loggato può usarlo — non è
-        un endpoint admin. Prefix match case-insensitive su `display_name`.
-        Ritorna solo dati pubblici (user_id, display_name, avatar_url): mai
-        email, stato account o altri dati sensibili.
+        un endpoint admin. Ritorna solo dati pubblici (user_id, display_name,
+        avatar_url): mai email, stato account o altri dati sensibili.
+
+        Tre modalità, in base al contenuto di `q`:
+        - contiene `@` → match **esatto** sull'email (nessuna enumerazione:
+          digitare `a@` non restituisce nulla, serve l'indirizzo completo)
+        - altrimenti → prefix match case-insensitive su **nome e cognome**,
+          risultati uniti e deduplicati (es. "rossi" trova "Mario Rossi" anche
+          se il suo `display_name` è solo "Mario")
       operationId: searchUsers
       security:
         - CognitoAuth: []
@@ -1814,7 +1820,8 @@ paths:
               properties:
                 participant_a:
                   type: object
-                  description: Esattamente uno fra user_id e guest_name.
+                  description: |
+                    In richiesta: esattamente uno fra user_id e guest_name. In risposta, se user_id è presente, il backend arricchisce automaticamente l'oggetto con display_name/avatar_url (letti al volo da UserProfiles, mai salvati nel matchup — restano sempre aggiornati anche se l'utente si rinomina dopo).
                   properties:
                     user_id:
                       type: string
@@ -1823,8 +1830,18 @@ paths:
                     guest_name:
                       type: string
                       description: Partecipante non registrato — nessun aggiornamento storico
+                    display_name:
+                      type: string
+                      readOnly: true
+                      description: 'Presente solo in risposta, solo se user_id è impostato.'
+                      example: Marco
+                    avatar_url:
+                      type: string
+                      nullable: true
+                      readOnly: true
+                      description: 'Presente solo in risposta, solo se user_id è impostato.'
                   example:
-                    user_id: 864eb230-a071-708c-ec7e-a1c6446c9cbe
+                    user_id: 864eb230-a071-706c-ec7e-a1c6446c9cbe
                 participant_b:
                   $ref: '#/paths/~1matchups~1%7BmatchupId%7D/put/requestBody/content/application~1json/schema/properties/participant_a'
                 status:

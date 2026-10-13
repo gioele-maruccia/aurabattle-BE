@@ -61,7 +61,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-create
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/ce1b41e4c38c9be0cee56048d1e76f12
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/d5dec9beeeb80812b1ff90f415fef52a
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -88,12 +88,15 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-list
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/cc2481d6a8c881462a8ccc31f04716c7
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/c26a38013a2dc2aeda87371d50ad8ac9
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
           TableName:
             Ref: MatchupsTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
       Events:
         Get:
           Type: Api
@@ -111,12 +114,15 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-get
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/e498b0c71ea84029de8352a66edadfa7
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/88e7dc1343604677a1259a796553bc14
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
           TableName:
             Ref: MatchupsTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: UserProfilesTableName
       Events:
         Get:
           Type: Api
@@ -134,7 +140,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-update
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/ec30223bc5846d6f126f222069363de2
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/3736c4b8f5ede68ee5181e2415d33885
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -161,7 +167,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-delete
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/c974cb6d63414cec63cfe92d0d506420
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/c974cb6d63414cec63cfe92d0d506420
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -185,7 +191,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-cast-vote
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/d23df2e80a6836ccfbdbf5add98c4337
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/32f2d62ba656108265a251758dbca259
       Handler: app.handler
       Environment:
         Variables:
@@ -221,7 +227,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-get-votes
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261012-142608/95d7fee85ba97f356e14b321abea4c5d
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/95d7fee85ba97f356e14b321abea4c5d
       Handler: app.handler
       Environment:
         Variables:

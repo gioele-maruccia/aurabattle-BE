@@ -28,6 +28,8 @@ Resources:
           AttributeType: S
         - AttributeName: display_name_lower
           AttributeType: S
+        - AttributeName: family_name_lower
+          AttributeType: S
 
       KeySchema:
         - AttributeName: user_id
@@ -57,7 +59,21 @@ Resources:
             NonKeyAttributes:
               - display_name
               - avatar_url
-      
+
+        # Stesso pattern, ma sul cognome (profile.family_name e' annidato,
+        # quindi non indicizzabile direttamente: lo duplichiamo qui top-level).
+        - IndexName: search_bucket-family_name_lower-index
+          KeySchema:
+            - AttributeName: search_bucket
+              KeyType: HASH
+            - AttributeName: family_name_lower
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - display_name
+              - avatar_url
+
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       

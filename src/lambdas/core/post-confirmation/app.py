@@ -54,6 +54,7 @@ def lambda_handler(event, context):
             # Nome pubblico mostrato agli altri utenti (default: given_name)
             'display_name': attrs.get('given_name', ''),
             'display_name_lower': attrs.get('given_name', '').lower(),
+            'family_name_lower': attrs.get('family_name', '').lower(),
             'search_bucket': 'ALL',  # indice fisso per la ricerca utenti (picker partecipanti)
             'avatar_url': None,
 

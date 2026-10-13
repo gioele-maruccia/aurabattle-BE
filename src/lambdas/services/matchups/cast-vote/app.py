@@ -20,7 +20,7 @@ dynamodb = boto3.resource('dynamodb')
 matchups_table = dynamodb.Table(os.environ['MATCHUPS_TABLE'])
 votes_table = dynamodb.Table(os.environ['MATCHUP_VOTES_TABLE'])
 
-VOTE_COOLDOWN_SECONDS = 10
+VOTE_COOLDOWN_SECONDS = 3
 BUCKET_SECONDS = 15
 ALLOWED_SIDES = ('A', 'B')
 

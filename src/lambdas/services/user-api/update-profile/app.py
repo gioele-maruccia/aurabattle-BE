@@ -49,6 +49,13 @@ def handler(event, context):
             merged_profile = {**existing_profile, **body['profile']}
             update_parts.append('profile = :profile')
             expr_values[':profile'] = merged_profile
+
+            # family_name e' annidato in profile, quindi non indicizzabile
+            # direttamente: lo duplichiamo top-level per l'indice di ricerca
+            # utenti (picker partecipanti), stesso pattern di display_name_lower
+            if 'family_name' in body['profile']:
+                update_parts.append('family_name_lower = :family_name_lower')
+                expr_values[':family_name_lower'] = body['profile']['family_name'].lower()
         
         # Aggiorna address
         if 'address' in body:

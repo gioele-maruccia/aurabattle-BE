@@ -11,6 +11,10 @@ from decimal import Decimal, InvalidOperation
 dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 
+scheduler_client = boto3.client('scheduler')
+SCHEDULER_ROLE_ARN = os.environ['SCHEDULER_ROLE_ARN']
+SET_BATTLE_LIVE_FUNCTION_ARN = os.environ['SET_BATTLE_LIVE_FUNCTION_ARN']
+
 UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'status', 'cover', 'stream_url']
 ALLOWED_STATUSES = ['published', 'live', 'closed']
 
@@ -41,6 +45,34 @@ def _parse_coordinate(value, min_value, max_value):
     if decimal_value < min_value or decimal_value > max_value:
         return None
     return decimal_value
+
+
+def _delete_live_schedule(battle_id):
+    try:
+        scheduler_client.delete_schedule(Name=f'battle-live-{battle_id}')
+    except scheduler_client.exceptions.ResourceNotFoundException:
+        pass
+    except Exception as e:
+        print(f"[update-battle] Warning: could not delete live-schedule for {battle_id}: {e}")
+
+
+def _create_live_schedule(battle_id, event_datetime):
+    try:
+        scheduled_at = datetime.fromisoformat(event_datetime.replace('Z', '+00:00')).strftime('%Y-%m-%dT%H:%M:%S')
+        scheduler_client.create_schedule(
+            Name=f'battle-live-{battle_id}',
+            ScheduleExpression=f'at({scheduled_at})',
+            ScheduleExpressionTimezone='UTC',
+            FlexibleTimeWindow={'Mode': 'OFF'},
+            Target={
+                'Arn': SET_BATTLE_LIVE_FUNCTION_ARN,
+                'RoleArn': SCHEDULER_ROLE_ARN,
+                'Input': json.dumps({'battle_id': battle_id}),
+            },
+            ActionAfterCompletion='DELETE',
+        )
+    except Exception as e:
+        print(f"[update-battle] Warning: could not schedule live-transition for {battle_id}: {e}")
 
 
 def handler(event, context):
@@ -137,7 +169,18 @@ def handler(event, context):
             ReturnValues='ALL_NEW',
         )
 
-        return _cors_response(200, result['Attributes'])
+        updated = result['Attributes']
+
+        # Mantiene in sincrono lo schedule EventBridge della transizione a 'live':
+        # se la battle non e' (piu') 'published', lo schedule non serve - lo cancella;
+        # se resta 'published' ma l'orario e' cambiato, lo ricrea con il nuovo orario.
+        if updated.get('status') != 'published':
+            _delete_live_schedule(battle_id)
+        elif 'event_datetime' in body:
+            _delete_live_schedule(battle_id)
+            _create_live_schedule(battle_id, updated['event_datetime'])
+
+        return _cors_response(200, updated)
 
     except Exception as e:
         print(f"[update-battle] Error: {e}")
