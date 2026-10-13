@@ -1927,8 +1927,15 @@ paths:
         di essere aggirabile da chi genera ID falsi.
 
         Si può votare solo mentre il matchup è `live` (409 altrimenti). Rate
-        limit: un voto ogni 10 secondi per `voter_id` + matchup (429 se troppo
+        limit: un voto ogni 3 secondi per `voter_id` + matchup (429 se troppo
         presto).
+
+        **Live update**: ogni voto registrato con successo viene anche spinto
+        via WebSocket a tutti i client connessi su quel matchup (vedi endpoint
+        WebSocket `wss://.../{env}?matchupId={id}`, payload
+        `{"action": "vote_update", "matchup_id", "votes_a", "votes_b"}`). Non è
+        necessario pollare `GET /matchups/{matchupId}/votes` per restare
+        aggiornati durante la fase live.
       operationId: castMatchupVote
       parameters:
         - name: matchupId

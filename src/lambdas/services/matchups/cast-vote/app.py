@@ -14,11 +14,14 @@ import json
 import os
 import time
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 dynamodb = boto3.resource('dynamodb')
 matchups_table = dynamodb.Table(os.environ['MATCHUPS_TABLE'])
 votes_table = dynamodb.Table(os.environ['MATCHUP_VOTES_TABLE'])
+connections_table = dynamodb.Table(os.environ['MATCHUP_CONNECTIONS_TABLE'])
+apigw_management = boto3.client('apigatewaymanagementapi', endpoint_url=os.environ['WEBSOCKET_API_ENDPOINT'])
 
 VOTE_COOLDOWN_SECONDS = 3
 BUCKET_SECONDS = 15
@@ -36,6 +39,40 @@ def _cors_response(status_code, body):
         },
         'body': json.dumps(body, default=str),
     }
+
+
+def _broadcast_vote_update(matchup_id, votes_a, votes_b):
+    """Spinge il nuovo conteggio a tutti i client connessi al WebSocket per
+    questo matchup (best-effort: un errore qui non deve far fallire il voto,
+    che e' comunque gia' persistito in DynamoDB).
+    """
+    try:
+        response = connections_table.query(
+            IndexName='matchupId-index',
+            KeyConditionExpression=Key('matchupId').eq(matchup_id)
+        )
+    except Exception as e:
+        print(f"[cast-vote] Warning: could not query connections for {matchup_id}: {e}")
+        return
+
+    payload = json.dumps({
+        'action': 'vote_update',
+        'matchup_id': matchup_id,
+        'votes_a': votes_a,
+        'votes_b': votes_b,
+    }).encode('utf-8')
+
+    for item in response.get('Items', []):
+        connection_id = item['connectionId']
+        try:
+            apigw_management.post_to_connection(ConnectionId=connection_id, Data=payload)
+        except apigw_management.exceptions.GoneException:
+            try:
+                connections_table.delete_item(Key={'connectionId': connection_id})
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[cast-vote] Warning: could not send to connection {connection_id}: {e}")
 
 
 def handler(event, context):
@@ -82,14 +119,18 @@ def handler(event, context):
             raise
 
         vote_field = 'votes_a' if side == 'A' else 'votes_b'
-        matchups_table.update_item(
+        result = matchups_table.update_item(
             Key={'matchup_id': matchup_id},
             UpdateExpression=f'ADD {vote_field} :inc SET updated_at = :now_iso',
             ExpressionAttributeValues={
                 ':inc': 1,
                 ':now_iso': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            }
+            },
+            ReturnValues='ALL_NEW',
         )
+
+        updated = result['Attributes']
+        _broadcast_vote_update(matchup_id, int(updated.get('votes_a', 0)), int(updated.get('votes_b', 0)))
 
         bucket = (now // BUCKET_SECONDS) * BUCKET_SECONDS
         try:

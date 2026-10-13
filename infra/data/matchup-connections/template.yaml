@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Matchup Connections Data - Connessioni WebSocket per il live dei voti
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Resources:
+  MatchupConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-MatchupConnections'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+        - AttributeName: matchupId
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+
+      GlobalSecondaryIndexes:
+        - IndexName: matchupId-index
+          KeySchema:
+            - AttributeName: matchupId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+      # Pulizia automatica delle connessioni stale (es. client che si chiude senza
+      # mandare $disconnect): 24h di TTL, stesso pattern usato per il chat.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  TableName:
+    Value: !Ref MatchupConnectionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt MatchupConnectionsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'

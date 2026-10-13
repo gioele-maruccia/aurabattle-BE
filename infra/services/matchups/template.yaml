@@ -30,6 +30,10 @@ Parameters:
     Type: String
     Description: DynamoDB User Profiles table name
 
+  MatchupConnectionsTableName:
+    Type: String
+    Description: DynamoDB table for WebSocket connections (live vote updates)
+
 Globals:
   Function:
     Runtime: python3.10
@@ -42,6 +46,96 @@ Globals:
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
 
 Resources:
+  # ============================================================
+  # WEBSOCKET API GATEWAY - live dei voti
+  # Il client si connette con wss://.../{env}?matchupId={id} e riceve un
+  # messaggio {action: "vote_update", matchup_id, votes_a, votes_b} ogni
+  # volta che POST /matchups/{id}/vote viene chiamato con successo.
+  # ============================================================
+  MatchupsWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${Environment}-matchups-websocket-api'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  MatchupsWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref MatchupsWebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-ws-connect
+      CodeUri: ../../../src/lambdas/services/matchups/on-connect/
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-matchups-ws-disconnect
+      CodeUri: ../../../src/lambdas/services/matchups/on-disconnect/
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+
+  OnConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MatchupsWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations'
+
+  OnConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MatchupsWebSocketApi
+      RouteKey: $connect
+      Target: !Sub 'integrations/${OnConnectIntegration}'
+
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/*/*'
+
+  OnDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MatchupsWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations'
+
+  OnDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MatchupsWebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub 'integrations/${OnDisconnectIntegration}'
+
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OnDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/*/*'
+
   MatchupsApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -175,6 +269,8 @@ Resources:
       Environment:
         Variables:
           MATCHUP_VOTES_TABLE: !Ref MatchupVotesTableName
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${MatchupsWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref MatchupsTableName
@@ -185,6 +281,17 @@ Resources:
               Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupsTableName}'
         - DynamoDBCrudPolicy:
             TableName: !Ref MatchupVotesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupConnectionsTableName}'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/${Environment}/POST/@connections/*'
       Events:
         Post:
           Type: Api
@@ -244,3 +351,6 @@ Outputs:
     Value: !Sub 'https://${MatchupsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
   ApiId:
     Value: !Ref MatchupsApi
+  WebSocketEndpoint:
+    Description: Endpoint WebSocket per il live dei voti (wss://.../{env}?matchupId={id})
+    Value: !Sub 'wss://${MatchupsWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'

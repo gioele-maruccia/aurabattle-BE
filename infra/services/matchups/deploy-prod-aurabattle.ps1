@@ -24,6 +24,7 @@ $BattlesTableName       = $ProdAuraBattle_BattlesTable
 $UserProfilesTableName  = $ProdAuraBattle_UserProfilesTable
 $MatchupsTableName      = "$Environment-Matchups"
 $MatchupVotesTableName  = "$Environment-MatchupVotes"
+$MatchupConnectionsTableName = "$Environment-MatchupConnections"
 
 if ($UserPoolArn -eq "PLACEHOLDER_RUN_PREREQS") {
     Write-Host "[ERROR] Cognito non configurato! Esegui: scripts\create-aurabattle-prereqs.ps1 -Environment prod-aurabattle" -ForegroundColor Red
@@ -88,6 +89,7 @@ aws cloudformation deploy `
         "MatchupsTableName=$MatchupsTableName" `
         "MatchupVotesTableName=$MatchupVotesTableName" `
         "UserProfilesTableName=$UserProfilesTableName" `
+        "MatchupConnectionsTableName=$MatchupConnectionsTableName" `
     --no-fail-on-empty-changeset 2>&1 | Out-Host
 
 if ($LASTEXITCODE -ne 0) {
@@ -102,6 +104,7 @@ if ($LASTEXITCODE -ne 0) {
             "ParameterKey=MatchupsTableName,ParameterValue=$MatchupsTableName" `
             "ParameterKey=MatchupVotesTableName,ParameterValue=$MatchupVotesTableName" `
             "ParameterKey=UserProfilesTableName,ParameterValue=$UserProfilesTableName" `
+            "ParameterKey=MatchupConnectionsTableName,ParameterValue=$MatchupConnectionsTableName" `
         --disable-rollback 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DEPLOY FALLITO!" -ForegroundColor Red; exit 1 }
     aws cloudformation wait stack-create-complete --stack-name $StackName --region $Region

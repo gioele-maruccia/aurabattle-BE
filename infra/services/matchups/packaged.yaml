@@ -23,6 +23,9 @@ Parameters:
   UserProfilesTableName:
     Type: String
     Description: DynamoDB User Profiles table name
+  MatchupConnectionsTableName:
+    Type: String
+    Description: DynamoDB table for WebSocket connections (live vote updates)
 Globals:
   Function:
     Runtime: python3.10
@@ -38,6 +41,121 @@ Globals:
         USER_PROFILES_TABLE:
           Ref: UserProfilesTableName
 Resources:
+  MatchupsWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name:
+        Fn::Sub: ${Environment}-matchups-websocket-api
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+    Metadata:
+      SamResourceId: MatchupsWebSocketApi
+  MatchupsWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId:
+        Ref: MatchupsWebSocketApi
+      StageName:
+        Ref: Environment
+      AutoDeploy: true
+    Metadata:
+      SamResourceId: MatchupsWebSocketStage
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-ws-connect
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/3b225a787f55dbdbc2835832c3f5cfc6
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_CONNECTIONS_TABLE:
+            Ref: MatchupConnectionsTableName
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupConnectionsTableName
+    Metadata:
+      SamResourceId: OnConnectFunction
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-matchups-ws-disconnect
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/b66564b1755c20118e062015f1ef34f2
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_CONNECTIONS_TABLE:
+            Ref: MatchupConnectionsTableName
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupConnectionsTableName
+    Metadata:
+      SamResourceId: OnDisconnectFunction
+  OnConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: MatchupsWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: OnConnectIntegration
+  OnConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: MatchupsWebSocketApi
+      RouteKey: $connect
+      Target:
+        Fn::Sub: integrations/${OnConnectIntegration}
+    Metadata:
+      SamResourceId: OnConnectRoute
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: OnConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/*/*
+    Metadata:
+      SamResourceId: OnConnectPermission
+  OnDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: MatchupsWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: OnDisconnectIntegration
+  OnDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: MatchupsWebSocketApi
+      RouteKey: $disconnect
+      Target:
+        Fn::Sub: integrations/${OnDisconnectIntegration}
+    Metadata:
+      SamResourceId: OnDisconnectRoute
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: OnDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/*/*
+    Metadata:
+      SamResourceId: OnDisconnectPermission
   MatchupsApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -61,7 +179,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-create
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/d5dec9beeeb80812b1ff90f415fef52a
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/d5dec9beeeb80812b1ff90f415fef52a
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -88,7 +206,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-list
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/c26a38013a2dc2aeda87371d50ad8ac9
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/c26a38013a2dc2aeda87371d50ad8ac9
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -114,7 +232,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-get
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/88e7dc1343604677a1259a796553bc14
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/88e7dc1343604677a1259a796553bc14
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -140,7 +258,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-update
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/3736c4b8f5ede68ee5181e2415d33885
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/3736c4b8f5ede68ee5181e2415d33885
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -167,7 +285,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-delete
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/c974cb6d63414cec63cfe92d0d506420
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/c974cb6d63414cec63cfe92d0d506420
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -191,12 +309,16 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-cast-vote
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/32f2d62ba656108265a251758dbca259
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/8e0f23d5650a6bdeb775e7234e0aee54
       Handler: app.handler
       Environment:
         Variables:
           MATCHUP_VOTES_TABLE:
             Ref: MatchupVotesTableName
+          MATCHUP_CONNECTIONS_TABLE:
+            Ref: MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT:
+            Fn::Sub: https://${MatchupsWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
       Policies:
       - DynamoDBReadPolicy:
           TableName:
@@ -210,6 +332,20 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: MatchupVotesTableName
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MatchupConnectionsTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:DeleteItem
+          Resource:
+            Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupConnectionsTableName}
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+            Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/${Environment}/POST/@connections/*
       Events:
         Post:
           Type: Api
@@ -227,7 +363,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-matchups-get-votes
-      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-113135/95d7fee85ba97f356e14b321abea4c5d
+      CodeUri: s3://aurabattle-prod-artifacts/matchups-prod-aurabattle/20261013-115130/95d7fee85ba97f356e14b321abea4c5d
       Handler: app.handler
       Environment:
         Variables:
@@ -281,3 +417,7 @@ Outputs:
   ApiId:
     Value:
       Ref: MatchupsApi
+  WebSocketEndpoint:
+    Description: Endpoint WebSocket per il live dei voti (wss://.../{env}?matchupId={id})
+    Value:
+      Fn::Sub: wss://${MatchupsWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
