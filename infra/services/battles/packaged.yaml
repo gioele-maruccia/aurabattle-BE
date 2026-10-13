@@ -39,7 +39,7 @@ Resources:
       LayerName:
         Fn::Sub: ${Environment}-pillow-layer
       Description: Pillow (image processing) for battle cover resize
-      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/52a64ecf6d7d9ff9c0348a7734758eeb
+      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/5e5418b0600082946007e95411043136
       CompatibleRuntimes:
       - python3.10
       RetentionPolicy: Retain
@@ -93,7 +93,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-create
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/687aec546f20e65e11576e8b99f22255
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/687aec546f20e65e11576e8b99f22255
       Handler: app.handler
       Environment:
         Variables:
@@ -139,7 +139,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-list
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/6b0b3748668e2029fedfa7102f05471b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/9572ce7f0c823cc10f106ce9e478c428
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -162,7 +162,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get-my
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/1abbff270f9c2ba69b2f86bbbdb96bb1
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/1abbff270f9c2ba69b2f86bbbdb96bb1
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -183,7 +183,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/b7122822f808c08f08ebab7ecd190d74
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/b7122822f808c08f08ebab7ecd190d74
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -206,7 +206,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-update
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/f83abcfe2ca0c21fe876048b02ac058e
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/f83abcfe2ca0c21fe876048b02ac058e
       Handler: app.handler
       Environment:
         Variables:
@@ -252,7 +252,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-delete
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/027a2478c6c683e1dbc7a33ca9102596
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/027a2478c6c683e1dbc7a33ca9102596
       Handler: app.handler
       Environment:
         Variables:
@@ -288,7 +288,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-request-cover-upload-url
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/4b4197f798e9aebcff9c1b6701bfe55d
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/4b4197f798e9aebcff9c1b6701bfe55d
       Handler: app.handler
       Environment:
         Variables:
@@ -319,7 +319,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-process-cover-upload
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/a91b3561ae204dfed0e75a66f677984b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/a91b3561ae204dfed0e75a66f677984b
       Handler: app.handler
       Timeout: 60
       MemorySize: 512
@@ -348,7 +348,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-set-live
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-111440/c45304b4e3ef39a88a52dcddb5093648
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/c45304b4e3ef39a88a52dcddb5093648
       Handler: app.handler
       Policies:
       - DynamoDBCrudPolicy:

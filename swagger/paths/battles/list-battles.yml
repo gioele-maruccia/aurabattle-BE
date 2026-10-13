@@ -2,7 +2,7 @@ get:
   tags:
     - Battles
   summary: Lista pubblica delle battle
-  description: Ritorna le battle pubblicate, ordinate per data evento (dalla più vicina). Nessuna autenticazione richiesta.
+  description: Ritorna le battle live (sempre in testa, solo nella prima pagina) seguite dalle pubblicate, ordinate per data evento (dalla più vicina). La paginazione con `cursor` riguarda solo le pubblicate. Nessuna autenticazione richiesta.
   operationId: listBattles
   parameters:
     - name: limit

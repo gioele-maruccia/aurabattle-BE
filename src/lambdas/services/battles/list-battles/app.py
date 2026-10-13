@@ -1,7 +1,8 @@
 """
 Battles API - List Battles
-Lista pubblica delle battle pubblicate, ordinate per data evento. Endpoint pubblico.
-Supporta paginazione via cursore (next_cursor).
+Lista pubblica delle battle live e pubblicate. Endpoint pubblico.
+Le battle live sono sempre in testa (restituite solo nella prima pagina, sono poche);
+le published sono ordinate per data evento e paginate via cursore (next_cursor).
 """
 import json
 import os
@@ -39,6 +40,23 @@ def _decode_cursor(cursor):
     return json.loads(raw)
 
 
+def _query_all_live():
+    """Tutte le battle in stato live, ordinate per data evento."""
+    items = []
+    kwargs = {
+        'IndexName': 'status-event_datetime-index',
+        'KeyConditionExpression': Key('status').eq('live'),
+        'ScanIndexForward': True,
+    }
+    while True:
+        response = battles_table.query(**kwargs)
+        items.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            return items
+        kwargs['ExclusiveStartKey'] = last_key
+
+
 def handler(event, context):
     try:
         params = event.get('queryStringParameters') or {}
@@ -64,9 +82,13 @@ def handler(event, context):
 
         response = battles_table.query(**query_kwargs)
 
+        # Le live vanno solo nella prima pagina, davanti alle published
+        live_items = _query_all_live() if not cursor else []
+        items = live_items + response.get('Items', [])
+
         result = {
-            'items': response.get('Items', []),
-            'count': response.get('Count', 0),
+            'items': items,
+            'count': len(items),
         }
 
         last_evaluated_key = response.get('LastEvaluatedKey')

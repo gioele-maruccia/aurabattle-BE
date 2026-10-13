@@ -147,7 +147,9 @@ $NotificationConfig = @{
     )
 } | ConvertTo-Json -Depth 10
 
-$NotificationConfigFile = Join-Path $env:TEMP "battle-covers-notification-$Environment.json"
+# Cartella temporanea dell'OS: $env:TEMP esiste solo su Windows, su macOS/Linux si usa quella di .NET.
+$TempDir = if ($env:TEMP) { $env:TEMP } else { [System.IO.Path]::GetTempPath() }
+$NotificationConfigFile = Join-Path $TempDir "battle-covers-notification-$Environment.json"
 [System.IO.File]::WriteAllText($NotificationConfigFile, $NotificationConfig, (New-Object System.Text.UTF8Encoding $false))
 
 aws s3api put-bucket-notification-configuration `
