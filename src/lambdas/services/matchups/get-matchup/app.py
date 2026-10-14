@@ -49,7 +49,7 @@ def handler(event, context):
         matchup_id = event['pathParameters']['matchupId']
 
         matchup = matchups_table.get_item(Key={'matchup_id': matchup_id}).get('Item')
-        if not matchup:
+        if not matchup or matchup.get('moderation_state') == 'removed':
             return _cors_response(404, {'error': 'Not Found', 'message': 'Matchup not found'})
 
         matchup['participant_a'] = _enrich_participant(matchup.get('participant_a'))

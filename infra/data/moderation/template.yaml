@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Moderation Data - Reports, UserBlocks, ModerationLog (DynamoDB)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
+
+Resources:
+  # Segnalazioni degli utenti. report_id = hash(target + segnalante): una sola
+  # segnalazione per persona e contenuto. Le righe di rate limit delle
+  # segnalazioni anonime (report_id "RATE#...") non hanno status, quindi non
+  # finiscono nella coda (GSI sparso), e scadono con il TTL.
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Reports'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: report_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+        - AttributeName: target_key
+          AttributeType: S
+        - AttributeName: target_owner_id
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: report_id
+          KeyType: HASH
+
+      GlobalSecondaryIndexes:
+        - IndexName: status-created_at-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+        - IndexName: target_key-created_at-index
+          KeySchema:
+            - AttributeName: target_key
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+        - IndexName: target_owner_id-created_at-index
+          KeySchema:
+            - AttributeName: target_owner_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+  # Blocchi fra utenti: chi blocca (HASH) -> chi e' bloccato (RANGE).
+  UserBlocksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-UserBlocks'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: blocker_id
+          AttributeType: S
+        - AttributeName: blocked_id
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: blocker_id
+          KeyType: HASH
+        - AttributeName: blocked_id
+          KeyType: RANGE
+
+      GlobalSecondaryIndexes:
+        - IndexName: blocked_id-index
+          KeySchema:
+            - AttributeName: blocked_id
+              KeyType: HASH
+            - AttributeName: blocker_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+  # Registro delle decisioni del super admin, per contenuto (target_key).
+  ModerationLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-ModerationLog'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: target_key
+          AttributeType: S
+        - AttributeName: ts
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: target_key
+          KeyType: HASH
+        - AttributeName: ts
+          KeyType: RANGE
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  ReportsTableName:
+    Value: !Ref ReportsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ReportsTableName'
+
+  UserBlocksTableName:
+    Value: !Ref UserBlocksTable
+    Export:
+      Name: !Sub '${AWS::StackName}-UserBlocksTableName'
+
+  ModerationLogTableName:
+    Value: !Ref ModerationLogTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ModerationLogTableName'

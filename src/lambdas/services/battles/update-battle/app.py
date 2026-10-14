@@ -123,6 +123,13 @@ def handler(event, context):
         if existing['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host can update this battle'})
 
+        if existing.get('moderation_state') == 'removed':
+            return _cors_response(403, {
+                'error': 'Forbidden',
+                'code': 'CONTENT_REMOVED',
+                'message': 'This battle was removed for violating the community guidelines',
+            })
+
         if 'status' in body and body['status'] not in ALLOWED_STATUSES:
             return _cors_response(400, {
                 'error': 'Bad Request',

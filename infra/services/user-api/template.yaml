@@ -36,6 +36,8 @@ Globals:
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
         USERNAMES_TABLE: !Sub ${Environment}-Usernames
         USER_POOL_ID: !Ref UserPoolId
+        REPORTS_TABLE: !Sub ${Environment}-Reports
+        USER_BLOCKS_TABLE: !Sub ${Environment}-UserBlocks
 
 Resources:
   UserAPI:
@@ -115,7 +117,8 @@ Resources:
             Path: /v1/settings
             Method: PATCH
 
-  # Stub API - Eliminazione account semplificata (placeholder per il frontend)
+  # Richiesta di eliminazione account: registra la richiesta, la cancellazione
+  # la esegue a mano il super admin (vedi backoffice /v1/admin/deletion-requests)
   DeleteAccountSimpleFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -123,6 +126,9 @@ Resources:
       CodeUri: ../../../src/lambdas/services/user-api/delete-account-simple/
       Handler: app.handler
       Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
       Events:
         Post:
           Type: Api
@@ -225,6 +231,8 @@ Resources:
             TableName: !Ref UserProfilesTableName
         - DynamoDBReadPolicy:
             TableName: !Sub ${Environment}-Usernames
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
       Events:
         Get:
           Type: Api
@@ -253,6 +261,127 @@ Resources:
             Auth:
               Authorizer: NONE
 
+  # ============================================================
+  # MODERAZIONE - segnalazioni, blocchi, accettazione Termini
+  # Le decisioni (rimozioni, sospensioni) le prende il super admin dal
+  # backoffice: qui nessuna azione automatica sui contenuti.
+  # ============================================================
+
+  # POST /reports (utente loggato) e POST /public/reports (visitatore, device_id)
+  CreateReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-create-report
+      CodeUri: ../../../src/lambdas/services/user-api/create-report/
+      Handler: app.handler
+      Environment:
+        Variables:
+          BATTLES_TABLE: !Ref BattlesTableName
+          MATCHUPS_TABLE: !Sub ${Environment}-Matchups
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref BattlesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-Matchups
+        - DynamoDBCrudPolicy:
+            TableName: !Sub ${Environment}-Reports
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/reports
+            Method: POST
+        PublicPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/public/reports
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  # GET /blocks - Utenti bloccati dall'utente loggato
+  ListBlocksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-list-blocks
+      CodeUri: ../../../src/lambdas/services/user-api/list-blocks/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/blocks
+            Method: GET
+
+  # PUT /blocks/{userId} - Blocca un utente (crea anche una segnalazione per il team)
+  BlockUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-block-user
+      CodeUri: ../../../src/lambdas/services/user-api/block-user/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UserProfilesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
+        - DynamoDBCrudPolicy:
+            TableName: !Sub ${Environment}-Reports
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/blocks/{userId}
+            Method: PUT
+
+  # DELETE /blocks/{userId} - Sblocca un utente
+  UnblockUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-unblock-user
+      CodeUri: ../../../src/lambdas/services/user-api/unblock-user/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/blocks/{userId}
+            Method: DELETE
+
+  # POST /profile/accept-terms - Registra la versione dei Termini accettata
+  AcceptTermsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-accept-terms
+      CodeUri: ../../../src/lambdas/services/user-api/accept-terms/
+      Handler: app.handler
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTableName
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/profile/accept-terms
+            Method: POST
+
   # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
@@ -278,5 +407,5 @@ Outputs:
   ApiId:
     Value: !Ref UserAPI
   DeleteAccountSimpleFunctionArn:
-    Description: ARN of DeleteAccountSimple stub Lambda function
+    Description: ARN of DeleteAccountSimple Lambda function (records deletion requests)
     Value: !GetAtt DeleteAccountSimpleFunction.Arn

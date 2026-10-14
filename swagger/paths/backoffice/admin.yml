@@ -1,0 +1,243 @@
+# Backoffice super admin (API Gateway del backoffice, non quella utente).
+# Tutte le rotte rispondono 403 a chi non e' nel gruppo Cognito `superadmins`.
+# Nessuna azione automatica: ogni rimozione/sospensione parte da qui e finisce
+# in ModerationLog.
+
+components:
+  parameters:
+    TargetType:
+      name: targetType
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [battle, matchup, user]
+    TargetId:
+      name: targetId
+      in: path
+      required: true
+      schema:
+        type: string
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+
+list-reports:
+  get:
+    tags:
+      - Backoffice
+    summary: Coda delle segnalazioni, raggruppate per contenuto
+    description: |
+      Una riga per contenuto con conteggio, motivi, prima/ultima data,
+      snapshot piu' recente e autore. `open`: dalla piu' vecchia (scadenza);
+      `actioned`/`dismissed`: dalla piu' recente.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, actioned, dismissed]
+          default: open
+    responses:
+      '200':
+        description: Gruppi di segnalazioni
+      '403':
+        description: Non super admin
+
+get-report-group:
+  get:
+    tags:
+      - Backoffice
+    summary: Dettaglio delle segnalazioni su un contenuto
+    description: |
+      Stato attuale del contenuto (`current`, anche se rimosso; `exists=false`
+      se cancellato), tutte le segnalazioni con snapshot e segnalante, scheda
+      dell'autore con statistiche (segnalazioni ricevute, bloccato da,
+      battle rimosse) e registro delle decisioni.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/TargetType'
+      - $ref: '#/components/parameters/TargetId'
+    responses:
+      '200':
+        description: Dettaglio
+      '404':
+        description: Nessuna segnalazione e contenuto inesistente
+
+resolve-reports:
+  post:
+    tags:
+      - Backoffice
+    summary: Decide su tutte le segnalazioni aperte di un contenuto
+    description: |
+      - `remove_content`: battle/matchup -> `moderation_state=removed`;
+        partecipante ospite -> nome sostituito da "Partecipante rimosso";
+        utente -> nome pubblico = username, avatar tolto (con
+        `rename_username: true` anche nuovo username generato).
+      - `suspend_user`: sospende l'autore (Cognito disabilitato, sessioni
+        chiuse, sue battle nascoste). `note` obbligatoria.
+      - `remove_and_suspend`: entrambe.
+      - `dismiss`: nessuna azione sul contenuto.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/TargetType'
+      - $ref: '#/components/parameters/TargetId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [action]
+            properties:
+              action:
+                type: string
+                enum: [remove_content, suspend_user, remove_and_suspend, dismiss]
+              note:
+                type: string
+              participant_side:
+                type: string
+                enum: [a, b]
+                description: Solo matchup; se omesso si usa quello delle segnalazioni aperte
+              rename_username:
+                type: boolean
+                description: Solo utenti
+    responses:
+      '200':
+        description: Decisione applicata
+      '400':
+        description: Azione non valida o nota mancante per la sospensione
+
+restore-content:
+  post:
+    tags:
+      - Backoffice
+    summary: Annulla la rimozione di una battle o di un matchup
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/TargetType'
+      - $ref: '#/components/parameters/TargetId'
+    responses:
+      '200':
+        description: Ripristinato
+      '409':
+        description: Il contenuto non era rimosso
+
+search-users:
+  get:
+    tags:
+      - Backoffice
+    summary: Ricerca utenti (username, nome, cognome, email esatta)
+    security:
+      - CognitoAuth: []
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+    responses:
+      '200':
+        description: Utenti, con email e stato account
+
+get-user:
+  get:
+    tags:
+      - Backoffice
+    summary: Scheda utente
+    description: Profilo, statistiche, battle (anche rimosse), segnalazioni ricevute, registro.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    responses:
+      '200':
+        description: Scheda
+      '404':
+        description: Utente inesistente
+
+suspend-user:
+  post:
+    tags:
+      - Backoffice
+    summary: Sospende un utente
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [note]
+            properties:
+              note:
+                type: string
+    responses:
+      '200':
+        description: Sospeso
+
+reinstate-user:
+  post:
+    tags:
+      - Backoffice
+    summary: Riattiva un utente sospeso
+    description: Riabilita l'utente Cognito e rimette visibili solo le battle nascoste dalla sospensione.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    responses:
+      '200':
+        description: Riattivato
+
+list-deletion-requests:
+  get:
+    tags:
+      - Backoffice
+    summary: Richieste di eliminazione account in attesa
+    description: Dalla piu' vecchia, con `days_left` sui 15 giorni promessi.
+    security:
+      - CognitoAuth: []
+    responses:
+      '200':
+        description: Richieste
+
+complete-deletion:
+  post:
+    tags:
+      - Backoffice
+    summary: Segna come eseguita un'eliminazione fatta a mano
+    description: |
+      Da chiamare dopo aver cancellato a mano utente Cognito e profilo. Se il
+      profilo esiste ancora lo marca `deleted`; in ogni caso scrive il
+      registro.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    responses:
+      '200':
+        description: Registrata
+
+stats:
+  get:
+    tags:
+      - Backoffice
+    summary: Contatori per il backoffice
+    security:
+      - CognitoAuth: []
+    responses:
+      '200':
+        description: Segnalazioni aperte, data della piu' vecchia, eliminazioni in attesa

@@ -26,6 +26,7 @@ dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 matchups_table = dynamodb.Table(os.environ['MATCHUPS_TABLE'])
 user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
+blocks_table = dynamodb.Table(os.environ['USER_BLOCKS_TABLE'])
 connections_table = dynamodb.Table(os.environ['MATCHUP_CONNECTIONS_TABLE'])
 apigw_management = boto3.client('apigatewaymanagementapi', endpoint_url=os.environ['WEBSOCKET_API_ENDPOINT'])
 
@@ -59,6 +60,35 @@ def _conflict(message):
 
 def _now_iso():
     return datetime.utcnow().isoformat() + 'Z'
+
+
+def _blocked_between(host_id, participant):
+    """True se fra l'host e un partecipante registrato c'e' un blocco, in
+    qualunque direzione: chi ha bloccato l'host non puo' esserci messo
+    dentro, e l'host non puo' metterci chi ha bloccato lui."""
+    other_id = (participant or {}).get('user_id')
+    if not other_id or other_id == host_id:
+        return False
+    for blocker, blocked in ((other_id, host_id), (host_id, other_id)):
+        if blocks_table.get_item(Key={'blocker_id': blocker, 'blocked_id': blocked}).get('Item'):
+            return True
+    return False
+
+
+def _removed_response(what):
+    return _cors_response(403, {
+        'error': 'Forbidden',
+        'code': 'CONTENT_REMOVED',
+        'message': f'This {what} was removed for violating the community guidelines',
+    })
+
+
+def _blocked_response(label):
+    return _cors_response(403, {
+        'error': 'Forbidden',
+        'code': 'USER_BLOCKED',
+        'message': f'{label} cannot be added to this matchup',
+    })
 
 
 def _parse_participant(value, label):
@@ -250,6 +280,11 @@ def handler(event, context):
         if not battle or battle['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host of the battle can update this matchup'})
 
+        if battle.get('moderation_state') == 'removed':
+            return _removed_response('battle')
+        if existing.get('moderation_state') == 'removed':
+            return _removed_response('matchup')
+
         if existing.get('status') == 'closed':
             return _conflict('A closed matchup cannot be modified')
 
@@ -272,12 +307,16 @@ def handler(event, context):
             participant_a, error = _parse_participant(body['participant_a'], 'participant_a')
             if error:
                 return _cors_response(400, {'error': 'Bad Request', 'message': error})
+            if _blocked_between(user_id, participant_a):
+                return _blocked_response('participant_a')
             fields['participant_a'] = participant_a
 
         if 'participant_b' in body:
             participant_b, error = _parse_participant(body['participant_b'], 'participant_b')
             if error:
                 return _cors_response(400, {'error': 'Bad Request', 'message': error})
+            if _blocked_between(user_id, participant_b):
+                return _blocked_response('participant_b')
             fields['participant_b'] = participant_b
 
         if new_status in ('published', 'live'):

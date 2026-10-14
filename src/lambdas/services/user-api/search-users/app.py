@@ -16,6 +16,7 @@ from boto3.dynamodb.conditions import Key
 dynamodb = boto3.resource('dynamodb')
 user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
 usernames_table = dynamodb.Table(os.environ['USERNAMES_TABLE'])
+blocks_table = dynamodb.Table(os.environ['USER_BLOCKS_TABLE'])
 
 MIN_QUERY_LENGTH = 2
 DEFAULT_LIMIT = 20
@@ -75,8 +76,28 @@ def _search_by_prefix(index_name, sort_key_name, query_lower, limit):
     return [_public_fields(item) for item in response.get('Items', [])]
 
 
+def _hidden_user_ids(user_id):
+    """Chi ho bloccato e chi mi ha bloccato: nessuno dei due compare nel
+    picker partecipanti."""
+    hidden = set()
+    for kwargs in (
+        {'KeyConditionExpression': Key('blocker_id').eq(user_id)},
+        {'IndexName': 'blocked_id-index', 'KeyConditionExpression': Key('blocked_id').eq(user_id)},
+    ):
+        while True:
+            response = blocks_table.query(**kwargs)
+            for item in response.get('Items', []):
+                hidden.add(item['blocked_id'] if item['blocker_id'] == user_id else item['blocker_id'])
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+            kwargs['ExclusiveStartKey'] = last_key
+    return hidden
+
+
 def handler(event, context):
     try:
+        user_id = event['requestContext']['authorizer']['claims']['sub']
         params = event.get('queryStringParameters') or {}
         query = (params.get('q') or '').strip()
 
@@ -107,6 +128,9 @@ def handler(event, context):
                     seen.add(item['user_id'])
                     items.append(item)
             items = items[:limit]
+
+        hidden = _hidden_user_ids(user_id)
+        items = [item for item in items if item['user_id'] not in hidden]
 
         return _cors_response(200, {'items': items, 'count': len(items)})
 

@@ -48,6 +48,9 @@ def handler(event, context):
             )
             battles.extend(response.get('Responses', {}).get(battles_table_name, []))
 
+        # Le battle rimosse dal super admin spariscono anche dai salvati.
+        battles = [b for b in battles if b.get('moderation_state') != 'removed']
+
         return _cors_response(200, {'items': battles, 'count': len(battles)})
 
     except Exception as e:

@@ -92,7 +92,7 @@ def handler(event, context):
             })
 
         matchup = matchups_table.get_item(Key={'matchup_id': matchup_id}).get('Item')
-        if not matchup:
+        if not matchup or matchup.get('moderation_state') == 'removed':
             return _cors_response(404, {'error': 'Not Found', 'message': 'Matchup not found'})
 
         if matchup.get('status') != 'live':

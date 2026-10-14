@@ -44,6 +44,7 @@ Globals:
         BATTLES_TABLE: !Ref BattlesTableName
         MATCHUPS_TABLE: !Ref MatchupsTableName
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
+        USER_BLOCKS_TABLE: !Sub ${Environment}-UserBlocks
 
 Resources:
   # ============================================================
@@ -168,6 +169,8 @@ Resources:
             TableName: !Ref MatchupsTableName
         - DynamoDBReadPolicy:
             TableName: !Ref UserProfilesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
       Events:
         Post:
           Type: Api
@@ -241,6 +244,8 @@ Resources:
             TableName: !Ref UserProfilesTableName
         - DynamoDBReadPolicy:
             TableName: !Ref MatchupConnectionsTableName
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-UserBlocks
         - Statement:
             - Effect: Allow
               Action:

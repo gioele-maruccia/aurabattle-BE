@@ -30,7 +30,9 @@ def handler(event, context):
         response = battles_table.get_item(Key={'battle_id': battle_id})
         battle = response.get('Item')
 
-        if not battle:
+        # Una battle rimossa dal super admin e' come se non esistesse: l'host
+        # la vede ancora (con il flag) solo in GET /battles/my.
+        if not battle or battle.get('moderation_state') == 'removed':
             return _cors_response(404, {'error': 'Not Found', 'message': 'Battle not found'})
 
         return _cors_response(200, battle)

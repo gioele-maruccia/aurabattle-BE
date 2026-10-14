@@ -15,6 +15,7 @@ dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 matchups_table = dynamodb.Table(os.environ['MATCHUPS_TABLE'])
 user_profiles_table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
+blocks_table = dynamodb.Table(os.environ['USER_BLOCKS_TABLE'])
 
 
 def _cors_response(status_code, body):
@@ -28,6 +29,35 @@ def _cors_response(status_code, body):
         },
         'body': json.dumps(body, default=str),
     }
+
+
+def _blocked_between(host_id, participant):
+    """True se fra l'host e un partecipante registrato c'e' un blocco, in
+    qualunque direzione: chi ha bloccato l'host non puo' esserci messo
+    dentro, e l'host non puo' metterci chi ha bloccato lui."""
+    other_id = (participant or {}).get('user_id')
+    if not other_id or other_id == host_id:
+        return False
+    for blocker, blocked in ((other_id, host_id), (host_id, other_id)):
+        if blocks_table.get_item(Key={'blocker_id': blocker, 'blocked_id': blocked}).get('Item'):
+            return True
+    return False
+
+
+def _removed_response(what):
+    return _cors_response(403, {
+        'error': 'Forbidden',
+        'code': 'CONTENT_REMOVED',
+        'message': f'This {what} was removed for violating the community guidelines',
+    })
+
+
+def _blocked_response(label):
+    return _cors_response(403, {
+        'error': 'Forbidden',
+        'code': 'USER_BLOCKED',
+        'message': f'{label} cannot be added to this matchup',
+    })
 
 
 def _parse_participant(value, label):
@@ -78,6 +108,9 @@ def handler(event, context):
         if battle['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host can create matchups for this battle'})
 
+        if battle.get('moderation_state') == 'removed':
+            return _removed_response('battle')
+
         # Una battle chiusa e' definitiva: un matchup aggiunto qui non si
         # aprirebbe mai.
         if battle.get('status') == 'closed':
@@ -90,6 +123,10 @@ def handler(event, context):
         participant_b, enriched_b, error_b = _parse_participant(body.get('participant_b'), 'participant_b')
         if error_b:
             return _cors_response(400, {'error': 'Bad Request', 'message': error_b})
+
+        for participant, label in ((participant_a, 'participant_a'), (participant_b, 'participant_b')):
+            if _blocked_between(user_id, participant):
+                return _blocked_response(label)
 
         now = datetime.utcnow().isoformat() + 'Z'
         matchup_id = str(uuid.uuid4())

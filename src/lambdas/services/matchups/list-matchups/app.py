@@ -55,7 +55,11 @@ def handler(event, context):
             KeyConditionExpression=Key('battle_id').eq(battle_id)
         )
 
-        items = sorted(response.get('Items', []), key=lambda m: m.get('created_at', ''))
+        # I matchup rimossi dal super admin non compaiono.
+        items = sorted(
+            (m for m in response.get('Items', []) if m.get('moderation_state') != 'removed'),
+            key=lambda m: m.get('created_at', ''),
+        )
 
         # Cache per evitare letture ripetute dello stesso profilo in piu' matchup
         profiles_cache = {}

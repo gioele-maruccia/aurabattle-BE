@@ -1,13 +1,14 @@
 post:
   tags:
     - User Profile & Settings
-  summary: Request account deletion (stub)
+  summary: Request account deletion
   description: |
-    **Stub endpoint** — marks the account as scheduled for deletion in 15 days.
-    
-    This is a placeholder for frontend integration. The full deletion flow
-    (grace period, booking suspension, job listing pause, auto-restore on login)
-    is handled by the `POST /profile/delete-request` endpoint once fully deployed.
+    Records the deletion request: sets `account_status = deletion_requested`
+    and `deletion_requested_at` (a second request keeps the first date).
+
+    Nothing is deleted here. The super admin sees the request in the
+    backoffice (`GET /admin/deletion-requests`), deletes the account by hand
+    within 15 days (Cognito user + profile) and then marks it as completed.
   security:
     - CognitoAuth: []
   responses:
@@ -21,6 +22,9 @@ post:
               message:
                 type: string
                 example: "account marked to be deleted in 15gg"
+              deletion_days:
+                type: integer
+                example: 15
     '401':
       description: Unauthorized - Invalid or missing token
       content:

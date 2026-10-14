@@ -58,6 +58,13 @@ def handler(event, context):
         if battle['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host can upload a cover for this battle'})
 
+        if battle.get('moderation_state') == 'removed':
+            return _cors_response(403, {
+                'error': 'Forbidden',
+                'code': 'CONTENT_REMOVED',
+                'message': 'This battle was removed for violating the community guidelines',
+            })
+
         content_type = body.get('content_type')
         extension = ALLOWED_CONTENT_TYPES.get(content_type)
         if not extension:

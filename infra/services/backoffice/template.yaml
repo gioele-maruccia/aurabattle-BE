@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   aurabattle-backoffice
-  SAM Template for backoffice APIs (user lookup)
+  SAM Template for backoffice APIs (user lookup, super admin moderation)
 
 Globals:
   Function:
@@ -91,6 +91,143 @@ Resources:
                 - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
 
   # ---------------------------
+  # LAMBDA: backoffice-admin (super admin)
+  # Un'unica Lambda con router interno per tutte le rotte /v1/admin/*: il
+  # controllo del gruppo Cognito `superadmins` sta in un solo punto.
+  # L'authorizer accetta qualunque utente del pool: e' la Lambda a
+  # rispondere 403 a chi non e' super admin.
+  # ---------------------------
+  AdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backoffice-admin"
+      CodeUri: ../../../src/lambdas/services/backoffice/backoffice-admin/
+      Handler: app.lambda_handler
+      Description: Super admin moderation API (reports, users, deletion requests)
+      Environment:
+        Variables:
+          REPORTS_TABLE: !Sub "${Environment}-Reports"
+          USER_BLOCKS_TABLE: !Sub "${Environment}-UserBlocks"
+          MODERATION_LOG_TABLE: !Sub "${Environment}-ModerationLog"
+          BATTLES_TABLE: !Sub "${Environment}-Battles"
+          MATCHUPS_TABLE: !Sub "${Environment}-Matchups"
+          USER_PROFILES_TABLE: !Sub "${Environment}-UserProfiles"
+          USERNAMES_TABLE: !Sub "${Environment}-Usernames"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-Reports"
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-ModerationLog"
+        - DynamoDBReadPolicy:
+            TableName: !Sub "${Environment}-UserBlocks"
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-Battles"
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-Matchups"
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-UserProfiles"
+        - DynamoDBCrudPolicy:
+            TableName: !Sub "${Environment}-Usernames"
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: CognitoModeration
+              Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminUserGlobalSignOut
+              Resource:
+                - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}'
+      Events:
+        ListReports:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/reports
+            Method: GET
+        GetReportGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/reports/{targetType}/{targetId}
+            Method: GET
+        ResolveReports:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/reports/{targetType}/{targetId}/resolve
+            Method: POST
+        RestoreContent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/content/{targetType}/{targetId}/restore
+            Method: POST
+        SearchAdminUsers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/users
+            Method: GET
+        GetAdminUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/users/{userId}
+            Method: GET
+        SuspendUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/users/{userId}/suspend
+            Method: POST
+        ReinstateUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/users/{userId}/reinstate
+            Method: POST
+        ListDeletionRequests:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/deletion-requests
+            Method: GET
+        CompleteDeletion:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/deletion-requests/{userId}/complete
+            Method: POST
+        Stats:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BackofficeApi
+            Path: /v1/admin/stats
+            Method: GET
+
+  # CORS anche sulle risposte di errore generate da API Gateway (401/403/5xx),
+  # altrimenti il backoffice web non riesce a leggerle.
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref BackofficeApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref BackofficeApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+
+  # ---------------------------
   # CloudWatch Alarms
   # ---------------------------
   ApiGatewayErrorAlarm:
@@ -129,5 +266,6 @@ Outputs:
 
       Endpoints:
       - GET /v1/users/search (search users)
+      - /v1/admin/* (super admin: reports, users, deletion requests, stats)
     Export:
       Name: !Sub "${Environment}-ApiEndpoints"

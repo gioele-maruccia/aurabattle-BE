@@ -1,6 +1,7 @@
 """
 Battles API - List Battles
 Lista pubblica delle battle live e pubblicate. Endpoint pubblico.
+Esclude le battle rimosse dal super admin (moderation_state = 'removed').
 Le battle live sono sempre in testa (restituite solo nella prima pagina, sono poche);
 le published sono ordinate per data evento e paginate via cursore (next_cursor).
 """
@@ -8,13 +9,18 @@ import json
 import os
 import base64
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 dynamodb = boto3.resource('dynamodb')
 battles_table = dynamodb.Table(os.environ['BATTLES_TABLE'])
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+
+# Le battle rimosse dal super admin non compaiono. Il filtro si applica dopo
+# il Limit, quindi una pagina puo' avere meno elementi: il cursore resta
+# corretto.
+VISIBLE = Attr('moderation_state').not_exists() | Attr('moderation_state').ne('removed')
 
 
 def _cors_response(status_code, body):
@@ -46,6 +52,7 @@ def _query_all_live():
     kwargs = {
         'IndexName': 'status-event_datetime-index',
         'KeyConditionExpression': Key('status').eq('live'),
+        'FilterExpression': VISIBLE,
         'ScanIndexForward': True,
     }
     while True:
@@ -69,6 +76,7 @@ def handler(event, context):
         query_kwargs = {
             'IndexName': 'status-event_datetime-index',
             'KeyConditionExpression': Key('status').eq('published'),
+            'FilterExpression': VISIBLE,
             'Limit': limit,
             'ScanIndexForward': True,  # dalla più vicina alla più lontana nel tempo
         }

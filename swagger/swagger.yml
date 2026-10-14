@@ -14,6 +14,10 @@ tags:
     description: Creazione e gestione delle aura battle
   - name: Matchups
     description: Sfide dentro una battle, voto e aggiornamento punteggio
+  - name: Moderation
+    description: Segnalazioni e blocchi lato utente (nessuna azione automatica)
+  - name: Backoffice
+    description: API del super admin (API Gateway del backoffice)
 
 components:
   securitySchemes:
@@ -79,6 +83,32 @@ paths:
     get:
       $ref: './paths/user-api/check-username.yml#/get'
 
+  /profile/accept-terms:
+    post:
+      $ref: './paths/user-api/moderation.yml#/accept-terms/post'
+
+  # ============================================================================
+  # MODERATION - segnalazioni e blocchi
+  # ============================================================================
+
+  /reports:
+    post:
+      $ref: './paths/user-api/moderation.yml#/create-report/post'
+
+  /public/reports:
+    post:
+      $ref: './paths/user-api/moderation.yml#/create-public-report/post'
+
+  /blocks:
+    get:
+      $ref: './paths/user-api/moderation.yml#/list-blocks/get'
+
+  /blocks/{userId}:
+    put:
+      $ref: './paths/user-api/moderation.yml#/block-user/put'
+    delete:
+      $ref: './paths/user-api/moderation.yml#/block-user/delete'
+
   # ============================================================================
   # BATTLES
   # ============================================================================
@@ -129,6 +159,54 @@ paths:
   /matchups/{matchupId}/votes:
     get:
       $ref: './paths/matchups/get-votes.yml#/get'
+
+  # ============================================================================
+  # BACKOFFICE - super admin (base URL: API Gateway del backoffice)
+  # ============================================================================
+
+  /admin/reports:
+    get:
+      $ref: './paths/backoffice/admin.yml#/list-reports/get'
+
+  /admin/reports/{targetType}/{targetId}:
+    get:
+      $ref: './paths/backoffice/admin.yml#/get-report-group/get'
+
+  /admin/reports/{targetType}/{targetId}/resolve:
+    post:
+      $ref: './paths/backoffice/admin.yml#/resolve-reports/post'
+
+  /admin/content/{targetType}/{targetId}/restore:
+    post:
+      $ref: './paths/backoffice/admin.yml#/restore-content/post'
+
+  /admin/users:
+    get:
+      $ref: './paths/backoffice/admin.yml#/search-users/get'
+
+  /admin/users/{userId}:
+    get:
+      $ref: './paths/backoffice/admin.yml#/get-user/get'
+
+  /admin/users/{userId}/suspend:
+    post:
+      $ref: './paths/backoffice/admin.yml#/suspend-user/post'
+
+  /admin/users/{userId}/reinstate:
+    post:
+      $ref: './paths/backoffice/admin.yml#/reinstate-user/post'
+
+  /admin/deletion-requests:
+    get:
+      $ref: './paths/backoffice/admin.yml#/list-deletion-requests/get'
+
+  /admin/deletion-requests/{userId}/complete:
+    post:
+      $ref: './paths/backoffice/admin.yml#/complete-deletion/post'
+
+  /admin/stats:
+    get:
+      $ref: './paths/backoffice/admin.yml#/stats/get'
 
   # ============================================================================
   # DA SBLOCCARE MAN MANO CHE DEPLOYIAMO I PROSSIMI SERVIZI:

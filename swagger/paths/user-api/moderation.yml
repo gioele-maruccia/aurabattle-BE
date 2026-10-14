@@ -1,0 +1,212 @@
+# Moderazione lato utente: segnalazioni, blocchi, accettazione Termini.
+# Nessuna di queste chiamate rimuove contenuti: le decisioni le prende il
+# super admin dal backoffice (vedi paths/backoffice/admin.yml).
+
+components:
+  schemas:
+    ReportRequest:
+      type: object
+      required: [target_type, target_id, reason]
+      properties:
+        target_type:
+          type: string
+          enum: [battle, matchup, user]
+        target_id:
+          type: string
+        participant_side:
+          type: string
+          enum: [a, b]
+          description: Solo per i matchup, e solo se il partecipante e' un ospite (guest_name). Un partecipante registrato si segnala come `user`.
+        reason:
+          type: string
+          enum: [spam, hate, violence, sexual, false_info, impersonation, other]
+        note:
+          type: string
+          maxLength: 500
+    ReportResponse:
+      type: object
+      properties:
+        report_id:
+          type: string
+        already_reported:
+          type: boolean
+          description: true se la stessa persona aveva gia' una segnalazione aperta su questo contenuto (nessun duplicato)
+    BlockedUser:
+      type: object
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+          nullable: true
+          description: null se l'utente ha eliminato l'account
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+create-report:
+  post:
+    tags:
+      - Moderation
+    summary: Segnala un contenuto (utente loggato)
+    description: |
+      Segnala una battle, un matchup (o un suo partecipante ospite) o un utente.
+      Il server salva una copia del contenuto (snapshot) e il suo proprietario.
+      Una sola segnalazione per persona e contenuto: ripetere risponde 200
+      con `already_reported: true`. Non si possono segnalare i propri contenuti.
+    security:
+      - CognitoAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReportRequest'
+    responses:
+      '201':
+        description: Segnalazione creata
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportResponse'
+      '200':
+        description: Segnalazione gia' presente
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportResponse'
+      '400':
+        description: Body non valido o contenuto proprio
+      '404':
+        description: Contenuto inesistente o gia' rimosso
+
+create-public-report:
+  post:
+    tags:
+      - Moderation
+    summary: Segnala un contenuto (visitatore senza account)
+    description: |
+      Come `POST /reports`, ma senza autenticazione: il segnalante e'
+      `device_id` (lo stesso `voter_id` usato per votare). Massimo 10
+      segnalazioni al giorno per dispositivo.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ReportRequest'
+              - type: object
+                required: [device_id]
+                properties:
+                  device_id:
+                    type: string
+    responses:
+      '201':
+        description: Segnalazione creata
+      '200':
+        description: Segnalazione gia' presente
+      '400':
+        description: Body non valido
+      '404':
+        description: Contenuto inesistente o gia' rimosso
+      '429':
+        description: Limite giornaliero raggiunto
+
+list-blocks:
+  get:
+    tags:
+      - Moderation
+    summary: Utenti bloccati
+    security:
+      - CognitoAuth: []
+    responses:
+      '200':
+        description: Lista dal blocco piu' recente
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BlockedUser'
+                count:
+                  type: integer
+
+block-user:
+  put:
+    tags:
+      - Moderation
+    summary: Blocca un utente
+    description: |
+      Idempotente. Agisce solo su cosa vede chi blocca: il client nasconde
+      battle e matchup del bloccato, la ricerca utenti lo esclude e non puo'
+      essere messo nei matchup di chi ha bloccato (e viceversa). Crea anche
+      una segnalazione `reason=blocked` per il super admin.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Utente bloccato
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockedUser'
+      '400':
+        description: Non puoi bloccare te stesso
+      '404':
+        description: Utente inesistente
+  delete:
+    tags:
+      - Moderation
+    summary: Sblocca un utente
+    description: Idempotente.
+    security:
+      - CognitoAuth: []
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Utente sbloccato
+
+accept-terms:
+  post:
+    tags:
+      - User Profile & Settings
+    summary: Accetta una versione dei Termini d'uso
+    description: Salva `terms_version_accepted` e `terms_accepted_at` sul profilo (restituiti da `GET /profile`).
+    security:
+      - CognitoAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [version]
+            properties:
+              version:
+                type: string
+                example: "2026-10"
+    responses:
+      '200':
+        description: Accettazione registrata
+      '400':
+        description: version mancante o non valida
