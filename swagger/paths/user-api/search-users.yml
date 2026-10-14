@@ -4,8 +4,11 @@ get:
   summary: Cerca utenti registrati (picker partecipanti)
   description: |
     Richiede autenticazione, ma qualsiasi utente loggato può usarlo — non è
-    un endpoint admin. Ritorna solo dati pubblici (user_id, display_name,
+    un endpoint admin. Ritorna solo dati pubblici (user_id, username, display_name,
     avatar_url): mai email, stato account o altri dati sensibili.
+
+    Lo **username** ha la priorità: il match esatto è sempre il primo
+    risultato, seguito dai prefix match su username, nome e cognome.
 
     Tre modalità, in base al contenuto di `q`:
     - contiene `@` → match **esatto** sull'email (nessuna enumerazione:
@@ -48,6 +51,9 @@ get:
                     user_id:
                       type: string
                       format: uuid
+                    username:
+                      type: string
+                      example: "mario_rossi"
                     display_name:
                       type: string
                       example: "Mario"

@@ -1,0 +1,36 @@
+get:
+  tags:
+    - User Profile & Settings
+  summary: Verifica disponibilità username
+  description: |
+    Endpoint **pubblico** (nessuna autenticazione), usato anche in
+    registrazione per il controllo in tempo reale. Il confronto è
+    case-insensitive. Ritorna solo l'esito, mai dati dell'utente.
+
+    Formato: 3-20 caratteri `a-z`, `0-9`, `_`, `.`; alcune parole sono riservate.
+  operationId: checkUsernameAvailable
+  security: []
+  parameters:
+    - name: u
+      in: query
+      required: true
+      schema:
+        type: string
+      example: "mario_rossi"
+  responses:
+    '200':
+      description: Esito del controllo
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              username:
+                type: string
+                example: "mario_rossi"
+              available:
+                type: boolean
+              reason:
+                type: string
+                enum: [invalid_format, reserved, taken]
+                description: Presente solo se available è false

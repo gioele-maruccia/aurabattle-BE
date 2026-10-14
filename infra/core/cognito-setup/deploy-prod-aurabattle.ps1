@@ -189,7 +189,9 @@ if (-not $LambdaArn -or $LambdaArn -eq "None") {
 }
 Write-Host "   Lambda ARN: $LambdaArn" -ForegroundColor Gray
 
-python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $LambdaArn 2>&1 | ForEach-Object { Write-Host "   $_" }
+$PreSignUpArn = aws cloudformation describe-stacks --stack-name $StackName --region $Region --query "Stacks[0].Outputs[?OutputKey=='PreSignUpLambdaArn'].OutputValue" --output text 2>$null
+if (-not $PreSignUpArn -or $PreSignUpArn -eq "None") { Write-Host "[ERROR] ARN Lambda PreSignUp non trovato nello stack!" -ForegroundColor Red; exit 1 }
+python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $LambdaArn $PreSignUpArn 2>&1 | ForEach-Object { Write-Host "   $_" }
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] Impossibile configurare il trigger su Cognito!" -ForegroundColor Red
     exit 1

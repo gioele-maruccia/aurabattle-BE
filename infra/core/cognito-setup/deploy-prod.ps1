@@ -255,7 +255,9 @@ if ($lambdaArn -and $lambdaArn -ne "None") {
     # azzera quell'impostazione e Cognito smette di inviare codici di verifica
     # Usiamo Python/boto3 per evitare problemi di escaping su Windows con {####}
     Write-Host "   Configurazione trigger e template email..." -ForegroundColor Gray
-    python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $lambdaArn 2>&1 | ForEach-Object { Write-Host "   $_" }
+    $PreSignUpArn = aws cloudformation describe-stacks --stack-name $StackName --region $Region --query "Stacks[0].Outputs[?OutputKey=='PreSignUpLambdaArn'].OutputValue" --output text 2>$null
+    if (-not $PreSignUpArn -or $PreSignUpArn -eq "None") { Write-Host "[ERROR] ARN Lambda PreSignUp non trovato nello stack!" -ForegroundColor Red; exit 1 }
+    python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $lambdaArn $PreSignUpArn 2>&1 | ForEach-Object { Write-Host "   $_" }
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "   ✅ Trigger PostConfirmation e template email configurati" -ForegroundColor Green

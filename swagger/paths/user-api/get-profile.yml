@@ -26,6 +26,10 @@ get:
                 example: "mario.rossi@example.com"
               profile:
                 $ref: '../../components/schemas/user-api/ProfileInfo.yml'
+              username:
+                type: string
+                description: Username univoco (lowercase), identificativo principale
+                example: "mario_rossi"
               display_name:
                 type: string
                 description: Nome pubblico mostrato agli altri utenti

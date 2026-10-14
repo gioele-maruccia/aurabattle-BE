@@ -3,12 +3,92 @@ Cognito Post-Confirmation Trigger
 Crea automaticamente il profilo DynamoDB quando l'utente conferma l'email
 """
 import os
+import re
+import uuid
 import boto3
 from datetime import datetime
 from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['USER_PROFILES_TABLE'])
+usernames_table = dynamodb.Table(os.environ['USERNAMES_TABLE'])
+
+# Username univoco, case-insensitive (salvato sempre lowercase).
+# L'unicita' e' garantita dalla tabella Usernames (chiave = username) con put
+# condizionale; UserProfiles.user_id resta sempre e solo l'UUID Cognito.
+USERNAME_PATTERN = re.compile(r'^[a-z0-9_.]{3,20}$')
+RESERVED_USERNAMES = {'admin', 'administrator', 'aurabattle', 'support', 'moderator', 'root', 'system', 'staff'}
+
+
+def _is_valid_username(value):
+    return bool(USERNAME_PATTERN.match(value)) and value not in RESERVED_USERNAMES
+
+
+def _reserve_username(username, owner_id):
+    """Riserva lo username per owner_id. True se riservato (o gia' suo)."""
+    try:
+        usernames_table.put_item(
+            Item={
+                'username': username,
+                'user_id': owner_id,
+                'status': 'active',
+                'created_at': datetime.utcnow().isoformat() + 'Z',
+            },
+            ConditionExpression=Attr('username').not_exists()
+        )
+        return True
+    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+        existing = usernames_table.get_item(Key={'username': username}).get('Item') or {}
+        return existing.get('user_id') == owner_id
+
+
+def _confirm_reservation(username, owner_id, email):
+    """Rende definitiva la riserva fatta dal PreSignUp (stesso username + stessa email).
+    True se la riserva era di questo utente e ora e' attiva (senza scadenza)."""
+    try:
+        usernames_table.update_item(
+            Key={'username': username},
+            UpdateExpression='SET user_id = :uid, #s = :active, confirmed_at = :now REMOVE expires_at',
+            ConditionExpression='attribute_exists(username) AND (email = :email OR user_id = :uid)',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={
+                ':uid': owner_id,
+                ':active': 'active',
+                ':email': email,
+                ':now': datetime.utcnow().isoformat() + 'Z',
+            },
+        )
+        return True
+    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+        return False
+
+
+def _resolve_username(requested, given_name, user_id, email):
+    """Conferma lo username riservato dal PreSignUp.
+
+    Il PreSignUp rifiuta la registrazione se lo username e' occupato, quindi qui
+    la riserva esiste gia'. Il ripiego generato resta solo come ultima risorsa
+    (riserva scaduta e username preso nel frattempo) e viene sempre loggato.
+    """
+    requested = (requested or '').strip().lower()
+    if requested and _is_valid_username(requested):
+        if _confirm_reservation(requested, user_id, email):
+            return requested
+        # Riserva scaduta e ripulita dal TTL: riprova a prenderlo se ancora libero
+        if _reserve_username(requested, user_id):
+            return requested
+
+    print(f"[PostConfirmation] WARNING: username '{requested}' non disponibile per {user_id}, uso un ripiego generato")
+    base = re.sub(r'[^a-z0-9_.]', '', (given_name or '').lower())[:12] or 'user'
+    sub_hex = user_id.replace('-', '')
+    for size in (4, 6, 8):
+        candidate = f"{base}_{sub_hex[:size]}"
+        if _is_valid_username(candidate) and _reserve_username(candidate, user_id):
+            return candidate
+    while True:
+        candidate = f"user_{uuid.uuid4().hex[:12]}"
+        if _reserve_username(candidate, user_id):
+            return candidate
 
 def lambda_handler(event, context):
     """
@@ -37,6 +117,8 @@ def lambda_handler(event, context):
         email = attrs['email']
         
         print(f"[PostConfirmation] Triggered for user: {user_id} ({email})")
+
+        username = _resolve_username(attrs.get('custom:username'), attrs.get('given_name', ''), user_id, email)
         
         # Crea profilo con valori di default
         profile_data = {
@@ -50,6 +132,10 @@ def lambda_handler(event, context):
                 'birthdate': attrs.get('birthdate', ''),
                 'phone_number': attrs.get('phone_number', '')
             },
+
+            # Username univoco (lowercase): identificativo principale per ricerca,
+            # selezione partecipanti e visualizzazione nelle sfide
+            'username': username,
 
             # Nome pubblico mostrato agli altri utenti (default: given_name)
             'display_name': attrs.get('given_name', ''),

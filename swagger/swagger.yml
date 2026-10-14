@@ -75,6 +75,10 @@ paths:
     get:
       $ref: './paths/user-api/search-users.yml#/get'
 
+  /users/username-available:
+    get:
+      $ref: './paths/user-api/check-username.yml#/get'
+
   # ============================================================================
   # BATTLES
   # ============================================================================

@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Usernames - tabella DynamoDB per l'unicita' degli username
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev-aurabattle
+    AllowedValues:
+      - dev-aurabattle
+      - prod-aurabattle
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod-aurabattle]
+
+Resources:
+  # Chiave = username (lowercase). La put condizionale attribute_not_exists
+  # garantisce l'unicita'; user_id punta al profilo proprietario (UUID Cognito).
+  UsernamesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-Usernames'
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH
+
+      # Le riserve 'pending' scadute vengono ripulite da DynamoDB (expires_at)
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: aurabattle
+
+Outputs:
+  TableName:
+    Value: !Ref UsernamesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt UsernamesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'

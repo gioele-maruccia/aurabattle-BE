@@ -3,7 +3,7 @@ Applica il template email di verifica account su Cognito.
 Usato dai deploy scripts (deploy-dev.ps1 / deploy-prod.ps1).
 
 Usage:
-    python apply-email-template.py <user_pool_id> <region> <lambda_arn>
+    python apply-email-template.py <user_pool_id> <region> <lambda_arn> [pre_signup_lambda_arn]
 """
 import sys
 import re
@@ -11,13 +11,14 @@ import pathlib
 import boto3
 
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: python apply-email-template.py <user_pool_id> <region> <lambda_arn>")
+    if len(sys.argv) not in (4, 5):
+        print("Usage: python apply-email-template.py <user_pool_id> <region> <lambda_arn> [pre_signup_lambda_arn]")
         sys.exit(1)
 
     user_pool_id = sys.argv[1]
     region       = sys.argv[2]
     lambda_arn   = sys.argv[3]
+    pre_signup_arn = sys.argv[4] if len(sys.argv) == 5 else None
 
     template_path = pathlib.Path(__file__).parent / "email-verification-template.html"
     if not template_path.exists():
@@ -37,16 +38,21 @@ def main():
         verification_template["EmailSubject"] = "Il tuo codice di verifica aura battle"
         verification_template["EmailMessage"] = email_message
 
+    # update_user_pool sostituisce l'intera LambdaConfig: vanno passati tutti i trigger
+    lambda_config = {"PostConfirmation": lambda_arn}
+    if pre_signup_arn:
+        lambda_config["PreSignUp"] = pre_signup_arn
+
     response = client.update_user_pool(
         UserPoolId=user_pool_id,
-        LambdaConfig={"PostConfirmation": lambda_arn},
+        LambdaConfig=lambda_config,
         AutoVerifiedAttributes=["email"],
         VerificationMessageTemplate=verification_template,
     )
 
     status = response["ResponseMetadata"]["HTTPStatusCode"]
     if status == 200:
-        print("[OK] Trigger PostConfirmation e template email configurati su Cognito")
+        print("[OK] Trigger (PostConfirmation, PreSignUp) e template email configurati su Cognito")
     else:
         print(f"[ERROR] HTTP {status}")
         sys.exit(1)

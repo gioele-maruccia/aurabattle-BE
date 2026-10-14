@@ -34,6 +34,7 @@ Globals:
       Variables:
         ENVIRONMENT: !Ref Environment
         USER_PROFILES_TABLE: !Ref UserProfilesTableName
+        USERNAMES_TABLE: !Sub ${Environment}-Usernames
         USER_POOL_ID: !Ref UserPoolId
 
 Resources:
@@ -81,6 +82,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Sub ${Environment}-Usernames
         - Statement:
             - Effect: Allow
               Action:
@@ -220,6 +223,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref UserProfilesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-Usernames
       Events:
         Get:
           Type: Api
@@ -227,6 +232,26 @@ Resources:
             RestApiId: !Ref UserAPI
             Path: /v1/users/search
             Method: GET
+
+  # GET /users/username-available?u=... - Verifica formato/disponibilita' username (PUBBLICO: usato in registrazione)
+  CheckUsernameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-user-api-check-username
+      CodeUri: ../../../src/lambdas/services/user-api/check-username/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Sub ${Environment}-Usernames
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserAPI
+            Path: /v1/users/username-available
+            Method: GET
+            Auth:
+              Authorizer: NONE
 
   # CORS: assicura header CORS anche nelle risposte di errore generate da API Gateway (es. 401, 403, 500)
   GatewayResponseDefault4XX:

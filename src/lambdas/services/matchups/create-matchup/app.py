@@ -36,7 +36,7 @@ def _parse_participant(value, label):
     Ritorna (stored_participant, enriched_participant, errore). `stored_participant`
     e' cio' che va salvato nel matchup (solo user_id/guest_name, mai il nome
     risolto, per evitare che diventi stantio se l'utente si rinomina dopo).
-    `enriched_participant` e' la stessa cosa con display_name/avatar_url
+    `enriched_participant` e' la stessa cosa con username/display_name/avatar_url
     aggiunti, usata solo per la risposta di questa chiamata.
     """
     if not isinstance(value, dict):
@@ -55,6 +55,7 @@ def _parse_participant(value, label):
         stored = {'user_id': user_id}
         enriched = {
             'user_id': user_id,
+            'username': profile.get('username'),
             'display_name': profile.get('display_name', ''),
             'avatar_url': profile.get('avatar_url'),
         }

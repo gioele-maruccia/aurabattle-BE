@@ -26,6 +26,8 @@ Resources:
           AttributeType: S
         - AttributeName: search_bucket
           AttributeType: S
+        - AttributeName: username
+          AttributeType: S
         - AttributeName: display_name_lower
           AttributeType: S
         - AttributeName: family_name_lower
@@ -42,6 +44,20 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+        # Username univoco (lowercase): chiave di ricerca a priorita' massima.
+        # L'unicita' NON e' data da questo indice ma dalla tabella Usernames.
+        - IndexName: search_bucket-username-index
+          KeySchema:
+            - AttributeName: search_bucket
+              KeyType: HASH
+            - AttributeName: username
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - display_name
+              - avatar_url
 
         # search_bucket e' sempre "ALL": indice globale per il prefix-match su
         # display_name (picker partecipanti). Scelta semplice per l'MVP: tutte

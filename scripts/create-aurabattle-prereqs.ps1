@@ -67,6 +67,7 @@ $poolJson = aws cognito-idp create-user-pool `
         'Name=email,Required=true,Mutable=true' `
         'Name=given_name,Required=true,Mutable=true' `
         'Name=family_name,Required=true,Mutable=true' `
+        'Name=username,AttributeDataType=String,Mutable=true,StringAttributeConstraints={MinLength=3,MaxLength=20}' `
     --policies $PoliciesJson `
     --user-pool-tags "Project=aurabattle,Environment=$Environment" `
     --output json

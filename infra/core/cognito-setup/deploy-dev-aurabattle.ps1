@@ -173,9 +173,19 @@ if (-not $LambdaArn -or $LambdaArn -eq "None") {
 }
 Write-Host "Lambda ARN: $LambdaArn" -ForegroundColor Gray
 
+$PreSignUpArn = aws cloudformation describe-stacks `
+    --stack-name $StackName `
+    --query "Stacks[0].Outputs[?OutputKey=='PreSignUpLambdaArn'].OutputValue" `
+    --output text --region $Region
+if (-not $PreSignUpArn -or $PreSignUpArn -eq "None") {
+    Write-Host "[ERROR] Impossibile ottenere ARN Lambda PreSignUp dallo stack!" -ForegroundColor Red
+    exit 1
+}
+Write-Host "PreSignUp Lambda ARN: $PreSignUpArn" -ForegroundColor Gray
+
 Write-Host ""
 Write-Host "Configurazione trigger PostConfirmation su Cognito..." -ForegroundColor Cyan
-python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $LambdaArn 2>&1 | ForEach-Object { Write-Host "   $_" }
+python "$PSScriptRoot\apply-email-template.py" $UserPoolId $Region $LambdaArn $PreSignUpArn 2>&1 | ForEach-Object { Write-Host "   $_" }
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] Impossibile configurare il trigger su Cognito!" -ForegroundColor Red

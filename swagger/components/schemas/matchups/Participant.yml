@@ -2,7 +2,7 @@ type: object
 description: >
   In richiesta: esattamente uno fra user_id e guest_name. In risposta, se
   user_id è presente, il backend arricchisce automaticamente l'oggetto con
-  display_name/avatar_url (letti al volo da UserProfiles, mai salvati nel
+  username/display_name/avatar_url (letti al volo da UserProfiles, mai salvati nel
   matchup — restano sempre aggiornati anche se l'utente si rinomina dopo).
 properties:
   user_id:
@@ -12,6 +12,11 @@ properties:
   guest_name:
     type: string
     description: Partecipante non registrato — nessun aggiornamento storico
+  username:
+    type: string
+    readOnly: true
+    description: Username univoco. Presente solo in risposta, solo se user_id è impostato.
+    example: "marco_92"
   display_name:
     type: string
     readOnly: true

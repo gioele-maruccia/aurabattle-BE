@@ -85,12 +85,13 @@ def _enrich_participant(participant):
         return participant
     profile = user_profiles_table.get_item(
         Key={'user_id': participant['user_id']},
-        ProjectionExpression='display_name, avatar_url'
+        ProjectionExpression='username, display_name, avatar_url'
     ).get('Item')
     if not profile:
         return participant
     return {
         **participant,
+        'username': profile.get('username'),
         'display_name': profile.get('display_name', ''),
         'avatar_url': profile.get('avatar_url'),
     }

@@ -20,6 +20,12 @@ put:
               $ref: '../../components/schemas/user-api/ProfileInfo.yml'
             address:
               $ref: '../../components/schemas/user-api/Address.yml'
+            username:
+              type: string
+              description: |
+                Username univoco (case-insensitive, salvato in lowercase).
+                3-20 caratteri: `a-z`, `0-9`, `_`, `.`. Risponde `409` se già in uso.
+              example: "mario_rossi"
             display_name:
               type: string
               description: Nome pubblico mostrato agli altri utenti

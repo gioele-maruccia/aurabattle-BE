@@ -1,0 +1,61 @@
+#!/usr/bin/env pwsh
+# Usernames Data Infrastructure - Deploy Script
+# Deploy della tabella DynamoDB per unicita' username
+
+param(
+    [string]$Environment = "dev-aurabattle",
+    [string]$Region = "eu-south-1"
+)
+
+Write-Host "[DEPLOY] Starting Deploy for Usernames Data Infrastructure..." -ForegroundColor Cyan
+Write-Host "Environment: $Environment" -ForegroundColor Yellow
+Write-Host "Region: $Region" -ForegroundColor Yellow
+Write-Host ""
+
+# Step 1: Clean build artifacts
+Write-Host "[CLEAN] Step 1: Cleaning build artifacts..." -ForegroundColor Green
+if (Test-Path .aws-sam) {
+    Remove-Item -Recurse -Force .aws-sam
+    Write-Host "   [OK] Removed .aws-sam directory" -ForegroundColor Gray
+}
+
+# Step 2: Validate template
+Write-Host "[VALIDATE] Step 2: Validating template..." -ForegroundColor Green
+$validateResult = sam validate --template-file template.yaml --region $Region --lint 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   [ERROR] Template validation failed!" -ForegroundColor Red
+    Write-Host $validateResult -ForegroundColor Red
+    exit 1
+}
+Write-Host "   [OK] Template is valid" -ForegroundColor Gray
+
+# Step 3: Build
+Write-Host "[BUILD] Step 3: Building..." -ForegroundColor Green
+sam build --template-file template.yaml
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   [ERROR] Build failed!" -ForegroundColor Red
+    exit 1
+}
+Write-Host "   [OK] Build completed" -ForegroundColor Gray
+
+# Step 4: Deploy
+Write-Host "[DEPLOY] Step 4: Deploying to AWS..." -ForegroundColor Green
+sam deploy `
+    --template-file .aws-sam/build/template.yaml `
+    --stack-name "$Environment-usernames-data" `
+    --region $Region `
+    --capabilities CAPABILITY_IAM `
+    --no-fail-on-empty-changeset `
+    --tags Project=aurabattle Environment=$Environment `
+    --parameter-overrides `
+        Environment=$Environment
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   [ERROR] Deploy failed!" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ""
+Write-Host "[SUCCESS] Deploy completed successfully!" -ForegroundColor Green
+Write-Host "Stack: $Environment-usernames-data" -ForegroundColor Cyan
+Write-Host ""

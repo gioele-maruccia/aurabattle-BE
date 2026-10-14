@@ -38,10 +38,38 @@ Resources:
       Environment:
         Variables:
           USER_PROFILES_TABLE: !Ref UserProfilesTableName
+          USERNAMES_TABLE: !Sub '${Environment}-Usernames'
           ENVIRONMENT: !Ref Environment
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Usernames'
+
+  PreSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-cognito-pre-signup'
+      CodeUri: ../../../src/lambdas/core/pre-signup/
+      Handler: app.lambda_handler
+      Runtime: python3.10
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          USERNAMES_TABLE: !Sub '${Environment}-Usernames'
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '${Environment}-Usernames'
+
+  PreSignUpInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PreSignUpFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !Ref UserPoolArn
 
   PostConfirmationInvokePermission:
     Type: AWS::Lambda::Permission
@@ -58,6 +86,12 @@ Outputs:
     Export:
       Name: !Sub "${Environment}-PostConfirmationLambdaArn"
   
+  PreSignUpLambdaArn:
+    Description: PreSignUp Lambda ARN
+    Value: !GetAtt PreSignUpFunction.Arn
+    Export:
+      Name: !Sub "${Environment}-PreSignUpLambdaArn"
+
   LambdaName:
     Description: PostConfirmation Lambda Function Name
     Value: !Ref PostConfirmationFunction
