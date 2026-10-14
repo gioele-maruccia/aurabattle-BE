@@ -77,6 +77,11 @@ def handler(event, context):
         if battle['host_id'] != user_id:
             return _cors_response(403, {'error': 'Forbidden', 'message': 'Only the host can create matchups for this battle'})
 
+        # Una battle chiusa e' definitiva: un matchup aggiunto qui non si
+        # aprirebbe mai.
+        if battle.get('status') == 'closed':
+            return _cors_response(409, {'error': 'Conflict', 'message': 'Cannot add matchups to a closed battle'})
+
         participant_a, enriched_a, error_a = _parse_participant(body.get('participant_a'), 'participant_a')
         if error_a:
             return _cors_response(400, {'error': 'Bad Request', 'message': error_a})

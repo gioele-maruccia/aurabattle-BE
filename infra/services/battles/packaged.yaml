@@ -20,6 +20,20 @@ Parameters:
   BattleCoversBucketName:
     Type: String
     Description: S3 bucket name for battle cover uploads
+  MatchupsTableName:
+    Type: String
+    Description: DynamoDB Matchups table name (opened/closed together with the battle)
+  MatchupConnectionsTableName:
+    Type: String
+    Description: DynamoDB table of the matchups WebSocket connections
+  MatchupsWebSocketApiEndpoint:
+    Type: String
+    Default: ''
+    Description: 'https:// management endpoint of the matchups WebSocket API (https://{apiId}.execute-api.{region}.amazonaws.com/{stage}).
+      Empty until the matchups stack exists: matchups are still opened/closed, connected
+      clients just are not pushed a matchup_update.
+
+      '
 Globals:
   Function:
     Runtime: python3.10
@@ -39,7 +53,7 @@ Resources:
       LayerName:
         Fn::Sub: ${Environment}-pillow-layer
       Description: Pillow (image processing) for battle cover resize
-      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/5e5418b0600082946007e95411043136
+      ContentUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/dfd2d8ee394d5811c609e11710cbf3f1
       CompatibleRuntimes:
       - python3.10
       RetentionPolicy: Retain
@@ -65,8 +79,11 @@ Resources:
           - Effect: Allow
             Action: lambda:InvokeFunction
             Resource:
-              Fn::GetAtt:
+            - Fn::GetAtt:
               - SetBattleLiveFunction
+              - Arn
+            - Fn::GetAtt:
+              - SetBattleClosedFunction
               - Arn
     Metadata:
       SamResourceId: BattleLiveSchedulerExecutionRole
@@ -93,7 +110,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-create
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/687aec546f20e65e11576e8b99f22255
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/3148cb7c1704593c5ddad51a35b9152a
       Handler: app.handler
       Environment:
         Variables:
@@ -104,6 +121,10 @@ Resources:
           SET_BATTLE_LIVE_FUNCTION_ARN:
             Fn::GetAtt:
             - SetBattleLiveFunction
+            - Arn
+          SET_BATTLE_CLOSED_FUNCTION_ARN:
+            Fn::GetAtt:
+            - SetBattleClosedFunction
             - Arn
       Policies:
       - DynamoDBCrudPolicy:
@@ -117,7 +138,8 @@ Resources:
           Action:
           - scheduler:CreateSchedule
           Resource:
-            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*
         - Effect: Allow
           Action: iam:PassRole
           Resource:
@@ -139,7 +161,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-list
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/9572ce7f0c823cc10f106ce9e478c428
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/9572ce7f0c823cc10f106ce9e478c428
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -162,7 +184,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get-my
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/1abbff270f9c2ba69b2f86bbbdb96bb1
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/1abbff270f9c2ba69b2f86bbbdb96bb1
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -183,7 +205,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-get
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/b7122822f808c08f08ebab7ecd190d74
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/b7122822f808c08f08ebab7ecd190d74
       Handler: app.handler
       Policies:
       - DynamoDBReadPolicy:
@@ -206,7 +228,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-update
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/f83abcfe2ca0c21fe876048b02ac058e
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/e7accf35a7a7295fcf326c3df203f923
       Handler: app.handler
       Environment:
         Variables:
@@ -217,6 +239,10 @@ Resources:
           SET_BATTLE_LIVE_FUNCTION_ARN:
             Fn::GetAtt:
             - SetBattleLiveFunction
+            - Arn
+          SET_BATTLE_CLOSED_FUNCTION_ARN:
+            Fn::GetAtt:
+            - SetBattleClosedFunction
             - Arn
       Policies:
       - DynamoDBCrudPolicy:
@@ -230,7 +256,17 @@ Resources:
           - scheduler:DeleteSchedule
           - scheduler:GetSchedule
           Resource:
-            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - SetBattleLiveFunction
+            - Arn
+          - Fn::GetAtt:
+            - SetBattleClosedFunction
+            - Arn
         - Effect: Allow
           Action: iam:PassRole
           Resource:
@@ -252,7 +288,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-delete
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/027a2478c6c683e1dbc7a33ca9102596
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/2f5f074f16cad76f72cd52206c2337c6
       Handler: app.handler
       Environment:
         Variables:
@@ -272,7 +308,8 @@ Resources:
           Action:
           - scheduler:DeleteSchedule
           Resource:
-            Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-live-*
+          - Fn::Sub: arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/battle-close-*
       Events:
         Delete:
           Type: Api
@@ -288,7 +325,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-request-cover-upload-url
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/4b4197f798e9aebcff9c1b6701bfe55d
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/4b4197f798e9aebcff9c1b6701bfe55d
       Handler: app.handler
       Environment:
         Variables:
@@ -319,7 +356,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-process-cover-upload
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/a91b3561ae204dfed0e75a66f677984b
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/a91b3561ae204dfed0e75a66f677984b
       Handler: app.handler
       Timeout: 60
       MemorySize: 512
@@ -348,14 +385,70 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${Environment}-battles-set-live
-      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261013-124023/c45304b4e3ef39a88a52dcddb5093648
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/27533d96be8fb55103d45787bfa0be4e
       Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUPS_TABLE:
+            Ref: MatchupsTableName
+          MATCHUP_CONNECTIONS_TABLE:
+            Ref: MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT:
+            Ref: MatchupsWebSocketApiEndpoint
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupConnectionsTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+            Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/${Environment}/POST/@connections/*
     Metadata:
       SamResourceId: SetBattleLiveFunction
+  SetBattleClosedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-battles-set-closed
+      CodeUri: s3://aurabattle-prod-artifacts/battles-prod-aurabattle/20261014-112951/9a4b5e3c5750a4b81dcf0ebca7814502
+      Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUPS_TABLE:
+            Ref: MatchupsTableName
+          MATCHUP_CONNECTIONS_TABLE:
+            Ref: MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT:
+            Ref: MatchupsWebSocketApiEndpoint
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BattlesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupsTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: UserProfilesTableName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MatchupConnectionsTableName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+            Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/${Environment}/POST/@connections/*
+    Metadata:
+      SamResourceId: SetBattleClosedFunction
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:

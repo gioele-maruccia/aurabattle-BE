@@ -53,7 +53,7 @@ Resources:
   # volta che POST /matchups/{id}/vote viene chiamato con successo.
   # Riceve anche {action: "matchup_update", matchup_id, status, winner,
   # votes_a, votes_b} quando set-battle-live / set-battle-closed (stack
-  # battles) aprono o chiudono il matchup.
+  # battles) o update-matchup (host) aprono o chiudono il matchup.
   # ============================================================
   MatchupsWebSocketApi:
     Type: AWS::ApiGatewayV2::Api
@@ -221,12 +221,17 @@ Resources:
               Authorizer: NONE
 
   # PUT /matchups/{matchupId} - Aggiorna matchup (solo host della battle); calcola il winner alla chiusura
+  # e manda matchup_update ai client WebSocket a ogni cambio di stato
   UpdateMatchupFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${Environment}-matchups-update
       CodeUri: ../../../src/lambdas/services/matchups/update-matchup/
       Handler: app.handler
+      Environment:
+        Variables:
+          MATCHUP_CONNECTIONS_TABLE: !Ref MatchupConnectionsTableName
+          WEBSOCKET_API_ENDPOINT: !Sub 'https://${MatchupsWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref BattlesTableName
@@ -234,6 +239,17 @@ Resources:
             TableName: !Ref MatchupsTableName
         - DynamoDBCrudPolicy:
             TableName: !Ref UserProfilesTableName
+        - DynamoDBReadPolicy:
+            TableName: !Ref MatchupConnectionsTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MatchupConnectionsTableName}'
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MatchupsWebSocketApi}/${Environment}/POST/@connections/*'
       Events:
         Put:
           Type: Api

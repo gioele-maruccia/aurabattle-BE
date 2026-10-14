@@ -19,6 +19,7 @@ SET_BATTLE_CLOSED_FUNCTION_ARN = os.environ['SET_BATTLE_CLOSED_FUNCTION_ARN']
 
 UPDATABLE_FIELDS = ['title', 'description', 'location', 'latitude', 'longitude', 'event_datetime', 'end_datetime', 'status', 'cover', 'stream_url']
 ALLOWED_STATUSES = ['published', 'live', 'closed']
+STATUS_ORDER = {'published': 0, 'live': 1, 'closed': 2}
 
 ALLOWED_COVERS = {
     'arena', 'crowd', 'soundwave', 'turntable', 'mic',
@@ -128,6 +129,26 @@ def handler(event, context):
                 'message': f'status must be one of: {", ".join(ALLOWED_STATUSES)}'
             })
 
+        # Lo stato va solo avanti: tornare indietro lascerebbe i matchup
+        # (gia' aperti o chiusi, con stats applicate) incoerenti con la battle.
+        current_status = existing.get('status', 'published')
+        if 'status' in body and STATUS_ORDER[body['status']] < STATUS_ORDER[current_status]:
+            return _cors_response(409, {
+                'error': 'Conflict',
+                'message': f'status can only move forward (published -> live -> closed), it is {current_status}'
+            })
+
+        # Una battle chiusa e' definitiva: si possono ancora correggere testi e
+        # copertina, non gli orari, che rimetterebbero in moto gli schedule.
+        if current_status == 'closed' and ('event_datetime' in body or 'end_datetime' in body):
+            return _cors_response(409, {
+                'error': 'Conflict',
+                'message': 'The dates of a closed battle cannot be changed'
+            })
+
+        if 'event_datetime' in body and _parse_iso_datetime(body['event_datetime']) is None:
+            return _cors_response(400, {'error': 'Bad Request', 'message': 'event_datetime must be a valid ISO 8601 date-time'})
+
         if 'latitude' in body:
             latitude = _parse_coordinate(body['latitude'], -90, 90)
             if latitude is None:
@@ -233,27 +254,34 @@ def handler(event, context):
         # Mantiene in sincrono gli schedule EventBridge:
         # - 'live': se la battle non e' (piu') 'published' non serve, lo
         #   cancella; se resta 'published' ma l'orario e' cambiato, lo ricrea.
+        #   Un inizio spostato a un orario gia' passato non si schedula (uno
+        #   schedule at() nel passato non e' garantito che scatti): la battle
+        #   parte subito.
         # - 'close': non serve piu' se la battle e' chiusa o ha perso la fine;
         #   se la fine e' cambiata lo ricrea (la battle puo' essere gia' live).
+        starts_now = False
         if updated.get('status') != 'published':
             _delete_schedule('battle-live', battle_id)
         elif 'event_datetime' in body:
             _delete_schedule('battle-live', battle_id)
-            _create_schedule('battle-live', SET_BATTLE_LIVE_FUNCTION_ARN, battle_id, updated['event_datetime'])
+            if _parse_iso_datetime(updated['event_datetime']) <= datetime.now(timezone.utc):
+                starts_now = True
+            else:
+                _create_schedule('battle-live', SET_BATTLE_LIVE_FUNCTION_ARN, battle_id, updated['event_datetime'])
 
         end_datetime = updated.get('end_datetime')
         if updated.get('status') == 'closed' or not end_datetime:
             _delete_schedule('battle-close', battle_id)
-        elif 'end_datetime' in body or existing.get('status') == 'closed':
+        elif 'end_datetime' in body:
             _delete_schedule('battle-close', battle_id)
             _create_schedule('battle-close', SET_BATTLE_CLOSED_FUNCTION_ARN, battle_id, end_datetime)
 
-        # Transizione manuale: i matchup seguono la battle.
-        if existing.get('status') != updated.get('status'):
-            if updated.get('status') == 'live':
-                _invoke_async(SET_BATTLE_LIVE_FUNCTION_ARN, battle_id)
-            elif updated.get('status') == 'closed':
-                _invoke_async(SET_BATTLE_CLOSED_FUNCTION_ARN, battle_id)
+        # Transizione manuale (o inizio gia' passato): i matchup seguono la
+        # battle.
+        if updated.get('status') == 'closed' and existing.get('status') != 'closed':
+            _invoke_async(SET_BATTLE_CLOSED_FUNCTION_ARN, battle_id)
+        elif starts_now or (updated.get('status') == 'live' and existing.get('status') != 'live'):
+            _invoke_async(SET_BATTLE_LIVE_FUNCTION_ARN, battle_id)
 
         return _cors_response(200, updated)
 

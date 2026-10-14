@@ -118,16 +118,27 @@ def handler(event, context):
                 })
             raise
 
+        # Lo stato si ricontrolla nella scrittura, non solo nella lettura sopra:
+        # se il matchup viene chiuso nel mezzo, il voto non deve sommarsi a
+        # totali su cui il vincitore e' gia' stato calcolato.
         vote_field = 'votes_a' if side == 'A' else 'votes_b'
-        result = matchups_table.update_item(
-            Key={'matchup_id': matchup_id},
-            UpdateExpression=f'ADD {vote_field} :inc SET updated_at = :now_iso',
-            ExpressionAttributeValues={
-                ':inc': 1,
-                ':now_iso': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            },
-            ReturnValues='ALL_NEW',
-        )
+        try:
+            result = matchups_table.update_item(
+                Key={'matchup_id': matchup_id},
+                UpdateExpression=f'ADD {vote_field} :inc SET updated_at = :now_iso',
+                ConditionExpression='#status = :live',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':inc': 1,
+                    ':live': 'live',
+                    ':now_iso': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                },
+                ReturnValues='ALL_NEW',
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                return _cors_response(409, {'error': 'Conflict', 'message': 'Voting is only allowed while the matchup is live'})
+            raise
 
         updated = result['Attributes']
         _broadcast_vote_update(matchup_id, int(updated.get('votes_a', 0)), int(updated.get('votes_b', 0)))

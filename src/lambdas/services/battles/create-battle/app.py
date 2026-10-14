@@ -130,8 +130,8 @@ def _create_schedule(name, function_arn, battle_id, when_iso):
 def _schedule_live_transition(battle_id, event_datetime):
     """Registra uno schedule one-time EventBridge che a event_datetime
     invoca set-battle-live per passare la battle a 'live' (e aprirne i
-    matchup). Best-effort: se event_datetime e' nel passato (o altro errore),
-    la creazione della battle non deve fallire per questo.
+    matchup). Best-effort: se fallisce, la creazione della battle non deve
+    fallire per questo.
     """
     try:
         _create_schedule('battle-live', SET_BATTLE_LIVE_FUNCTION_ARN, battle_id, event_datetime)
@@ -177,6 +177,15 @@ def handler(event, context):
         if stream_url_error:
             return _cors_response(400, {'error': 'Bad Request', 'message': stream_url_error})
 
+        event_datetime = _parse_iso_datetime(body['event_datetime'])
+        if event_datetime is None:
+            return _cors_response(400, {'error': 'Bad Request', 'message': 'event_datetime must be a valid ISO 8601 date-time'})
+
+        # Un inizio gia' passato (o "adesso") parte subito invece di affidarsi a
+        # uno schedule at() nel passato, che non e' garantito che scatti. Una
+        # battle appena creata non ha matchup da aprire: basta lo stato.
+        starts_now = event_datetime <= datetime.now(timezone.utc)
+
         end_datetime, end_datetime_error = _parse_end_datetime(
             body.get('end_datetime'), body['event_datetime']
         )
@@ -195,7 +204,7 @@ def handler(event, context):
             'latitude': latitude,
             'longitude': longitude,
             'event_datetime': body['event_datetime'],
-            'status': 'published',
+            'status': 'live' if starts_now else 'published',
             'created_at': now,
             'updated_at': now,
         }
@@ -221,7 +230,8 @@ def handler(event, context):
         except Exception as e:
             print(f"[create-battle] Warning: could not update hosted_battles_count: {e}")
 
-        _schedule_live_transition(battle_id, battle['event_datetime'])
+        if not starts_now:
+            _schedule_live_transition(battle_id, battle['event_datetime'])
         if end_datetime:
             _schedule_close_transition(battle_id, end_datetime)
 
