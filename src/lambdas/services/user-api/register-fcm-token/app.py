@@ -169,7 +169,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Fetch existing profile to decide whether to initialise retention
         existing_profile_resp = user_profiles_table.get_item(Key={'user_id': user_id})
-        existing_profile = existing_profile_resp.get('Item', {})
+        existing_profile = existing_profile_resp.get('Item')
+
+        # No profile, no token: update_item would otherwise *create* the item
+        # with just these two fields, a profile GET /profile can't parse
+        # (accounts made with admin-create-user skip the PostConfirmation
+        # trigger that seeds profiles).
+        if not existing_profile:
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'Not Found',
+                    'message': 'Profile not found'
+                })
+            }
         is_first_token = not existing_profile.get('fcm_token')
         has_retention = bool(existing_profile.get('retention_state'))
 
@@ -183,6 +200,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ':token': fcm_token,
                 ':updated_at': timestamp
             },
+            ConditionExpression='attribute_exists(user_id)',
         )
         
         logger.info(f"FCM token registered for user {user_id}")
